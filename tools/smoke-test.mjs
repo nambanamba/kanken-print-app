@@ -165,6 +165,32 @@ ok("前半は選択式だけ", order.frontAllSelect);
 ok("後半は自己申告の形式だけ（書き・読み）", order.backAllWrite);
 ok("後半に読みが入っている（30点分）", order.backHasYomi);
 ok("前半が1形式に偏っていない", order.fields > 1, String(order.fields));
+
+// ★形式ごとの出題数を、本番の配点の比で決めている（2026-09-09 ユーザー指示）。
+//   均等だと画数が1/3出ていたが、本番は 10問・10点＝5% しかない。
+const share = await page.evaluate(() => {
+  const s = buildSession({ kstats: {}, dayKey: "w1" });
+  const front = s.items.slice(0, s.firstWrite);
+  const cnt = {};
+  SELECT_FIELDS.forEach(f => { cnt[f] = 0; });
+  front.forEach(q => { if (cnt[q.field] !== undefined) cnt[q.field]++; });
+  const pts = {};
+  SELECT_FIELDS.forEach(f => { pts[f] = FIELDS.filter(x => x.key === f)[0].points; });
+  return { cnt, pts, n: front.length, limit: s.selectLimit };
+});
+// ★どの形式も0問にしない。比率の端数で簡単に0になり、
+//   その形式がまるごと出なくなったことに本番まで気づかない
+ok("どの形式も0問になっていない",
+   Object.keys(share.cnt).every(f => share.cnt[f] > 0), JSON.stringify(share.cnt));
+ok("前半の合計が上限を超えていない", share.n <= share.limit, `${share.n}/${share.limit}`);
+// 画数（10点）が、音訓・部首（各20点）より多く出ていないこと
+ok("画数が、配点の大きい形式より多く出ていない",
+   share.cnt.kakusu <= share.cnt.onkun && share.cnt.kakusu <= share.cnt.bushu,
+   JSON.stringify(share.cnt));
+// 均等（1/3≒33%）から、配点比（20%）に下がっていること
+ok("画数の比率が均等（1/3）より下がっている",
+   share.cnt.kakusu / share.n < 0.30,
+   `${share.cnt.kakusu}/${share.n} = ${Math.round(share.cnt.kakusu / share.n * 100)}%`);
 ok("前半の問題数が上限を超えていない", order.frontN <= order.limit, `${order.frontN}/${order.limit}`);
 ok("★前半で聞いた字が後半（＝紙）に出てこない（A-1）", order.noShared);
 ok("「書ける」も押している（検証の入口ができている）", saidKnow > 0, String(saidKnow));

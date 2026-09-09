@@ -390,10 +390,17 @@ function buildSession(opts) {
     });
     byField.push(one);
   });
-  // ★形式ごとに順ぐりに取る（1形式に偏らせない）。
-  //   画数10・音訓20・部首20＝50点は規則的で短時間で伸びる（引き継ぎ.md 6章）。
-  //   ここで偏らせると、コスパの高い分野がまるごと育たない日が出る。
-  selItems = roundRobin(byField, rnd).slice(0, opts.selectLimit || SELECT_LIMIT);
+  // ★形式ごとの出題数を、**本番の配点の比で**決める（2026-09-09 ユーザー指示）。
+  //   均等に順ぐりだと、**画数が約1/3（20問中6〜7問）**出ていた。
+  //   本番の (四)何画目・総画数は **10問・10点＝200点中の5%** しかない
+  //   （`公式資料\outline_degree_example_7m_3.pdf` と標準解答 `_7k_3.pdf`。
+  //     引き継ぎ.md 1章の表は合計200点で検算済み）。
+  //   ユーザーの言葉:「画数はもっとほんのちょっとでいい、数えるだけですし」
+  //   → 配点比だと 画数10 ÷（10＋20＋20）＝ **20%（20問中4問）**。
+  //     問題集から漢字えらび20・じゅく語作り20が入れば、自然に 11% まで下がる。
+  //   ★ただし **どの形式も0問にしない。** 画数がまるごと出なくなっても、
+  //     本番前まで誰も気づかない。ここがいちばん怖い。
+  selItems = weightedPick(SELECT_FIELDS, byField, opts.selectLimit || SELECT_LIMIT, rnd);
 
   // 後半は書きと読みを順ぐりに。どちらも「自分はできるか」の自己申告なので、
   // 頭の切りかえは起きない（前半と後半を分けたのは、そこが違うため）
@@ -421,6 +428,43 @@ function buildSession(opts) {
     items: items,
     preUnsure: mustWrite           // 聞かずに最初から「あやしい」に入れる字
   };
+}
+
+/* ★形式ごとの出題数を、本番の配点の比で決めて取り出す。
+   fields[i] の問題が lists[i] に入っている。合計 limit 問を返す。
+
+   ★どの形式も最低1問は出す。 比率の端数で 0 になると、
+     **その形式がまるごと出なくなったことに、本番まで誰も気づかない。**
+     （画数は配点5%なので、素直に割ると 0 になりうる）
+   ※ limit が形式の数より小さいときは、**limit を1〜2問超えても各形式1問を残す。**
+     形式をまるごと落とすほうが害が大きいため。いまの limit=20 では起きない。
+   ※ その形式の問題が1問も作れないとき（lists[i] が空）は 0 問になる。
+     これは正しい（作れないものは出せない）。 */
+function weightedPick(fields, lists, limit, rnd) {
+  var pts = fields.map(function (f) {
+    var d = (typeof FIELDS !== "undefined") && FIELDS.filter(function (x) { return x.key === f; })[0];
+    return (d && d.points) || 1;
+  });
+  var sum = pts.reduce(function (a, b) { return a + b; }, 0);
+  var want = fields.map(function (f, i) {
+    var n = Math.round(limit * pts[i] / sum);
+    if (n < 1) n = 1;                              // ★0問にしない
+    return Math.min(n, lists[i].length);
+  });
+  // 端数で limit を超えたら、配点の大きい形式から1問ずつ削る（最低1問は残す）
+  var total = want.reduce(function (a, b) { return a + b; }, 0);
+  var order = fields.map(function (_, i) { return i; })
+                    .sort(function (a, b) { return pts[b] - pts[a]; });
+  for (var g = 0; total > limit && g < 500; g++) {
+    var cut = false;
+    for (var j = 0; j < order.length && total > limit; j++) {
+      var i2 = order[j];
+      if (want[i2] > 1) { want[i2]--; total--; cut = true; }
+    }
+    if (!cut) break;                               // 全部1問。これ以上は削れない
+  }
+  var picked = lists.map(function (l, i) { return l.slice(0, want[i]); });
+  return roundRobin(picked, rnd);                  // 同じ形式が続かないように混ぜる
 }
 
 /* 形式ごとのリストから順ぐりに1つずつ取る（部首→画数→音訓→部首→…） */
