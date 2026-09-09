@@ -549,6 +549,65 @@ ok("セッションの状態も残っている（前後で変わらない）",
    `${JSON.stringify(beforeReload)} -> ${JSON.stringify(kept.s)}`);
 ok("リロード後もJSエラーが無い", errors.length === 0, errors.join(" | "));
 
+console.log("\n=== 日割り（量をならす。重いステージを分ける） ===");
+// ユーザー:「じかんより、やれそうか、が大事」→ **最適化するのは所要時間ではなく、量のばらつき。**
+// ⚠️ 1日の量を増やして日数の帳尻を合わせないこと。足りなければ範囲を削る側で調整する。
+const plan = await page.evaluate(() => {
+  const dr = UNITS.filter(u => u.mat === "dr" && u.field !== "test");
+  const p = buildPlan(dr, {});
+  const s = planSummary(p);
+  return {
+    sum: s,
+    days: p.length,
+    // 設問数が分かっているものだけの最大・最小（ならしの評価はこちらで）
+    knownMax: Math.max.apply(null, p.filter(c => !c.itemsUnknown).map(c => c.n)),
+    knownMin: Math.min.apply(null, p.filter(c => !c.itemsUnknown).map(c => c.n)),
+    // 分割されたかたまりが、元の単元の問数をちょうど覆っているか
+    // ★覆いは **設問数（items）** で見る。qs（答えの数）ではない。
+    //   同じ部首は設問10問で答え33、じゅく語作りは設問12問で答え24 なので、
+    //   qs で見ると「紙に無い問番号まで覆っている」ことになってしまう
+    covers: dr.filter(u => u.items).every(u => {
+      const cs = p.filter(c => c.unit === u.id);
+      if (!cs.length) return false;
+      const total = cs.reduce((a, c) => a + c.n, 0);
+      const first = cs[0].from === 1, last = cs[cs.length - 1].to === u.items;
+      const contiguous = cs.every((c, i) => i === 0 || c.from === cs[i - 1].to + 1);
+      return total === u.items && first && last && contiguous;
+    }),
+    // 設問数が未実測のもの（分割していない）
+    unknown: p.filter(c => c.itemsUnknown).length,
+    // ★上限を超えているのに、未実測の印が付いていないもの＝取りこぼし
+    overWithoutFlag: p.filter(c => c.n > 20 && !c.itemsUnknown).length,
+    // 未実測かつ上限超（＝実測が届いたら分割し直す対象）
+    needMeasure: p.filter(c => c.itemsUnknown && c.n > 20).map(c => c.unit),
+    ids: p.map(c => c.id),
+    // 分割しなかった単元は、単元idそのままであること（記録のidを動かさないため C-5）
+    unsplitKeepsId: p.filter(c => c.parts === 1).every(c => c.id === c.unit),
+    over: p.filter(c => c.n > 20).length,
+    noteUntouched: (() => {
+      const tn = UNITS.filter(u => u.mat === "tn");
+      const q = buildPlan(tn, {});
+      return q.every(c => c.parts === 1);   // 問数未実測なので切らない（A-6）
+    })()
+  };
+});
+ok("日割りが作れた", plan.days > 0, JSON.stringify(plan.sum));
+// ★★「上限を超えるものが無い」とは書けない。**設問数が未実測の単元は分割できない**ため
+//   （qs は答えの数なので、それで割ると紙に無い問番号を指す）。
+//   なので不変条件は「**超えているなら、必ず未実測の印が付いている**」。
+//   こう書くと、実測が届いて印が外れた瞬間に「分割し忘れ」が落ちる。
+ok("★上限を超えるかたまりには、必ず未実測の印が付いている",
+   plan.overWithoutFlag === 0, `印なしで超過 ${plan.overWithoutFlag} 件`);
+ok("★実測が要る単元が一覧で取れる（忘れられない）",
+   plan.needMeasure.length === 0 || plan.needMeasure.every(u => /^dr_\d\d$/.test(u)),
+   plan.needMeasure.join(" "));
+ok("★量がならされている（設問数が分かっているものだけで見る）",
+   plan.knownMax - plan.knownMin <= 10, `最小${plan.knownMin} 最大${plan.knownMax}`);
+ok("★分割が元の設問数をすき間なく覆っている", plan.covers);
+ok("★分けなかった単元は単元idのまま（記録のidを動かさない）", plan.unsplitKeepsId);
+ok("かたまりのidに重複が無い", plan.ids.length === new Set(plan.ids).size);
+ok("★問数が分からないノートは切らない（推測で切らない）", plan.noteUntouched);
+
 console.log("\n=== 紙の折り線（答えが折り線をまたがないか。C-4d） ===");
 // ユーザー指示（2026-09-10）:「書きは、答えを紙をおれば見えないみたいにできますか? 広げてパパが丸付けします」
 // ★唯一の失敗のしかたは「答えが答え欄から溢れて、折り線より上に出ること」。

@@ -555,3 +555,86 @@ function pickAudit(kstats, weak, limit, rnd) {
   });
   return cand.slice(0, want);
 }
+
+/* =========================================================================
+   日割り（2026-09-10）
+   ★基準が「所要時間」から **「毎日これなら続けられそうか」** に変わった。
+     ユーザー:「じかんより、やれそうか、が大事なので、時間はいいです」
+   → **最適化するのは、日によって量がバラバラにならないこと。**
+     ドリルは12問の日と33問の日があり、そのまま出すと重い日に
+     「今日は多い」と見えて、そこでやる気が切れる。**時間ではなく見た目の量が効く。**
+
+   ⚠️ **1日の量を増やして日数の帳尻を合わせないこと**（司令塔の明示指示）。
+      日数が足りないときは**範囲を削る側**で調整する（ステージ2は苦手分野だけ）。
+
+   ⚠️ 切るときは**キリのいいところ**で。大問の途中では切らない。
+      いまはドリル（大問なし）だけを切る対象にしている。
+      ノートとテストは大問があり、その境目のデータをまだ持っていないので**切らない**（A-6）。
+   ========================================================================= */
+var DAY_CAP = 20;   // ★1日の上限。本人が「毎日20問書く」と言っているので20を基準に置く
+
+/* 1単元を、1日ぶんの「かたまり」に割る。
+   かたまりの id は "<unit_id>#<番号>"。**単元idは変えない**ので既存の記録は無事（C-5）。
+   ⚠️ 1かたまりしか無いときは "#1" を付けない（＝単元idそのもの）。
+      分割の必要が無い単元の記録が、あとから id を変えられることになるため。 */
+function splitUnit(unit, cap) {
+  // ★★割るのは **設問数（items）** であって、答えの数（qs）ではない。
+  //   qs で割ると「ステージ25 の 18〜33」のような**紙に存在しない範囲**を出す
+  //   （同じ部首は設問10問で答え33、じゅく語作りは設問12問で答え24）。
+  //   items が未実測（0）の単元は **割らない。**範囲を推測で作らないため（A-6）。
+  var n = unit.items || 0;
+  var unknown = !n;
+  // ★設問数が未実測なら、**表示だけは答えの数で代用する**（0問と出すよりまし）。
+  //   ただし **分割はしない。**範囲を推測で作ると、紙に無い問番号を指すことになる。
+  //   ⚠️ 代用が効かないのは「同じ部首」「じゅく語作り」の2種類だけ（設問数≠答え数）。
+  //      そこは実測が届くまで `itemsUnknown` で分かるようにしてある。
+  if (unknown) n = unit.qs || 0;
+  if (unknown || n <= cap || unit.field === "test" || unit.mat !== "dr") {
+    return [{ id: unit.id, unit: unit.id, part: 1, parts: 1,
+              from: 1, to: n, n: n, qs: unit.qs || 0, itemsUnknown: unknown }];
+  }
+  var parts = Math.ceil(n / cap);
+  var base = Math.floor(n / parts), extra = n % parts;   // 端数は前の回から1問ずつ
+  var out = [], from = 1;
+  for (var i = 0; i < parts; i++) {
+    var take = base + (i < extra ? 1 : 0);
+    out.push({ id: unit.id + "#" + (i + 1), unit: unit.id, part: i + 1, parts: parts,
+               from: from, to: from + take - 1, n: take,
+               qs: unit.qs || 0, itemsUnknown: false });
+    from += take;
+  }
+  return out;
+}
+
+/* 単元の並びから、1日ぶんのかたまりの列を作る。
+   ★1日1かたまり。**詰め込まない。**「今日は2つある」と見えた時点で量がバラつく。 */
+function buildPlan(units, opts) {
+  opts = opts || {};
+  var cap = opts.cap || DAY_CAP;
+  var only = opts.only;                       // 例: ["dr"] でドリルだけ
+  var plan = [];
+  units.forEach(function (u) {
+    if (only && only.indexOf(u.mat) < 0) return;
+    if (opts.skip && opts.skip.indexOf(u.id) >= 0) return;
+    splitUnit(u, cap).forEach(function (c) {
+      plan.push({
+        id: c.id, unit: c.unit, mat: u.mat, label: u.label, field: u.field,
+        pages: u.pages, part: c.part, parts: c.parts,
+        from: c.from, to: c.to,
+        n: c.n,                        // ★設問数（画面に出すのはこちら）
+        qs: c.qs,                      // ★答えの数（点数の計算はこちら）
+        itemsUnknown: c.itemsUnknown   // 設問数が未実測。分割していない
+      });
+    });
+  });
+  plan.forEach(function (d, i) { d.day = i + 1; });
+  return plan;
+}
+
+/* 何日ぶんあるか／総問数。日割りが受検日までに収まるかを見るのに使う */
+function planSummary(plan) {
+  var qs = 0, max = 0, min = Infinity;
+  plan.forEach(function (d) { qs += d.n; if (d.n > max) max = d.n; if (d.n < min) min = d.n; });
+  return { days: plan.length, qs: qs, max: max, min: (min === Infinity ? 0 : min),
+           avg: plan.length ? Math.round(qs / plan.length * 10) / 10 : 0 };
+}
