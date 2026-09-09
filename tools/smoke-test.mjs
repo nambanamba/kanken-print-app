@@ -223,8 +223,21 @@ ok("検証字が「あやしい」と重なっていない", auditSane.noOverlap
 console.log("\n=== ③ 練習プリントを印刷 ===");
 await page.click('button:has-text("この字の練習プリントを印刷")');
 const printed = await page.evaluate(() => document.getElementById("print-region").innerHTML);
-ok("印刷用HTMLが組み立てられた", printed.includes("れんしゅうする字"));
-ok("お手本（なぞり用）が入っている", printed.includes("p-model"));
+ok("印刷用HTMLが組み立てられた", printed.includes("きょう 書く字"));
+// ★2026-09-10、お子さん本人の希望で**なぞり練習を廃止**した。
+//   「練習はなし、毎日20問書く」。だから紙にお手本を出さない＝ここは反転した検査になる。
+ok("★お手本（なぞり）を出していない（本人の希望で廃止）", !printed.includes("p-model"));
+// ⚠️ なぞりを外すと紙の上から答えが消える。以前は「なぞる字」が答えを兼ねていた。
+//    採点する人が紙1枚で完結できなくなるので、**書きの答えを紙の下に出す**のが必須条件。
+const keyBlock = printed.slice(printed.indexOf("おうちの方へ"));
+ok("★書きの答えが紙の下に印刷されている", keyBlock.includes("書きの答え"), keyBlock.slice(0, 200));
+ok("読みの答えも紙の下に印刷されている（従来どおり）",
+   !printed.includes("読みかたを、ひらがなで書きましょう") || keyBlock.includes("読みの答え"),
+   keyBlock.slice(0, 200));
+// 答えは「おうちの方へ」より前に出ていないこと（解いている最中に見えない）
+ok("答えが問題より先に出ていない",
+   printed.indexOf("書きの答え") < 0 || printed.indexOf("書きの答え") > printed.indexOf("漢字を書きましょう"),
+   String(printed.indexOf("書きの答え")) + " / " + String(printed.indexOf("漢字を書きましょう")));
 ok("おうちの方への説明が入っている", printed.includes("おうちの方へ"));
 const allInPrint = await page.evaluate(() => {
   const h = document.getElementById("print-region").innerHTML;
@@ -535,6 +548,65 @@ ok("セッションの状態も残っている（前後で変わらない）",
    JSON.stringify(kept.s) === JSON.stringify(beforeReload),
    `${JSON.stringify(beforeReload)} -> ${JSON.stringify(kept.s)}`);
 ok("リロード後もJSエラーが無い", errors.length === 0, errors.join(" | "));
+
+console.log("\n=== 紙の折り線（答えが折り線をまたがないか。C-4d） ===");
+// ユーザー指示（2026-09-10）:「書きは、答えを紙をおれば見えないみたいにできますか? 広げてパパが丸付けします」
+// ★唯一の失敗のしかたは「答えが答え欄から溢れて、折り線より上に出ること」。
+//   溢れれば折っても答えが見えるので、**そこだけを機械的に見る。**
+//   ⚠️ 問題数が変われば答えの行数も変わるので、**少ない日・ふつうの日・多い日**で見る。
+await page.emulateMedia({ media: "print" });
+await page.setViewportSize({ width: 794, height: 1123 });
+const foldCheck = await page.evaluate(() => {
+  const out = [], real = window.practiceList;
+  const pool = KANJI_MASTER.map(r => r.k);
+  [5, 13, 20, 30, 40].forEach(n => {   // ★上限側も見る。マスの高さを上げたとき30問で実際に溢れた
+    window.practiceList = () => pool.slice(0, n);
+    printSessionPractice();
+    const region = document.getElementById("print-region");
+    const key = region.querySelector(".p-key"), fold = region.querySelector(".p-fold");
+    const body = region.querySelector(".p-body");
+    out.push({
+      n: n, hasFold: !!fold,
+      // 答え欄からの溢れ。1pxでも溢れたら、折っても答えが見える
+      keyOverflow: key ? key.scrollHeight - key.clientHeight : -1,
+      // 折り線が答えより先に来ていること（逆なら折る意味がない）
+      foldAboveKey: !!(fold && key &&
+        (fold.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      hasKakiKey: !!key && key.textContent.indexOf("書きの答え") >= 0,
+      // ★★ここが本命。**問題側が入りきらず、折り線を突き抜けていないか。**
+      //   最初これを見ておらず「答え欄の中の溢れ」しか見ていなかったため、
+      //   20問で問題が紙をはみ出して答えの上に重なっていたのに**テストは全通過した。**
+      //   撮って目で見て初めて分かった（C-4d / D-14「その検査で捕まるかは試すまで分からない」）。
+      bodyOverflow: body ? body.scrollHeight - body.clientHeight : -1,
+      // 問題の最後の行が、折り線より上で終わっていること
+      lastRowBottom: (() => {
+        const rows = body ? body.querySelectorAll("tr") : [];
+        if (!rows.length) return 0;
+        return Math.round(rows[rows.length - 1].getBoundingClientRect().bottom);
+      })(),
+      foldTop: fold ? Math.round(fold.getBoundingClientRect().top) : -1,
+      // ★問題側に答えが混じっていないこと
+      bodyHasAnswer: !!body && body.textContent.indexOf("答え") >= 0,
+      regionH: region.getBoundingClientRect().height
+    });
+  });
+  window.practiceList = real;
+  return out;
+});
+await page.emulateMedia({ media: null });
+foldCheck.forEach(c => {
+  ok("折り線がある（" + c.n + "字）", c.hasFold);
+  ok("折り線が答えより上にある（" + c.n + "字）", c.foldAboveKey);
+  ok("★答えが折り線をまたいでいない（" + c.n + "字）", c.keyOverflow <= 0, "はみ出し " + c.keyOverflow + "px");
+  ok("★★問題が紙からはみ出していない（" + c.n + "字）", c.bodyOverflow <= 0, "はみ出し " + c.bodyOverflow + "px");
+  ok("★★問題の最後の行が折り線より上で終わっている（" + c.n + "字）",
+     c.lastRowBottom <= c.foldTop, "最終行 " + c.lastRowBottom + "px / 折り線 " + c.foldTop + "px");
+  ok("書きの答えが答え欄にある（" + c.n + "字）", c.hasKakiKey);
+  ok("★問題側に答えが混じっていない（" + c.n + "字）", !c.bodyHasAnswer);
+});
+ok("紙の高さがA4に固定されている（折り線の位置が毎回同じ）",
+   foldCheck.every(c => Math.abs(c.regionH - foldCheck[0].regionH) < 1),
+   foldCheck.map(c => Math.round(c.regionH)).join(" / "));
 
 console.log("\n=== 目次のマージ（★焼き付いた端末が直るか。C-7b） ===");
 // もとの実装は `load(K_UNITS,null) || DEFAULT_UNITS` で、**保存ずみが1件でもあると

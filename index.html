@@ -119,7 +119,35 @@
   @media print{
     body{background:#fff;padding:0;}
     header,.tabs,.wrap{display:none !important;}
-    #print-region{display:block !important;padding:14mm 16mm;}
+    /* ★答えを紙の下に置き、**折ると裏側に来る**ようにする（2026-09-10 ユーザー指示）。
+       「広げてパパが丸付けします」。
+       ⚠️ 折り線を「中身の直後」に置いてはいけない。**問題数によって位置が動き、
+          毎回ちがう場所で折ることになる。**
+       → **A4の高さを固定し、答え欄を下端に固定の高さで貼る。**
+          折り線は常に紙の同じ場所（下から p-key の高さぶん）に来る。
+       ⚠️ 答えが増えて p-key から溢れると、**折っても答えが見える。**
+          そこが唯一の失敗のしかたなので、はみ出しはテストで固定してある
+          （p-key の scrollHeight が clientHeight を超えないこと）。 */
+    #print-region{display:flex !important;flex-direction:column;
+                  box-sizing:border-box;height:297mm;padding:14mm 16mm;}
+    /* ⚠️ ここは overflow:hidden にしない。**隠すと「入りきらない」ことに気づけない。**
+       入りきらないなら、それはレイアウトの不具合として見えるべき。
+       テストは p-body の scrollHeight が clientHeight を超えないことを見ている */
+    .p-body{flex:1 1 auto;min-height:0;}
+    /* ★2段組み。1問1マスにしたので、20問でも1枚に収まる。
+       ⚠️ もとは1問に空きマス4〜5個（なぞり練習の名残）で、
+          **20問だと紙をはみ出して折り線を突き抜けていた。**
+          テストは通っていた（答え欄の中しか見ていなかった）。目で見て分かった（C-4d） */
+    .p-cols{display:flex;gap:5mm;align-items:flex-start;}
+    .p-cols>table{flex:1 1 0;min-width:0;}
+    /* ★書くマスの高さ。子どもが漢字を1字書く枠なので、小さすぎると書けない。
+       ⚠️ 固定値にすると、問数が増えたとき折り線を越える（14mm・30問で実際に76px溢れた）。
+          → **段あたりの行数から JS で決める**（boxHeightFor）。CSSの既定は控えめな値にしておく。
+          上げ下げしたら **必ず 5/13/20/30/40問でテストし直すこと。** */
+    .p-ansbox{height:11mm;}
+    .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
+            font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
+    .p-key{flex:0 0 auto;height:42mm;overflow:hidden;box-sizing:border-box;}
     @page{size:A4 portrait;margin:0;}
     .p-title{font-size:13pt;font-weight:700;}
     .p-sub{font-size:8.5pt;color:#555;margin:1mm 0 4mm;}
@@ -131,8 +159,9 @@
     .p-no{width:7%;text-align:center;background:#f5f5f5;}
     .p-q{width:45%;}
     .p-ans{width:48%;height:11mm;}
-    .p-key{margin-top:5mm;border-top:1px dashed #999;padding-top:2.5mm;font-size:8.5pt;line-height:1.9;}
+    .p-key{padding-top:2mm;font-size:8.5pt;line-height:1.75;}
     .p-key b{font-size:9pt;}
+    .p-key .ans{letter-spacing:.02em;}
     .p-model{text-align:center;font-size:22pt;color:#c9c9c9;width:15%;}
     .p-blank{width:15%;height:15mm;}
   }
@@ -335,7 +364,7 @@
     <div class="card">
       <h2>🖨️ もうすこしの字の練習プリント</h2>
       <div class="muted" style="margin-bottom:10px">
-        まちがえた字を、お手本＋なぞり書き＋練習マスでA4に出します。
+        その日に書く字を、A4に出します。答えは紙の下（おうちの方へ）に印刷されます。
       </div>
       <button class="btn sec" onclick="printPractice()">練習プリントを印刷</button>
     </div>
@@ -591,7 +620,9 @@ function mustWriteList(){
 function startSession(force){
   if(!SESSION || SESSION.date!==todayStr() || SESSION.done || force){
     SESSION=buildSession({kstats:KSTATS, dayKey:todayStr()+(force?("#"+Date.now()):""),
-                          unsureTarget:10, mustWrite:mustWriteList()});
+                          unsureTarget:10, mustWrite:mustWriteList(),
+                          // ★画数を「直前期だけ増やす」ために残り日数を渡す（本人の希望）
+                          daysLeft:daysLeft()});
     SESSION.date=todayStr();
     SESSION.pos=0;
     // ★聞かずに最初から「あやしい」に入っている字がある（12-3b ③）。
@@ -843,7 +874,33 @@ function renderKyouEnd(){
     +"<tr><td>「あやしい」と答えた字</td><td class='num'>"+u.length+"</td></tr></table>";
 }
 
-/* きょうの10字の練習プリント（お手本＋なぞり＋書くマス） */
+/* ★問題を2段組みにする。1問1マスにしたので、20問でも1枚に収まる。
+   前半・後半で分けて左右に置く（左が1〜n/2、右が続き）。読む順が上から下で自然になる。 */
+/* ★書くマスの高さを、段あたりの行数から決める。
+   行が少ない日は大きく、多い日は小さく。**紙は1枚のまま、折り線の位置も動かさない。**
+   ⚠️ 値を変えたら 5/13/20/30/40問のテストを通すこと（30問・14mmで実際に溢れた）。 */
+function boxHeightFor(rowsPerCol){
+  if(rowsPerCol<= 8) return 18;
+  if(rowsPerCol<=10) return 15;
+  if(rowsPerCol<=12) return 13;
+  if(rowsPerCol<=15) return 11;
+  if(rowsPerCol<=18) return 9;
+  return 8;   // ★40問(20行/段)で1px溢れたので、下限をもう1段下げた
+}
+
+function twoCols(list, rowFn){
+  if(!list.length) return "";
+  var half=Math.ceil(list.length/2);
+  function tbl(items, base){
+    return '<table class="p-tbl">'
+      +items.map(function(k,j){ return rowFn(k, base+j); }).join("")+'</table>';
+  }
+  var left=list.slice(0,half), right=list.slice(half);
+  if(!right.length) return tbl(left,0);
+  return '<div class="p-cols">'+tbl(left,0)+tbl(right,half)+'</div>';
+}
+
+/* きょう書く字のプリント（なぞり廃止。1問1マスの2段組み＋折り線の下に答え） */
 function printSessionPractice(){
   // ★sheet を使う（「あやしい」＋黙って混ぜた検証字）。
   //   紙の上では両者を区別しない。区別すると、検証字だけ身構えて実力が測れない（12-3）
@@ -855,42 +912,58 @@ function printSessionPractice(){
   var kaki=list.filter(function(k){ return sheetFieldOf(k)!=="yomi"; });
   var yomi=list.filter(function(k){ return sheetFieldOf(k)==="yomi"; });
 
-  var html=
-    '<div class="p-title">漢検7級　きょう れんしゅうする字（'+list.length+'字）</div>'
+  // ★紙は「問題（p-body）／折り線（p-fold）／答え（p-key）」の3段。
+  //   折り線から下が答えなので、**折り返すと答えが裏側に来る。**
+  var html='<div class="p-body">'
+    +'<div class="p-title">漢検7級　きょう 書く字</div>'
     +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>';
 
+  // ★2026-09-10、**お子さん本人の希望でなぞり練習を廃止した。**
+  //   「練習はなし、毎日20問書く。できたら次の日はやらない。できなかったら、次の日も書く。」
+  //   → 引き継ぎ.md 12章の「できてもできなくても10字なぞって練習する」を撤回するもの。
+  //     **理由が本人の希望なので、次の担当は勝手に戻さないこと。**
+  //   ⚠️ なぞりを外すと、**紙の上から答えが消える。**
+  //      いままでは「なぞる字」が答えを兼ねていた。→ 折り線の下に答えを出す。
+  var kakiKey=[], yomiKey=[];
+  // 段あたりの行数（書き＋読みの合計）から、書くマスの高さを決める
+  var rowsPerCol=Math.ceil(kaki.length/2)+Math.ceil(yomi.length/2);
+  var boxH=boxHeightFor(rowsPerCol)+"mm";
   if(kaki.length){
-    html+='<div class="p-sec">■ なぞってから、あいているマスに書きましょう。'
+    html+='<div class="p-sec">■ 読みかたに合う漢字を書きましょう。'
       +'<span class="p-ask">（　）は読みです。</span></div>'
-      +'<table class="p-tbl">'+kaki.map(function(k){
+      +twoCols(kaki, function(k,i){
         var r=MASTER_BY_K[k]||{on:[],kun:[]};
         var cue=[].concat(r.on||[],r.kun||[]).slice(0,3).join("・");
-        return "<tr><td class='p-q' style='width:24%'>"+k
-          // 指示文が「（　）は読みです。」なので、読みは必ず（　）で囲む（紙の指示と見た目を一致させる）
-          +"<br><span style='font-size:8pt;color:#666'>（"+cue+"）</span></td>"
-          +"<td class='p-model'>"+k+"</td>"
-          +"<td class='p-blank'></td><td class='p-blank'></td>"
-          +"<td class='p-blank'></td><td class='p-blank'></td></tr>";
-      }).join("")+'</table>';
+        // ★答えの番号は問題の番号と同じ。父親が上から順に照らすだけで済むように
+        kakiKey.push((i+1)+" "+k);
+        // ★書くマスは1問1つ。なぞり練習をやめたので、繰り返し書く枠は要らない
+        return "<tr><td class='p-no'>"+(i+1)+"</td>"
+          +"<td class='p-q'><span style='font-size:9pt'>（"+cue+"）</span></td>"
+          +"<td class='p-ansbox' style='height:"+boxH+"'></td></tr>";
+      });
   }
-  var yomiKey=[];
   if(yomi.length){
     html+='<div class="p-sec">■ 読みかたを、ひらがなで書きましょう。</div>'
-      +'<table class="p-tbl">'+yomi.map(function(k){
+      +twoCols(yomi, function(k,i){
         var q=genYomi(k, seededRandom(SESSION.date+"|y|"+k));
-        if(q) yomiKey.push(q.q+"＝"+q.a);
-        return "<tr><td class='p-q' style='width:24%'>"+(q?q.q:k)
+        if(q) yomiKey.push((i+1)+" "+q.a);
+        return "<tr><td class='p-no'>"+(i+1)+"</td>"
+          +"<td class='p-q'>"+(q?q.q:k)
           +(q&&q.hint?"<br><span style='font-size:8pt;color:#666'>（"+q.hint+"）</span>":"")
-          +"</td><td class='p-blank' colspan='5'></td></tr>";
-      }).join("")+'</table>';
+          +"</td><td class='p-ansbox' style='height:"+boxH+"'></td></tr>";
+      });
   }
+  html+='</div>';
 
-  // ★答えを紙の下に印刷する（設計:「親御さんが紙1枚で採点を完結できる」）。
-  //   書きはお手本が出ているので答えは要らないが、**読みは答えが紙に無いと採点できない。**
-  html+='<div class="p-key"><b>おうちの方へ</b><br>'
-    +(yomiKey.length ? "読みの答え … "+yomiKey.join("／")+"<br>" : "")
+  // ★折り線。子ども向けの文字を入れる（ここで折るのは本人なので）
+  html+='<div class="p-fold">✂ ‑ ‑ ‑ ‑ ‑ ここで おってね ‑ ‑ ‑ ‑ ‑ ✂</div>';
+
+  // ★答えは必ず折り線より下。番号は問題と一致させる
+  html+='<div class="p-key"><b>おうちの方へ</b>（ここを折ると、答えは裏になります）<br>'
+    +(kakiKey.length ? '<span class="ans"><b>書きの答え</b>　'+kakiKey.join("　")+'</span><br>' : "")
+    +(yomiKey.length ? '<span class="ans"><b>読みの答え</b>　'+yomiKey.join("　")+'</span><br>' : "")
     +'できたかどうかを「きろく」画面で入れてください。'
-    +'できなかった字は、次の日の練習に回ります。</div>';
+    +'できなかった字は、次の日にまた出ます。</div>';
   document.getElementById("print-region").innerHTML=html;
   window.print();
 }

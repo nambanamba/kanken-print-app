@@ -410,7 +410,7 @@ function buildSession(opts) {
   //     問題集から漢字えらび20・じゅく語作り20が入れば、自然に 11% まで下がる。
   //   ★ただし **どの形式も0問にしない。** 画数がまるごと出なくなっても、
   //     本番前まで誰も気づかない。ここがいちばん怖い。
-  selItems = weightedPick(SELECT_FIELDS, byField, opts.selectLimit || SELECT_LIMIT, rnd);
+  selItems = weightedPick(SELECT_FIELDS, byField, opts.selectLimit || SELECT_LIMIT, rnd, opts.daysLeft);
 
   // 後半は書きと読みを順ぐりに。どちらも「自分はできるか」の自己申告なので、
   // 頭の切りかえは起きない（前半と後半を分けたのは、そこが違うため）
@@ -450,18 +450,35 @@ function buildSession(opts) {
      形式をまるごと落とすほうが害が大きいため。いまの limit=20 では起きない。
    ※ その形式の問題が1問も作れないとき（lists[i] が空）は 0 問になる。
      これは正しい（作れないものは出せない）。 */
-function weightedPick(fields, lists, limit, rnd) {
-  var pts = fields.map(function (f) {
-    var d = (typeof FIELDS !== "undefined") && FIELDS.filter(function (x) { return x.key === f; })[0];
-    return (d && d.points) || 1;
-  });
+/* ★出題の重み。**本番の配点（FIELDS.points）とは別物。**
+   もとは配点をそのまま重みにしていたが、**お子さん本人の希望**で画数だけ切り離した。
+     「総画数は直前に少しだけやりましょう。部首、音訓は今くらい」（2026-09-10）
+   → 直前期に入るまで画数は最小限。**直前期（残り14日以内）で配点なりに戻す。**
+   ⚠️ **0にはしない。**まるごと出なくなると、本番前まで誰も気づかない。
+   ⚠️ FIELDS.points は本番の配点そのものなので、**そちらを書きかえて調整しないこと。**
+      予想得点の計算が狂う。 */
+var KAKUSU_WEIGHT_NORMAL = 3;    // 部首20・音訓20 に対して 3 → 20問中およそ1問
+var CHOKUZEN_DAYS = 14;          // ここから直前期。画数を配点なりに戻す
+function selectWeight(field, daysLeft) {
+  var d = (typeof FIELDS !== "undefined") && FIELDS.filter(function (x) { return x.key === field; })[0];
+  var pts = (d && d.points) || 1;
+  if (field !== "kakusu") return pts;
+  return (daysLeft != null && daysLeft <= CHOKUZEN_DAYS) ? pts : KAKUSU_WEIGHT_NORMAL;
+}
+
+function weightedPick(fields, lists, limit, rnd, daysLeft) {
+  var pts = fields.map(function (f) { return selectWeight(f, daysLeft); });
   var sum = pts.reduce(function (a, b) { return a + b; }, 0);
   var want = fields.map(function (f, i) {
     var n = Math.round(limit * pts[i] / sum);
     if (n < 1) n = 1;                              // ★0問にしない
     return Math.min(n, lists[i].length);
   });
-  // 端数で limit を超えたら、配点の大きい形式から1問ずつ削る（最低1問は残す）
+  // 端数の調整。★超えたときだけでなく、**足りないときも埋める。**
+  //   ⚠️ もとは「超えたら削る」しか無かった。重みが偏ると round の切り捨てで
+  //      合計が limit に届かず、**前半が20問のはずが19問で終わっていた**
+  //      （画数の重みを 20→3 に下げた瞬間に出た。9+9+1=19）。
+  //      テストの「前半は20問か、まちがい10個で終わっている」が落ちて分かった。
   var total = want.reduce(function (a, b) { return a + b; }, 0);
   var order = fields.map(function (_, i) { return i; })
                     .sort(function (a, b) { return pts[b] - pts[a]; });
@@ -472,6 +489,16 @@ function weightedPick(fields, lists, limit, rnd) {
       if (want[i2] > 1) { want[i2]--; total--; cut = true; }
     }
     if (!cut) break;                               // 全部1問。これ以上は削れない
+  }
+  // 足りないぶんは、**重みの大きい形式から**足す（在庫のある範囲で）。
+  // ここで画数に足さないのが要点。減らした意図を、端数の調整で崩さない
+  for (var g2 = 0; total < limit && g2 < 500; g2++) {
+    var added = false;
+    for (var j2 = 0; j2 < order.length && total < limit; j2++) {
+      var i3 = order[j2];
+      if (want[i3] < lists[i3].length) { want[i3]++; total++; added = true; }
+    }
+    if (!added) break;                             // 在庫切れ。これ以上は足せない
   }
   var picked = lists.map(function (l, i) { return l.slice(0, want[i]); });
   return roundRobin(picked, rnd);                  // 同じ形式が続かないように混ぜる
