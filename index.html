@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>漢検7級 いっしょにがんばろう</title>
+<script src="kanken-data.js"></script>
+<script src="kanken-kanji.js"></script>
+<script src="kanken-gen.js"></script>
+<style>
+  :root{
+    --primary:#2563eb; --accent:#0891b2; --good:#16a34a; --soft:#f59e0b;
+    --bg:#f1f5f9; --card:#fff; --line:#e2e8f0; --text:#0f172a; --sub:#64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+       background:var(--bg);color:var(--text);padding-bottom:40px;line-height:1.6;}
+  .wrap{max-width:720px;margin:0 auto;padding:12px;}
+  header{background:var(--primary);color:#fff;padding:14px 12px;}
+  header h1{font-size:1.05rem;font-weight:700;}
+  header .sub{font-size:0.78rem;opacity:.9;margin-top:2px;}
+
+  .tabs{display:flex;gap:4px;background:#e2e8f0;padding:4px;border-radius:10px;margin-bottom:12px;}
+  .tab{flex:1;padding:9px 4px;border:none;background:transparent;border-radius:7px;
+       font-size:0.86rem;font-weight:700;color:var(--sub);cursor:pointer;}
+  .tab.active{background:#fff;color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .page{display:none;} .page.active{display:block;}
+
+  .card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:12px;
+        box-shadow:0 2px 4px rgba(0,0,0,.04);}
+  .card h2{font-size:0.95rem;margin-bottom:10px;}
+  .muted{color:var(--sub);font-size:0.82rem;}
+
+  .hero{background:linear-gradient(135deg,#2563eb,#0891b2);color:#fff;text-align:center;padding:20px 14px;}
+  .hero .big{font-size:2.6rem;font-weight:800;line-height:1.1;}
+  .hero .big small{font-size:1rem;font-weight:700;opacity:.9;}
+  .hero .cap{font-size:0.85rem;opacity:.92;margin-top:4px;}
+  .bar{height:14px;background:rgba(255,255,255,.28);border-radius:99px;overflow:hidden;margin-top:12px;}
+  .bar > i{display:block;height:100%;background:#fff;border-radius:99px;transition:width .4s;}
+
+  .scorebox{text-align:center;padding:6px 0;}
+  .scorebox .n{font-size:2.1rem;font-weight:800;color:var(--primary);}
+  .scorebox .n small{font-size:.95rem;color:var(--sub);font-weight:700;}
+  .sbar{height:20px;background:#e2e8f0;border-radius:99px;overflow:hidden;position:relative;margin:10px 0 2px;}
+  .sbar > i{display:block;height:100%;background:linear-gradient(90deg,#2563eb,#0891b2);transition:width .4s;}
+  .sbar .goal{position:absolute;top:0;bottom:0;width:3px;background:#f59e0b;}
+  .goallab{position:relative;height:16px;}
+  .goallab span{position:absolute;font-size:.7rem;color:var(--soft);font-weight:700;transform:translateX(-50%);white-space:nowrap;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{padding:6px 10px;border-radius:99px;font-size:1.05rem;font-weight:700;
+        background:#f1f5f9;border:1px solid var(--line);}
+  .chip.got{background:#dcfce7;border-color:#86efac;color:#15803d;}
+  .chip.soft{background:#fef3c7;border-color:#fcd34d;color:#92400e;}
+
+  .week{display:flex;gap:5px;}
+  .week span{flex:1;text-align:center;padding:7px 0;border-radius:7px;background:#f1f5f9;
+             font-size:.75rem;color:var(--sub);font-weight:700;}
+  .week span.on{background:#dcfce7;color:#15803d;}
+
+  .fieldrow{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  .fieldrow .nm{width:7.5em;font-size:.8rem;font-weight:700;flex-shrink:0;}
+  .fieldrow .fb{flex:1;height:11px;background:#e2e8f0;border-radius:99px;overflow:hidden;}
+  .fieldrow .fb > i{display:block;height:100%;border-radius:99px;}
+  .fieldrow .pt{width:4.2em;text-align:right;font-size:.75rem;color:var(--sub);font-weight:700;}
+
+  label{display:block;font-size:.82rem;font-weight:700;margin-bottom:4px;color:#334155;}
+  select,input[type=text],input[type=number],input[type=date]{
+    width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:.95rem;
+    font-family:inherit;background:#fff;}
+  .row{display:flex;gap:8px;} .row > div{flex:1;}
+  .field{margin-bottom:11px;}
+  .btn{display:block;width:100%;padding:13px;border:none;border-radius:10px;background:var(--primary);
+       color:#fff;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 3px 8px rgba(37,99,235,.28);}
+  .btn.sec{background:var(--accent);box-shadow:0 3px 8px rgba(8,145,178,.28);}
+  .btn.ghost{background:#fff;color:var(--primary);border:1px solid #cbd5e1;box-shadow:none;}
+  .btn+.btn{margin-top:8px;}
+
+  .stepper{display:flex;align-items:center;gap:10px;}
+  .stepper button{width:46px;height:46px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;
+                  font-size:1.4rem;font-weight:700;color:var(--primary);cursor:pointer;flex-shrink:0;}
+  .stepper input{text-align:center;font-size:1.3rem;font-weight:800;}
+
+  table{width:100%;border-collapse:collapse;font-size:.82rem;}
+  th,td{padding:7px 5px;border-bottom:1px solid var(--line);text-align:left;}
+  th{color:var(--sub);font-size:.75rem;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .done{color:var(--good);font-weight:700;}
+
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;
+        font-size:.78rem;color:#92400e;margin-bottom:10px;}
+
+  /* きょうのセッション（1問ずつ出す） */
+  .ky-prog{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;
+           font-size:.82rem;font-weight:700;color:var(--sub);}
+  .ky-dots{display:flex;gap:3px;}
+  .ky-dots i{width:9px;height:9px;border-radius:99px;background:#e2e8f0;display:block;}
+  .ky-dots i.on{background:var(--soft);}
+  .ky-q{font-size:2.4rem;font-weight:800;text-align:center;padding:18px 8px 6px;line-height:1.25;}
+  .ky-q .sub{display:block;font-size:.95rem;color:var(--sub);font-weight:700;margin-top:6px;}
+  .ky-ask{text-align:center;margin-bottom:14px;}
+  .ky-btn{display:block;width:100%;padding:15px;margin-top:9px;border:1px solid #cbd5e1;
+          border-radius:11px;background:#fff;font-size:1.15rem;font-weight:700;cursor:pointer;
+          font-family:inherit;color:var(--text);}
+  .ky-btn:active{background:#f1f5f9;}
+  .ky-btn.know{background:#dcfce7;border-color:#86efac;color:#15803d;}
+  .ky-btn.unsure{background:#fef3c7;border-color:#fcd34d;color:#92400e;}
+  .ky-fb{text-align:center;font-size:1.05rem;font-weight:800;min-height:1.9em;margin-top:12px;}
+  .ky-fb.ok{color:var(--good);} .ky-fb.ng{color:#b91c1c;}
+
+  /* 採点：既定は〇。まちがえた番号だけタップして✕にする */
+  .marks{display:flex;flex-wrap:wrap;gap:7px;}
+  .mark{width:56px;padding:7px 0;text-align:center;border-radius:9px;border:1px solid #86efac;
+        background:#dcfce7;color:#15803d;font-weight:800;cursor:pointer;font-size:.85rem;}
+  .mark .no{display:block;font-size:.68rem;font-weight:700;opacity:.8;}
+  .mark.x{background:#fee2e2;border-color:#fca5a5;color:#b91c1c;}
+
+  #print-region{display:none;}
+  @media print{
+    body{background:#fff;padding:0;}
+    header,.tabs,.wrap{display:none !important;}
+    #print-region{display:block !important;padding:14mm 16mm;}
+    @page{size:A4 portrait;margin:0;}
+    .p-title{font-size:13pt;font-weight:700;}
+    .p-sub{font-size:8.5pt;color:#555;margin:1mm 0 4mm;}
+    .p-sec{font-size:9.5pt;font-weight:700;background:#eee;padding:1.2mm 2mm;margin:3.5mm 0 1.5mm;}
+    .p-ask{font-weight:400;font-size:8.5pt;}
+    .p-hint{font-size:8.5pt;color:#555;margin-left:1mm;}
+    table.p-tbl{width:100%;border-collapse:collapse;}
+    table.p-tbl td{border:1px solid #999;padding:1.5mm 2mm;font-size:10pt;vertical-align:middle;}
+    .p-no{width:7%;text-align:center;background:#f5f5f5;}
+    .p-q{width:45%;}
+    .p-ans{width:48%;height:11mm;}
+    .p-key{margin-top:5mm;border-top:1px dashed #999;padding-top:2.5mm;font-size:8.5pt;line-height:1.9;}
+    .p-key b{font-size:9pt;}
+    .p-model{text-align:center;font-size:22pt;color:#c9c9c9;width:15%;}
+    .p-blank{width:15%;height:15mm;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap" style="padding:0;">
+    <h1>漢検7級 いっしょにがんばろう</h1>
+    <div class="sub" id="hdr-sub"></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" data-page="ouen">おうえん</button>
+    <button class="tab" data-page="kyou">きょう</button>
+    <button class="tab" data-page="kiroku">きろく</button>
+    <button class="tab" data-page="setei">せってい</button>
+  </div>
+
+  <!-- ================= おうえん ================= -->
+  <div class="page active" id="page-ouen">
+    <div class="card hero">
+      <div class="big" id="h-done">0<small> 字</small></div>
+      <div class="cap" id="h-cap">ここまで進んだよ</div>
+      <div class="bar"><i id="h-bar" style="width:0%"></i></div>
+    </div>
+
+    <div class="card">
+      <h2>🎯 いまの力（本番は200点満点）</h2>
+      <div class="scorebox">
+        <div class="n" id="s-score">—<small> 点</small></div>
+        <div class="muted" id="s-caption">まだ記録がありません</div>
+      </div>
+      <div class="sbar"><i id="s-bar" style="width:0%"></i><span class="goal" id="s-goal"></span></div>
+      <div class="goallab"><span id="s-goallab"></span></div>
+      <div class="muted" style="margin-top:6px" id="s-note"></div>
+    </div>
+
+    <div class="card">
+      <h2>🌱 できるようになった字</h2>
+      <div id="got-box"></div>
+    </div>
+
+    <div class="card">
+      <h2>📅 今週やった日</h2>
+      <div class="week" id="week-box"></div>
+      <div class="muted" id="week-cap" style="margin-top:7px"></div>
+    </div>
+
+    <div class="card">
+      <h2>📊 分野べつ（のびしろが見えます）</h2>
+      <div id="fields-box"></div>
+    </div>
+  </div>
+
+  <!-- ================= きょう（1日ぶんのセッション） ================= -->
+  <div class="page" id="page-kyou">
+    <!-- 開始前 -->
+    <div id="ky-start">
+      <div class="card">
+        <h2>▶️ きょうのぶん</h2>
+        <div class="muted" style="margin-bottom:12px">
+          漢字が1つずつ出ます。<br>
+          <b>書けそうなら「書ける」、あやしければ「あやしい」</b>をおしてください。<br>
+          <b>「あやしい」が10こ たまったら、きょうはおしまいです。</b>
+        </div>
+        <button class="btn" onclick="startSession()">はじめる</button>
+        <div class="muted" style="margin-top:10px" id="ky-info"></div>
+      </div>
+    </div>
+
+    <!-- 出題中 -->
+    <div id="ky-run" style="display:none">
+      <div class="card">
+        <div class="ky-prog">
+          <span id="ky-count">あやしい 0 / 10</span>
+          <span class="ky-dots" id="ky-dots"></span>
+        </div>
+        <div class="ky-q" id="ky-q"></div>
+        <div class="ky-ask muted" id="ky-ask"></div>
+        <div id="ky-choices"></div>
+        <div class="ky-fb" id="ky-fb"></div>
+      </div>
+    </div>
+
+    <!-- 終了 -->
+    <div id="ky-end" style="display:none">
+      <div class="card" style="text-align:center">
+        <div style="font-size:1.5rem;font-weight:800;color:var(--good)" id="ky-endmsg">きょうはここまで！</div>
+        <div class="muted" id="ky-endsub" style="margin-top:6px"></div>
+      </div>
+      <div class="card">
+        <h2>📝 きょう れんしゅうする字</h2>
+        <div class="chips" id="ky-list"></div>
+        <button class="btn sec" style="margin-top:12px" onclick="printSessionPractice()">
+          この字の練習プリントを印刷（A4）
+        </button>
+        <div class="muted" style="margin-top:8px">
+          印刷したら、紙に書いてもらってください。<br>
+          書けたかどうかは「きろく」で入れられます。
+        </div>
+      </div>
+      <div class="card">
+        <h2>✅ きょうやったこと</h2>
+        <div id="ky-summary"></div>
+        <button class="btn ghost" style="margin-top:10px" onclick="resetSession()">もう一度やる</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="note">
+        <b>未完成:</b> <b>漢字えらび・対義語・じゅく語作り・同じ読み（66点分）</b>は、まだ出せません。
+        問題集が届いてから足します。
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= きろく ================= -->
+  <div class="page" id="page-kiroku">
+    <div class="card">
+      <h2>✏️ 練習した字を採点する</h2>
+      <div class="muted" style="margin-bottom:10px">
+        <b>ぜんぶ〇になっています。書けなかった字だけタップして✕にしてください。</b><br>✕にした字は、次の日の練習にまた出ます。
+      </div>
+      <div class="marks" id="mark-box"></div>
+      <button class="btn" style="margin-top:12px" onclick="saveSheetResult()">この字を記録する</button>
+    </div>
+
+    <div class="card">
+      <h2>📘 本でやった分を入れる</h2>
+      <div class="muted" style="margin-bottom:10px">
+        問題集（トレーニングノート・ドリル）をやったら、こちらに入れてください。
+      </div>
+      <div class="field">
+        <label>どこをやりましたか</label>
+        <select id="k-unit"></select>
+      </div>
+      <div class="field">
+        <label>分野</label>
+        <select id="k-field"></select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>ぜんぶで何問</label>
+          <div class="stepper">
+            <button type="button" onclick="bump('k-total',-1)">−</button>
+            <input type="number" id="k-total" value="20" min="1" inputmode="numeric">
+            <button type="button" onclick="bump('k-total',1)">＋</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>そのうち正解</label>
+          <div class="stepper">
+            <button type="button" onclick="bump('k-correct',-1)">−</button>
+            <input type="number" id="k-correct" value="20" min="0" inputmode="numeric">
+            <button type="button" onclick="bump('k-correct',1)">＋</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>まちがえた字（あれば。続けて書いてOK）</label>
+        <input type="text" id="k-wrong" placeholder="例）愛潟械">
+      </div>
+      <button class="btn sec" onclick="saveUnitRecord()">この回を記録する</button>
+    </div>
+
+    <div class="card">
+      <h2>🌤 もうすこしの字</h2>
+      <div class="chips" id="weak-chips"></div>
+    </div>
+  </div>
+
+  <!-- ================= せってい ================= -->
+  <div class="page" id="page-setei">
+    <div class="card">
+      <h2>📅 受検日</h2>
+      <div class="field"><input type="date" id="m-date"></div>
+      <button class="btn ghost" onclick="saveExamDate()">受検日を保存</button>
+    </div>
+    <div class="card">
+      <h2>🖨️ もうすこしの字の練習プリント</h2>
+      <div class="muted" style="margin-bottom:10px">
+        まちがえた字を、お手本＋なぞり書き＋練習マスでA4に出します。
+      </div>
+      <button class="btn sec" onclick="printPractice()">練習プリントを印刷</button>
+    </div>
+    <div class="card">
+      <div class="note">
+        本が届いたら、各回の分野・ページ・問題数をここで入れてください。
+      </div>
+      <h2>📑 本の目次</h2>
+      <div id="units-box"></div>
+      <button class="btn" style="margin-top:10px" onclick="saveUnits()">目次を保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="print-region"></div>
+
+<script>
+/* =========================================================================
+   保存キー。既存アプリ（kq_battle_stats_v1 / kq_kanji_stats_v1）と
+   ぶつからないよう "kanken7_" で始める。
+   ========================================================================= */
+var K_REC="kanken7_records_v1", K_UNITS="kanken7_units_v1", K_WEAK="kanken7_weak_v1",
+    K_SET="kanken7_settings_v1", K_KSTAT="kanken7_kstats_v1", K_SHEET="kanken7_sheet_v1",
+    K_SESSION="kanken7_session_v1";
+
+function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v===null?d:v; }catch(e){ return d; } }
+function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+
+var RECORDS=load(K_REC,{}), WEAK=load(K_WEAK,{}), SET=load(K_SET,{examDate:KANKEN.examDate}),
+    KSTATS=load(K_KSTAT,{}), SHEET=load(K_SHEET,null), SESSION=load(K_SESSION,null),
+    UNITS=load(K_UNITS,null)||DEFAULT_UNITS.map(function(u){return Object.assign({},u);});
+
+function fieldOf(k){ return FIELDS.filter(function(f){return f.key===k;})[0]; }
+function matOf(k){ return MATERIALS.filter(function(m){return m.key===k;})[0]; }
+function unitOf(id){ return UNITS.filter(function(u){return u.id===id;})[0]; }
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function todayStr(){ return ymd(new Date()); }
+function daysLeft(){
+  var d=new Date(SET.examDate+"T00:00:00"), t=new Date(); t.setHours(0,0,0,0);
+  return Math.max(0, Math.round((d-t)/86400000));
+}
+
+Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(b){
+  b.onclick=function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("active");});
+    Array.prototype.forEach.call(document.querySelectorAll(".page"),function(x){x.classList.remove("active");});
+    b.classList.add("active");
+    document.getElementById("page-"+b.dataset.page).classList.add("active");
+    renderAll();
+  };
+});
+
+function bump(id,d){
+  var el=document.getElementById(id);
+  var v=Math.max(parseInt(el.min||0,10),(parseInt(el.value,10)||0)+d);
+  if(el.max) v=Math.min(parseInt(el.max,10),v);
+  el.value=v;
+  if(id==="k-total"){
+    var c=document.getElementById("k-correct");
+    if((parseInt(c.value,10)||0)>v) c.value=v;
+  }
+}
+
+/* =========================================================================
+   予想得点
+   ★まだ手をつけていない分野を「0点」として数えない。数えると序盤は必ず低く出て、
+     できていないことを責める画面になる。代わりに「何分野を測れたか」を必ず添える。
+   ========================================================================= */
+function estimate(){
+  var agg={}, test=null;
+  function add(f,c,t){ if(!agg[f]) agg[f]={c:0,t:0}; agg[f].c+=c; agg[f].t+=t; }
+  // 本の記録
+  Object.keys(RECORDS).forEach(function(id){
+    var r=RECORDS[id]; if(!r||!r.total) return;
+    if(r.field==="test"){ if(!test||(r.date||"")>(test.date||"")) test=r; return; }
+    if(fieldOf(r.field)) add(r.field,r.correct,r.total);
+  });
+  // アプリが出した1枚の記録（字ごとの積み上げ）
+  Object.keys(KSTATS).forEach(function(k){
+    Object.keys(KSTATS[k]).forEach(function(f){
+      if(!fieldOf(f)) return;
+      var s=KSTATS[k][f]; add(f,s.o||0,(s.o||0)+(s.x||0));
+    });
+  });
+  var keys=Object.keys(agg).filter(function(k){return agg[k].t>0;}), w=0,p=0;
+  keys.forEach(function(k){ var f=fieldOf(k); w+=(agg[k].c/agg[k].t)*f.points; p+=f.points; });
+  return { agg:agg, est:p>0?Math.round(w/p*KANKEN.fullMarks):null,
+           testScore:test?Math.round(test.correct/test.total*KANKEN.fullMarks):null,
+           covered:keys.length, totalFields:FIELDS.length };
+}
+
+/* できている字＝どれか1つでも形式で正解し、いま✕が残っていない字 */
+function isOK(k){
+  var s=KSTATS[k]; if(!s) return false;
+  var any=false, bad=false;
+  Object.keys(s).forEach(function(f){
+    if(f==="self") return;                 // 自己申告は正誤の記録ではない
+    // ★4択は2回続けて正解して初めて「できた」（fieldDone）。
+    //   1回の正解で数えると、まぐれ当たりの字が「できた字」に混ざり、
+    //   予想得点が実力より高く出る（引き継ぎ.md 12-1 の ⚠）
+    if(fieldDone(s[f],f)) any=true;
+    if((s[f].x||0)>(s[f].o||0)) bad=true;
+  });
+  return any && !bad;
+}
+
+/* ---------- おうえん ---------- */
+function renderOuen(){
+  var dl=daysLeft();
+  document.getElementById("hdr-sub").textContent="受検日 "+SET.examDate+"　あと "+dl+" 日";
+
+  var okCount=KANJI_MASTER.filter(function(r){return isOK(r.k);}).length;
+  var total=KANJI_MASTER.length;
+  document.getElementById("h-done").innerHTML=okCount+"<small> / "+total+" 字</small>";
+  document.getElementById("h-bar").style.width=(okCount/total*100)+"%";
+  document.getElementById("h-cap").textContent=
+    okCount===0?"さあ、はじめよう！":
+    okCount>=total?"ぜんぶできた！すごい！":"ここまでできるようになったよ";
+
+  var e=estimate();
+  var shown=(e.testScore!==null&&e.testScore!==undefined)?e.testScore:e.est;
+  var pct=KANKEN.passMark/KANKEN.fullMarks*100;
+  document.getElementById("s-goal").style.left=pct+"%";
+  var gl=document.getElementById("s-goallab");
+  gl.style.left=pct+"%"; gl.textContent="合格圏 "+KANKEN.passMark+"点";
+
+  var sc=document.getElementById("s-score"), cap=document.getElementById("s-caption"), note=document.getElementById("s-note");
+  // ★測れた分野が少ないうちは、予想得点を「合格圏かどうか」の判定に使わない。
+  //   少ない分野の正答率を200点に引き伸ばしているだけなので、
+  //   「合格圏に入っています」と出すと【事実と違う励まし】になる。
+  //   本番直前に「できるはずだったのに」となるのが、いちばん避けたいこと。
+  var hasTest=(e.testScore!==null&&e.testScore!==undefined);
+  var reliable=hasTest||e.covered>=Math.ceil(e.totalFields/2);
+  if(shown===null||shown===undefined){
+    sc.innerHTML="—<small> 点</small>";
+    cap.textContent="1枚やって採点すると出ます";
+    document.getElementById("s-bar").style.width="0%"; note.textContent="";
+  }else{
+    sc.innerHTML=shown+"<small> 点</small>";
+    document.getElementById("s-bar").style.width=(shown/KANKEN.fullMarks*100)+"%";
+    var diff=KANKEN.passMark-shown;
+    if(reliable){
+      cap.innerHTML=diff>0?'合格圏まで <b style="color:#f59e0b">あと '+diff+' 点</b>'
+                          :'<b style="color:#16a34a">合格圏に入っています！</b>';
+      note.innerHTML=hasTest ? "実戦テストの点です。<br>"+KANKEN.passNote
+                             : e.covered+" / "+e.totalFields+" 分野を測ったところからの目安です。";
+    }else{
+      cap.innerHTML='いまのところ <b style="color:#2563eb">'+shown+' 点</b>のペースです';
+      note.innerHTML="まだ <b>"+e.covered+" / "+e.totalFields+" 分野</b>しか測っていないので、"
+        +"これは<b>その分野だけの目安</b>です。ほかの分野もやると、本当の点数に近づきます。"
+        +"（合格は "+KANKEN.passMark+" 点あたり）";
+    }
+  }
+
+  // ★できるようになった字を名指しで見せる（ここがいちばん効く）
+  var got=Object.keys(WEAK).filter(function(k){return WEAK[k].got;})
+            .sort(function(a,b){return (WEAK[b].gotAt||0)-(WEAK[a].gotAt||0);});
+  document.getElementById("got-box").innerHTML=got.length
+    ? '<div class="chips">'+got.slice(0,40).map(function(k){return '<span class="chip got">'+k+'</span>';}).join("")+'</div>'
+      +'<div class="muted" style="margin-top:8px">'+got.length+" 字、書けるようになりました。</div>"
+    : '<div class="muted">まちがえた字が書けるようになると、ここに名前が出ます。</div>';
+
+  // ★連続日数は使わない。途切れても0に戻らない
+  var dows=["日","月","火","水","木","金","土"], wk=[], hit=0, dates={};
+  Object.keys(RECORDS).forEach(function(id){ if(RECORDS[id].date) dates[RECORDS[id].date]=1; });
+  (SET.doneDays||[]).forEach(function(d){ dates[d]=1; });
+  var now=new Date(); now.setHours(0,0,0,0);
+  var mon=new Date(now); mon.setDate(now.getDate()-((now.getDay()+6)%7));
+  for(var i=0;i<7;i++){
+    var d=new Date(mon); d.setDate(mon.getDate()+i);
+    var on=!!dates[ymd(d)]; if(on) hit++;
+    wk.push('<span class="'+(on?"on":"")+'">'+dows[d.getDay()]+'</span>');
+  }
+  document.getElementById("week-box").innerHTML=wk.join("");
+  document.getElementById("week-cap").textContent=
+    hit===0?"今週はこれから。きょうから始めよう！":"今週は "+hit+" 日やりました。";
+
+  document.getElementById("fields-box").innerHTML=FIELDS.map(function(f){
+    var a=e.agg[f.key], rate=(a&&a.t)?a.c/a.t:null;
+    var col=rate===null?"#cbd5e1":rate>=.8?"#16a34a":rate>=.6?"#f59e0b":"#fb7185";
+    return '<div class="fieldrow"><span class="nm">'+f.name+'</span>'
+      +'<span class="fb"><i style="width:'+(rate===null?0:rate*100)+'%;background:'+col+'"></i></span>'
+      +'<span class="pt">'+(rate===null?"まだ":Math.round(rate*100)+"%")+'</span></div>';
+  }).join("")+'<div class="muted" style="margin-top:8px">「まだ」は、できていないのではなく<b>まだやっていない</b>ところです。</div>';
+}
+
+/* =========================================================================
+   きょうのセッション（引き継ぎ.md 12章の設計）
+   「1日1枚固定」ではなく、**「あやしい」が10個たまったら終わり**。
+   固定枠にすると、できる字を練習させてしまうため。
+   ========================================================================= */
+/* ★「書ける」と言って書けなかった字（引き継ぎ.md 12-3b ③）。
+   待ち行列は持たない。**2回書けるまでは、この式が勝手に返し続ける**ので、
+   「次に印刷する紙に必ず入れる」（12-3b ①）が、取りこぼしなく成り立つ。
+   （待ち行列にすると、消し忘れ・消しすぎのどちらでも壊れる） */
+function mustWriteList(){
+  return Object.keys(KSTATS).filter(function(k){
+    var s=KSTATS[k].self;
+    return s && (s.miss||0)>0 && !(WEAK[k] && WEAK[k].got);
+  });
+}
+function startSession(force){
+  if(!SESSION || SESSION.date!==todayStr() || SESSION.done || force){
+    SESSION=buildSession({kstats:KSTATS, dayKey:todayStr()+(force?("#"+Date.now()):""),
+                          unsureTarget:10, mustWrite:mustWriteList()});
+    SESSION.date=todayStr();
+    SESSION.pos=0;
+    // ★聞かずに最初から「あやしい」に入っている字がある（12-3b ③）。
+    //   10字の枠の「中」なので、その日の量は増えない
+    SESSION.unsure=(SESSION.preUnsure||[]).slice();
+    SESSION.know=[];        // 「書ける」と言った字
+    SESSION.sel={o:0,x:0};  // 選択式の正誤
+    SESSION.done=false;
+    save(K_SESSION,SESSION);
+    // ★聞かずに入れた字だけで10字に達する日は、もう出す必要がない。
+    //   量を増やさないのが 12-2 の設計なので、その場で終わりにする
+    if(SESSION.unsure.length>=SESSION.unsureTarget){ finishSession(false); return; }
+  }
+  renderKyou();
+}
+function resetSession(){ startSession(true); }
+
+function currentItem(){
+  return SESSION && !SESSION.done ? SESSION.items[SESSION.pos] : null;
+}
+
+function renderKyou(){
+  var start=document.getElementById("ky-start"), run=document.getElementById("ky-run"),
+      end=document.getElementById("ky-end");
+  var live=SESSION && SESSION.date===todayStr();
+
+  if(!live){
+    start.style.display=""; run.style.display="none"; end.style.display="none";
+    var left=KANJI_MASTER.filter(function(r){return !isOK(r.k);}).length;
+    document.getElementById("ky-info").innerHTML=
+      "受検日まで <b>あと "+daysLeft()+" 日</b>。まだ確かめていない字が <b>"+left+" 字</b>あります。";
+    return;
+  }
+  if(SESSION.done){
+    start.style.display="none"; run.style.display="none"; end.style.display="";
+    renderKyouEnd(); return;
+  }
+  start.style.display="none"; run.style.display=""; end.style.display="none";
+
+  var q=currentItem();
+  if(!q){ finishSession(true); return; }
+
+  // 進み具合。★「あと何個」ではなく「たまった数」を出す（責めない見せ方）
+  document.getElementById("ky-count").textContent=
+    "あやしい "+SESSION.unsure.length+" / "+SESSION.unsureTarget;
+  var dots="";
+  for(var i=0;i<SESSION.unsureTarget;i++)
+    dots+='<i class="'+(i<SESSION.unsure.length?"on":"")+'"></i>';
+  document.getElementById("ky-dots").innerHTML=dots;
+
+  document.getElementById("ky-fb").textContent="";
+  document.getElementById("ky-fb").className="ky-fb";
+
+  if(q.field==="kaki"){
+    // 書き取りは自己申告。★正誤はここでは決まらない（紙で書いてから）
+    document.getElementById("ky-q").innerHTML=
+      q.q+(q.hint?'<span class="sub">（'+q.hint+'）</span>':"");
+    document.getElementById("ky-ask").textContent="この字、書ける？";
+    document.getElementById("ky-choices").innerHTML=
+      '<button class="ky-btn know" onclick="answerWrite(true)">書ける</button>'
+      +'<button class="ky-btn unsure" onclick="answerWrite(false)">あやしい</button>';
+  }else{
+    // 選択式はその場で自動判定
+    document.getElementById("ky-q").innerHTML=q.q;
+    document.getElementById("ky-ask").textContent=q.ask;
+    var ch=document.getElementById("ky-choices");
+    if(q.choices){
+      ch.innerHTML=q.choices.map(function(c,i){
+        return '<button class="ky-btn" onclick="answerSelect('+i+')">'
+          +"アイウエ"[i]+"　"+c+'</button>';
+      }).join("");
+    }else if(q.field==="onkun"){
+      ch.innerHTML='<button class="ky-btn" onclick="answerSelectVal(\'ア\')">ア　音読み</button>'
+        +'<button class="ky-btn" onclick="answerSelectVal(\'イ\')">イ　訓読み</button>';
+    }else{
+      // 画数は数字。選びやすいように候補を並べる
+      var n=parseInt(q.a,10), opts=[n];
+      [-2,-1,1,2].forEach(function(d){ if(n+d>0) opts.push(n+d); });
+      opts=opts.slice(0,5).sort(function(a,b){return a-b;});
+      ch.innerHTML=opts.map(function(v){
+        return '<button class="ky-btn" onclick="answerSelectVal(\''+v+'\')">'+v+' 画</button>';
+      }).join("");
+    }
+  }
+}
+
+/* 書き取りの自己申告 */
+function answerWrite(canWrite){
+  var q=currentItem(); if(!q) return;
+  if(!KSTATS[q.kanji]) KSTATS[q.kanji]={};
+  var s=KSTATS[q.kanji].self||(KSTATS[q.kanji].self={say:0,hit:0,miss:0});
+  if(canWrite){
+    s.say++;                       // 「書ける」と言った回数
+    s.lastSayAt=Date.now();        // 古い申告から先に抜き取る（12-3）
+    SESSION.know.push(q.kanji);
+  }else{
+    if(SESSION.unsure.indexOf(q.kanji)<0) SESSION.unsure.push(q.kanji);
+    if(!WEAK[q.kanji]) WEAK[q.kanji]={wrong:0,got:false};
+    WEAK[q.kanji].got=false; WEAK[q.kanji].lastAt=Date.now();
+  }
+  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK);
+  nextItem(SESSION.unsure.length>=SESSION.unsureTarget);
+}
+
+/* 選択式の自動判定 */
+function answerSelect(i){
+  var q=currentItem(); if(!q) return;
+  answerSelectVal(q.choices[i]);
+}
+function answerSelectVal(val){
+  var q=currentItem(); if(!q) return;
+  var ok=(String(val)===String(q.a));
+  if(!KSTATS[q.kanji]) KSTATS[q.kanji]={};
+  var s=KSTATS[q.kanji][q.field]||(KSTATS[q.kanji][q.field]={o:0,x:0});
+  // ★run＝いま何回続けて正解しているか。4択は25%で当たるので、
+  //   2回続くまで「できた」にしない（引き継ぎ.md 12-1 の ⚠）
+  if(ok){ s.o++; s.run=(s.run||0)+1; SESSION.sel.o++; }
+  else{
+    s.x++; s.run=0; SESSION.sel.x++;
+    if(!WEAK[q.kanji]) WEAK[q.kanji]={wrong:0,got:false};
+    WEAK[q.kanji].wrong++; WEAK[q.kanji].got=false; WEAK[q.kanji].lastAt=Date.now();
+  }
+  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK);
+  var fb=document.getElementById("ky-fb");
+  fb.textContent=ok?"◯ せいかい！":"✕ こたえは "+q.a;
+  fb.className="ky-fb "+(ok?"ok":"ng");
+  Array.prototype.forEach.call(document.querySelectorAll("#ky-choices .ky-btn"),
+    function(b){ b.disabled=true; });
+  setTimeout(function(){ nextItem(false); }, ok?550:1500);
+}
+
+function nextItem(finish){
+  SESSION.pos++;
+  if(finish || SESSION.pos>=SESSION.items.length){ finishSession(!finish); return; }
+  save(K_SESSION,SESSION);
+  renderKyou();
+}
+function finishSession(ranOut){
+  SESSION.done=true;
+  SESSION.ranOut=!!ranOut;      // 出す問題が尽きた（＝ぜんぶ書けた）
+
+  // ★抜き取り検証（12-3・12-3b）。「書ける」と申告した字を、黙って紙に混ぜる。
+  //   紙は1回きりのものなので、ここで確定させて SESSION に持たせる
+  //   （印刷のたびに引き直すと、印刷した紙と採点画面がずれる）。
+  var rnd=seededRandom(SESSION.date+"|audit");
+  SESSION.audit=pickAudit(KSTATS, WEAK, (SESSION.unsure||[]).length, rnd);
+  // ★どれが検証用かは紙に書かない。並び順でも分からないように混ぜる
+  SESSION.sheet=shuffle((SESSION.unsure||[]).concat(SESSION.audit), rnd);
+
+  SET.doneDays=(SET.doneDays||[]).concat([todayStr()])
+    .filter(function(v,i,a){return a.indexOf(v)===i;});
+  save(K_SESSION,SESSION); save(K_SET,SET);
+  renderAll();
+}
+
+function renderKyouEnd(){
+  var u=SESSION.unsure||[];
+  // ★画面も紙と同じ sheet を見せる。ここで「あやしい」だけ見せると、
+  //   紙に増えている字が検証字だと分かってしまう（12-3「どれが検証用かは書かない」）
+  var sheet=practiceList();
+  document.getElementById("ky-endmsg").textContent=
+    SESSION.ranOut && !u.length ? "ぜんぶ書けた！すごい！" : "きょうはここまで！";
+  document.getElementById("ky-endsub").textContent=
+    sheet.length ? "れんしゅうする字は "+sheet.length+" 字です。" : "れんしゅうする字はありません。";
+  document.getElementById("ky-list").innerHTML=
+    sheet.length ? sheet.map(function(k){return '<span class="chip soft">'+k+'</span>';}).join("")
+                 : '<span class="muted">ありません。</span>';
+  var s=SESSION.sel||{o:0,x:0};
+  document.getElementById("ky-summary").innerHTML=
+    "<table><tr><th>やったこと</th><th class='num'>かず</th></tr>"
+    +"<tr><td>出た問題</td><td class='num'>"+SESSION.pos+"</td></tr>"
+    +"<tr><td>えらぶ問題の正解</td><td class='num done'>"+s.o+" / "+(s.o+s.x)+"</td></tr>"
+    +"<tr><td>「書ける」と答えた字</td><td class='num'>"+(SESSION.know||[]).length+"</td></tr>"
+    +"<tr><td>「あやしい」と答えた字</td><td class='num'>"+u.length+"</td></tr></table>";
+}
+
+/* きょうの10字の練習プリント（お手本＋なぞり＋書くマス） */
+function printSessionPractice(){
+  // ★sheet を使う（「あやしい」＋黙って混ぜた検証字）。
+  //   紙の上では両者を区別しない。区別すると、検証字だけ身構えて実力が測れない（12-3）
+  var list=practiceList();
+  if(!list.length){ alert("れんしゅうする字がありません。"); return; }
+  document.getElementById("print-region").innerHTML=
+    '<div class="p-title">漢検7級　きょう れんしゅうする字（'+list.length+'字）</div>'
+    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>'
+    +'<div class="p-sec">■ なぞってから、あいているマスに書きましょう。'
+    +'<span class="p-ask">（　）は読みです。</span></div>'
+    +'<table class="p-tbl">'+list.map(function(k){
+        var r=MASTER_BY_K[k]||{on:[],kun:[]};
+        var cue=[].concat(r.on||[],r.kun||[]).slice(0,3).join("・");
+        return "<tr><td class='p-q' style='width:24%'>"+k
+          // 指示文が「（　）は読みです。」なので、読みは必ず（　）で囲む（紙の指示と見た目を一致させる）
+          +"<br><span style='font-size:8pt;color:#666'>（"+cue+"）</span></td>"
+          +"<td class='p-model'>"+k+"</td>"
+          +"<td class='p-blank'></td><td class='p-blank'></td>"
+          +"<td class='p-blank'></td><td class='p-blank'></td></tr>";
+      }).join("")+'</table>'
+    +'<div class="p-key"><b>おうちの方へ</b><br>'
+    +'書けたかどうかを「きろく」画面で入れてください。'
+    +'書けなかった字は、次の日の練習に回ります。</div>';
+  window.print();
+}
+
+/* ---------- きろく：練習プリントに書いた字の採点。既定〇、✕だけタップ ----------
+   「きょう」で印刷した字を、実際に書けたかどうか入れる。
+   ★書けなかった字は WEAK に残るので、次の日の練習にまた出る
+     （引き継ぎ.md 12-3b「書けると言って書けなかった字は書きに回す」の土台）。 */
+/* 紙に出る字。「あやしい」10字＋**黙って混ぜた検証字**（12-3）。
+   ★unsure ではなく sheet を見ること。検証字を採点し損ねると、
+     自己申告が当たっていたのか外れていたのかが永久に分からなくなる。 */
+function practiceList(){
+  if(!(SESSION && SESSION.date===todayStr())) return [];
+  return SESSION.sheet || SESSION.unsure || [];
+}
+function isAudit(k){ return !!(SESSION && SESSION.audit && SESSION.audit.indexOf(k)>=0); }
+function renderMarks(){
+  var box=document.getElementById("mark-box"), list=practiceList();
+  if(!list.length){
+    box.innerHTML='<span class="muted">「きょう」で練習する字を出すと、ここに並びます。</span>'; return;
+  }
+  SESSION.results=SESSION.results||{};
+  box.innerHTML=list.map(function(k,i){
+    var x=SESSION.results[k]==="x";
+    return '<div class="mark'+(x?" x":"")+'" onclick="toggleMark(\''+k+'\')">'
+      +'<span class="no">'+(i+1)+'</span>'+k+(x?" ✕":" 〇")+'</div>';
+  }).join("");
+}
+function toggleMark(k){
+  SESSION.results=SESSION.results||{};
+  SESSION.results[k]=SESSION.results[k]==="x"?"o":"x";
+  save(K_SESSION,SESSION); renderMarks();
+}
+function saveSheetResult(){
+  var list=practiceList();
+  if(!list.length){ alert("採点する字がありません。"); return; }
+  list.forEach(function(k){
+    var wrong=!!(SESSION.results&&SESSION.results[k]==="x");
+    if(!KSTATS[k]) KSTATS[k]={};
+    var s=KSTATS[k].kaki||(KSTATS[k].kaki={o:0,x:0});
+    var audit=isAudit(k);
+    // ★検証字は「書ける」と申告した字。当たったか外したかをここで記録する（12-3b）
+    var self=audit ? (KSTATS[k].self||(KSTATS[k].self={say:0,hit:0,miss:0})) : null;
+    if(wrong){
+      s.x++;
+      if(self) self.miss++;   // ★申告が外れた。以後この字は「書ける？」と聞かず、練習に回る（12-3b ③）
+      if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
+      WEAK[k].wrong++; WEAK[k].got=false; WEAK[k].lastAt=Date.now();
+    }else{
+      s.o++;
+      if(self){
+        // ★「書ける」と言って実際に書けた字は、**実測なのでいちばん強い証拠**。
+        //   1回で「できる」確定でよい（12-3b ②）
+        self.hit++;
+        if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
+        WEAK[k].got=true; WEAK[k].gotAt=Date.now();
+      }else{
+        // ★自分で「あやしい」と言った字なので、1回書けただけでは卒業させない。
+        //   2回書けてから「できるようになった字」に出す（引き継ぎ.md 12-3の5番）
+        if(WEAK[k] && !WEAK[k].got && (s.o||0)>=2){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); }
+      }
+    }
+  });
+  SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET); save(K_SESSION,SESSION);
+  renderAll();
+  alert("記録しました。おうえん画面を見せてあげてください！");
+}
+
+function renderKiroku(){
+  renderMarks();
+  var sel=document.getElementById("k-unit"), keep=sel.value;
+  sel.innerHTML=UNITS.map(function(u){
+    var m=matOf(u.mat), r=RECORDS[u.id];
+    return '<option value="'+u.id+'">'+(m?m.short:"")+" "+u.label+(u.pages?" ("+u.pages+")":"")+(r?" ✓済":"")+"</option>";
+  }).join("");
+  var fu=UNITS.filter(function(u){return !RECORDS[u.id];})[0];
+  sel.value=(keep&&unitOf(keep))?keep:(fu?fu.id:(UNITS[0]||{}).id);
+  var fs=document.getElementById("k-field");
+  fs.innerHTML='<option value="">（えらぶ）</option>'
+    +FIELDS.map(function(f){return '<option value="'+f.key+'">'+f.name+"（"+f.points+"点）</option>";}).join("")
+    +'<option value="test">実戦テスト（200点満点）</option>';
+  syncUnitToForm();
+  var weak=Object.keys(WEAK).filter(function(k){return !WEAK[k].got;});
+  document.getElementById("weak-chips").innerHTML=weak.length
+    ? weak.map(function(k){return '<span class="chip soft">'+k+'</span>';}).join("")
+    : '<span class="muted">いまはありません。</span>';
+}
+document.getElementById("k-unit").addEventListener("change",syncUnitToForm);
+function syncUnitToForm(){
+  var u=unitOf(document.getElementById("k-unit").value); if(!u) return;
+  var r=RECORDS[u.id];
+  document.getElementById("k-field").value=r?r.field:(u.field||"");
+  var t=r?r.total:(u.qs||(u.field==="test"?200:20));
+  document.getElementById("k-total").value=t;
+  document.getElementById("k-correct").value=r?r.correct:t;  // ★既定は全問正解
+}
+function saveUnitRecord(){
+  var id=document.getElementById("k-unit").value, u=unitOf(id);
+  if(!u){ alert("やったところをえらんでください。"); return; }
+  var total=parseInt(document.getElementById("k-total").value,10)||0;
+  var correct=parseInt(document.getElementById("k-correct").value,10)||0;
+  if(total<=0){ alert("問題数を入れてください。"); return; }
+  if(correct>total){ alert("正解の数が、ぜんぶの数より多くなっています。"); return; }
+  var field=document.getElementById("k-field").value;
+  RECORDS[id]={correct:correct,total:total,field:field,date:todayStr()};
+  if(field&&u.field!==field){ u.field=field; save(K_UNITS,UNITS); }
+  save(K_REC,RECORDS);
+  var raw=document.getElementById("k-wrong").value||"";
+  for(var i=0;i<raw.length;i++){
+    var ch=raw.charAt(i);
+    if(!MASTER_BY_K[ch]) continue;              // 範囲外の字は無視
+    if(!WEAK[ch]) WEAK[ch]={wrong:0,got:false};
+    WEAK[ch].wrong++; WEAK[ch].got=false; WEAK[ch].lastAt=Date.now();
+  }
+  save(K_WEAK,WEAK);
+  document.getElementById("k-wrong").value="";
+  renderAll(); alert("記録しました。");
+}
+
+/* ---------- せってい ---------- */
+function renderSetei(){
+  document.getElementById("m-date").value=SET.examDate;
+  document.getElementById("units-box").innerHTML=
+    "<table><tr><th>回</th><th>分野</th><th>ページ</th><th style='width:4em'>問数</th></tr>"
+    +UNITS.map(function(u){
+      var m=matOf(u.mat);
+      return "<tr><td style='white-space:nowrap'>"+(m?m.short:"")+" "+u.label+"</td>"
+        +"<td><select data-u='"+u.id+"' data-k='field' style='padding:4px;font-size:.8rem'><option value=''>—</option>"
+        +FIELDS.map(function(f){return "<option value='"+f.key+"'"+(u.field===f.key?" selected":"")+">"+f.name+"</option>";}).join("")
+        +"<option value='test'"+(u.field==="test"?" selected":"")+">実戦テスト</option></select></td>"
+        +"<td><input type='text' data-u='"+u.id+"' data-k='pages' value='"+(u.pages||"")+"' style='padding:4px;font-size:.8rem' placeholder='p.4-5'></td>"
+        +"<td><input type='number' data-u='"+u.id+"' data-k='qs' value='"+(u.qs||"")+"' style='padding:4px;font-size:.8rem'></td></tr>";
+    }).join("")+"</table>";
+}
+function saveUnits(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-u]"),function(el){
+    var u=unitOf(el.dataset.u); if(!u) return;
+    u[el.dataset.k]=(el.dataset.k==="qs")?(parseInt(el.value,10)||0):el.value;
+  });
+  save(K_UNITS,UNITS); renderAll(); alert("目次を保存しました。");
+}
+function saveExamDate(){
+  var v=document.getElementById("m-date").value; if(!v) return;
+  SET.examDate=v; save(K_SET,SET); renderAll(); alert("受検日を保存しました。");
+}
+
+/* ---------- 練習プリント（kanji-print-app の練習マスを流用） ---------- */
+function printPractice(){
+  var list=Object.keys(WEAK).filter(function(k){return !WEAK[k].got;})
+            .sort(function(a,b){return (WEAK[b].wrong||0)-(WEAK[a].wrong||0);}).slice(0,15);
+  if(!list.length){ alert("「もうすこしの字」がまだありません。"); return; }
+  document.getElementById("print-region").innerHTML=
+    '<div class="p-title">漢検7級　もうすこしの字 れんしゅう（'+list.length+'字）</div>'
+    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>'
+    +'<table class="p-tbl">'+list.map(function(k){
+        var r=MASTER_BY_K[k];
+        var cue=r?((r.on[0]||r.kun[0]||"")):"";
+        return "<tr><td class='p-q' style='width:25%'>"+k+"<br><span style='font-size:8pt;color:#666'>"+cue+"</span></td>"
+          +"<td class='p-model'>"+k+"</td><td class='p-blank'></td><td class='p-blank'></td>"
+          +"<td class='p-blank'></td><td class='p-blank'></td></tr>";
+      }).join("")+'</table>';
+  window.print();
+}
+
+function renderAll(){ renderOuen(); renderKyou(); renderKiroku(); renderSetei(); }
+renderAll();
+</script>
+</body>
+</html>

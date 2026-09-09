@@ -1,0 +1,319 @@
+// index.html の1日ぶんの流れを、ヘッドレスChromeで通しで確認する。
+//
+// 使い方:  node tools/smoke-test.mjs
+//
+// 確認する流れ（引き継ぎ.md 12章の設計）
+//   ① 字が1つずつ出る（選択式＝自動判定／書き取り＝「書ける・あやしい」）
+//   ② 「あやしい」が10個たまったら終了
+//   ③ その10字で練習プリントを印刷
+//   ④ 記録が残り、応援画面に反映される
+//
+// 注意:
+// - 件数を決め打ちしない。その場のデータから数えて、つじつまだけを見る（C-8b）。
+// - 印刷そのものは確認できないので、印刷用HTMLが組み立てられたかを見る。
+
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { getChromium, launchBrowser } from "./browser.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+let chromium;
+try { chromium = await getChromium(); }
+catch (e) { console.error(e.message); process.exit(2); }
+
+const MIME = { ".html": "text/html", ".js": "text/javascript" };
+const server = http.createServer((req, res) => {
+  // index.html は favicon を参照していないが、Edge / Chrome は自分から /favicon.ico を取りに来る。
+  // 404 を返すとコンソールにエラーが出て「JSエラーが無い」が落ちるので、空で204を返す。
+  // （同梱chromium では要求が来なかったため、msedge に切り替えて初めて出た。アプリの不具合ではない）
+  if (req.url === "/favicon.ico") { res.writeHead(204); return res.end(); }
+  const f = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]).replace(/^\//, "") || "index.html");
+  if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { "Content-Type": MIME[path.extname(f)] || "application/octet-stream" });
+  res.end(fs.readFileSync(f));
+});
+await new Promise(r => server.listen(0, r));
+const base = "http://127.0.0.1:" + server.address().port;
+
+let pass = 0, fail = 0;
+const ok = (name, cond, extra = "") => {
+  if (cond) { pass++; console.log("  OK   " + name); }
+  else { fail++; console.log("  FAIL " + name + (extra ? "  " + extra : "")); }
+};
+
+const browser = await launchBrowser(chromium);
+console.log("ブラウザ:", browser._kankenChannel);
+const page = await browser.newPage();
+const errors = [];
+page.on("pageerror", e => errors.push(String(e)));
+page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+page.on("dialog", d => d.accept());
+
+await page.goto(base + "/index.html", { waitUntil: "networkidle" });
+
+console.log("\n=== 読みこみ ===");
+ok("JSエラーが無い", errors.length === 0, errors.join(" | "));
+const master = await page.evaluate(() => ({
+  n: KANJI_MASTER.length,
+  ids: new Set(KANJI_MASTER.map(r => r.id)).size,
+  points: FIELDS.reduce((s, f) => s + f.points, 0)
+}));
+ok("漢字マスタが読めている（" + master.n + "字）", master.n > 0);
+ok("id に重複が無い", master.ids === master.n, `${master.ids}/${master.n}`);
+ok("配点の合計が満点と一致", master.points === 200, String(master.points));
+
+console.log("\n=== ① セッションを始める ===");
+await page.click('.tab[data-page="kyou"]');
+await page.click('button:has-text("はじめる")');
+const s0 = await page.evaluate(() => ({
+  n: SESSION.items.length,
+  target: SESSION.unsureTarget,
+  fields: [...new Set(SESSION.items.map(i => i.field))],
+  allKanji: SESSION.items.every(i => i.kanji && MASTER_BY_K[i.kanji]),
+  // ★同じ字を書き取りと選択式の両方に出していないか（一方が他方の答えになる）
+  dupKanji: (() => { const k = SESSION.items.map(i => i.kanji); return k.length - new Set(k).size; })()
+}));
+ok("セッションが作られた", s0.n > 0, JSON.stringify(s0));
+ok("「あやしい」の目標が10", s0.target === 10, String(s0.target));
+ok("書き取りと選択式が混ざっている", s0.fields.includes("kaki") && s0.fields.length > 1, s0.fields.join(","));
+ok("全問がマスタの字に紐づく", s0.allKanji);
+ok("同じ字を2回出していない", s0.dupKanji === 0, String(s0.dupKanji));
+ok("最初の1問が表示されている", (await page.locator("#ky-q").textContent()).trim().length > 0);
+
+console.log("\n=== ② 答えていく（選択式は自動判定／書き取りは自己申告） ===");
+// 選択式に正しく答えたときに◯が出るか、まず1問だけ確かめる
+const selFirst = await page.evaluate(() => {
+  // 最初の選択式問題までの位置を返す
+  for (let i = SESSION.pos; i < SESSION.items.length; i++)
+    if (SESSION.items[i].field !== "kaki") return { i, a: SESSION.items[i].a, field: SESSION.items[i].field };
+  return null;
+});
+ok("選択式の問題が存在する", !!selFirst);
+
+// 書き取りに答えていって、「あやしい」が10個たまったら終わるか。
+// ★3問に1問は「書ける」を押す。**押さないと自己申告が1件も残らず、
+//   抜き取り検証（12-3）の検査が「空配列に every」で丸ごと素通りする**
+//   （実際、最初に書いたときは素通りしていた。引き継ぎ.md 8章の教訓）。
+let guard = 0, kakiSeen = 0, saidKnow = 0;
+while (guard++ < 400) {
+  const st = await page.evaluate(() => ({ done: SESSION.done, field: (SESSION.items[SESSION.pos] || {}).field }));
+  if (st.done) break;
+  if (st.field === "kaki") {
+    if (kakiSeen++ % 3 === 2) { await page.click('button:has-text("書ける")'); saidKnow++; }
+    else { await page.click('button:has-text("あやしい")'); }
+  } else {
+    // 選択式は正解を押す（自動判定が働くか見る）
+    const clicked = await page.evaluate(() => {
+      const q = SESSION.items[SESSION.pos];
+      const btns = [...document.querySelectorAll("#ky-choices .ky-btn")];
+      const hit = btns.find(b => b.textContent.replace(/\s|画/g, "").endsWith(String(q.a).replace(/\s/g, "")));
+      (hit || btns[0]).click();
+      return true;
+    });
+    if (clicked) await page.waitForTimeout(700);
+  }
+}
+const s1 = await page.evaluate(() => ({
+  done: SESSION.done, unsure: SESSION.unsure.length, target: SESSION.unsureTarget,
+  sel: SESSION.sel, pos: SESSION.pos, ranOut: SESSION.ranOut,
+  // ★紙に出るのは「あやしい」＋黙って混ぜた検証字（12-3）。件数は決め打ちしない（C-8b）
+  audit: (SESSION.audit || []).length, sheet: (SESSION.sheet || []).length
+}));
+ok("「書ける」も押している（検証の入口ができている）", saidKnow > 0, String(saidKnow));
+ok("セッションが終了した", s1.done === true);
+ok("「あやしい」が10個たまって終わった", s1.unsure === s1.target, `${s1.unsure}/${s1.target}`);
+ok("選択式が自動採点されている", (s1.sel.o + s1.sel.x) > 0, JSON.stringify(s1.sel));
+ok("選択式は正解を押したので正解が多い", s1.sel.o > s1.sel.x, JSON.stringify(s1.sel));
+ok("終了画面が出ている", await page.locator("#ky-end").isVisible());
+const chips = await page.locator("#ky-list .chip").count();
+ok("練習する字が紙と同じ数ならんでいる", chips === s1.sheet, `${chips} vs ${s1.sheet}`);
+
+// ★抜き取り検証（引き継ぎ.md 12-3・12-3b）
+ok("紙は「あやしい」＋検証字になっている", s1.sheet === s1.unsure + s1.audit,
+   `sheet=${s1.sheet} unsure=${s1.unsure} audit=${s1.audit}`);
+ok("検証字は「あやしい」の字数を超えない（12-3b ④）", s1.audit <= s1.unsure,
+   `audit=${s1.audit} unsure=${s1.unsure}`);
+const auditSane = await page.evaluate(() => {
+  const a = SESSION.audit || [];
+  return {
+    // 検証字は「書ける」と申告した字だけ
+    fromKnow: a.every(k => KSTATS[k] && KSTATS[k].self && KSTATS[k].self.say > 0),
+    // 「あやしい」と重ならない（同じ字が紙に2回出ると A-1 の穴になる）
+    noOverlap: a.every(k => SESSION.unsure.indexOf(k) < 0),
+    n: a.length
+  };
+});
+ok("検証字は「書ける」と申告した字から選ばれている", auditSane.fromKnow);
+ok("検証字が「あやしい」と重なっていない", auditSane.noOverlap);
+
+console.log("\n=== ③ 練習プリントを印刷 ===");
+await page.click('button:has-text("この字の練習プリントを印刷")');
+const printed = await page.evaluate(() => document.getElementById("print-region").innerHTML);
+ok("印刷用HTMLが組み立てられた", printed.includes("れんしゅうする字"));
+ok("お手本（なぞり用）が入っている", printed.includes("p-model"));
+ok("おうちの方への説明が入っている", printed.includes("おうちの方へ"));
+const allInPrint = await page.evaluate(() => {
+  const h = document.getElementById("print-region").innerHTML;
+  return {
+    all: (SESSION.sheet || []).every(k => h.includes(k)),
+    // ★どれが検証用かは紙に書かない（12-3）。書くとそこだけ身構えて実力が測れない
+    noLabel: !/検証|抜き取り|ぬきとり/.test(h)
+  };
+});
+ok("紙の字がすべて出ている（あやしい＋検証字）", allInPrint.all);
+ok("どれが検証用か紙に書いていない", allInPrint.noLabel);
+
+console.log("\n=== ④ 採点して記録する（既定〇・✕だけタップ） ===");
+await page.click('.tab[data-page="kiroku"]');
+const marks = await page.locator(".mark").count();
+ok("採点ボタンが字の数ぶん出ている", marks === s1.sheet, `${marks} vs ${s1.sheet}`);
+ok("最初はぜんぶ〇", await page.evaluate(() =>
+  [...document.querySelectorAll(".mark")].every(e => !e.classList.contains("x"))));
+// ★✕にする2字は、**検証字を1つ必ず含める**ように選ぶ。
+//   ここを nth(0),nth(1) の決め打ちにすると、検証字に当たらない日があり、
+//   12-3b ②③ の検査が「空配列に every」で**素通りしてしまう**（引き継ぎ.md 8章の教訓）。
+const xIdx = await page.evaluate(() => {
+  const sh = SESSION.sheet, a = SESSION.audit || [];
+  const ai = sh.findIndex(k => a.indexOf(k) >= 0);        // 検証字（✕にする）
+  const ui = sh.findIndex(k => a.indexOf(k) < 0);         // あやしい字（✕にする）
+  return { ai, ui, nAudit: a.length };
+});
+ok("検証字が1字以上まざっている（検査が素通りしないこと）", xIdx.nAudit > 0, String(xIdx.nAudit));
+ok("✕にする検証字と、あやしい字を選べた", xIdx.ai >= 0 && xIdx.ui >= 0, JSON.stringify(xIdx));
+await page.locator(".mark").nth(xIdx.ai).click();
+await page.locator(".mark").nth(xIdx.ui).click();
+ok("タップした2つだけ✕になる", (await page.locator(".mark.x").count()) === 2);
+
+await page.click('button:has-text("この字を記録する")');
+await page.waitForTimeout(200);
+const after = await page.evaluate(() => {
+  // ★紙の並び順（sheet）で採点している。unsure の順ではない
+  const sh = SESSION.sheet;
+  const isA = k => (SESSION.audit || []).indexOf(k) >= 0;
+  // ✕にした字は DOM の .mark.x から読む（並び順の決め打ちをしない）
+  const xs = [...document.querySelectorAll(".mark.x")].map(e => e.textContent.replace(/[0-9\s〇✕]/g, ""));
+  const x = xs, o = sh.filter(k => xs.indexOf(k) < 0);
+  // 「あやしい」と言った字だけ（＝検証字を除く）で見る項目
+  const oUnsure = o.filter(k => !isA(k));
+  return {
+    wrongOK: x.every(k => KSTATS[k] && KSTATS[k].kaki && KSTATS[k].kaki.x > 0),
+    rightOK: o.every(k => KSTATS[k] && KSTATS[k].kaki && KSTATS[k].kaki.o > 0),
+    wrongStillWeak: x.every(k => WEAK[k] && !WEAK[k].got),
+    // ★自分で「あやしい」と言った字は、1回書けただけでは卒業させない（12-3の5番）
+    notGraduatedYet: oUnsure.every(k => WEAK[k] && !WEAK[k].got),
+    // ★「書ける」と言って実際に書けた字は実測なので1回で確定（12-3b ②）
+    auditHitDone: o.filter(isA).length > 0
+      && o.filter(isA).every(k => WEAK[k] && WEAK[k].got && KSTATS[k].self.hit > 0),
+    // ★「書ける」と言って書けなかった字は miss がつき、練習に回る（12-3b ③）
+    auditMissKept: x.filter(isA).length > 0
+      && x.filter(isA).every(k => KSTATS[k].self.miss > 0 && !WEAK[k].got),
+    // ★self は記録するだけ。画面には出さない
+    selfHidden: !/見立て|申告|miss|自己申告/.test(document.body.innerText),
+    // ★次のセッションで、外した字は聞かずに「あやしい」へ入る（12-3b ①③）
+    mustNext: mustWriteList(),
+    auditMissed: x.filter(isA),
+    est: estimate().est
+  };
+});
+ok("✕にした字が「書けなかった」として記録された", after.wrongOK);
+ok("〇の字が「書けた」として記録された", after.rightOK);
+ok("✕の字は「もうすこしの字」に残る（次の日また出る）", after.wrongStillWeak);
+ok("1回書けただけでは卒業させない（2回必要）", after.notGraduatedYet);
+ok("「書ける」と言って書けた字は1回で確定する（12-3b ②）", after.auditHitDone);
+ok("「書ける」と言って書けなかった字は練習に残る（12-3b ③）", after.auditMissKept);
+ok("自己申告の当たり外れを画面に出していない", after.selfHidden);
+ok("外した字は次の紙に必ず入る（12-3b ①）",
+   after.auditMissed.length > 0
+   && after.auditMissed.every(k => after.mustNext.indexOf(k) >= 0),
+   `missed=${after.auditMissed} must=${after.mustNext}`);
+ok("予想得点が出る", typeof after.est === "number" && after.est >= 0 && after.est <= 200, String(after.est));
+
+console.log("\n=== 応援画面に反映されるか ===");
+await page.click('.tab[data-page="ouen"]');
+const ouen = await page.evaluate(() => ({
+  done: document.getElementById("h-done").textContent,
+  score: document.getElementById("s-score").textContent,
+  cap: document.getElementById("s-caption").textContent,
+  note: document.getElementById("s-note").textContent,
+  fields: document.getElementById("fields-box").textContent,
+  week: document.querySelectorAll(".week span.on").length
+}));
+ok("できた字の数が出ている", /\d+\s*\/\s*\d+\s*字/.test(ouen.done.replace(/\s+/g, " ")), ouen.done);
+ok("予想得点が数字で出ている", /\d+/.test(ouen.score), ouen.score);
+ok("合格までの距離を「点」で言っている（字で言っていない）",
+  ouen.cap.includes("点") && !/あと\s*\d+\s*字/.test(ouen.cap), ouen.cap);
+ok("測った分野が少ないうちは合格圏だと断言しない",
+  !ouen.cap.includes("合格圏に入っています") && ouen.note.includes("分野"), ouen.cap);
+ok("未実施の分野は「まだ」と出る（0%と出さない）", ouen.fields.includes("まだ"));
+ok("今週やった日に印がついた", ouen.week >= 1, String(ouen.week));
+
+console.log("\n=== 責めない設計になっているか ===");
+// <script> の中まで拾わないこと。ソースのコメントを画面の文言と取り違える
+const body = await page.evaluate(() =>
+  [...document.querySelectorAll(".page, header")].map(e => e.textContent).join(" "));
+ok("「にがて」ではなく「もうすこし」と呼んでいる", !body.includes("にがて") && body.includes("もうすこし"));
+ok("「遅れ」を画面に出していない", !body.includes("遅れ"));
+ok("連続日数（ストリーク）を使っていない", !body.includes("連続"));
+ok("未完成の部分が「未完成」と明示されている", body.includes("未完成"));
+
+console.log("\n=== まぐれ当たり対策（4択は2回続けて正解するまで「できた」にしない） ===");
+// ★引き継ぎ.md 12-1 の ⚠。**仕様に書いてあるのに実装されていなかった**箇所。
+//   1回の正解で「できた」にすると、まぐれ当たりの字が二度と出てこなくなり、
+//   予想得点が実力より高いまま固まる（＝事実と違う励まし）。
+const fluke = await page.evaluate(() => {
+  const k = KANJI_MASTER.find(r => !KSTATS[r.k]).k;   // まだ手つかずの字で試す
+  const out = {};
+  KSTATS[k] = { bushu: { o: 1, x: 0, run: 1 } };      // 1回だけ正解した状態
+  out.oneNotDone = !fieldDone(KSTATS[k].bushu, "bushu");
+  out.oneNotOK   = !isOK(k);
+  // ★「まだ出る」ことの確かめ方。
+  //   642字のほとんどが手つかずなので、ある1日に必ず出るとは限らない（出たら偶然）。
+  //   確かめたいのは **「できた字」と同じ最後尾に回されていないこと** なので、
+  //   ほかを全部「2回続けて正解ずみ」にして、この字が拾われるかを見る。
+  const all = {};
+  KANJI_MASTER.forEach(r => { all[r.k] = { bushu: { o: 2, x: 0, run: 2 } }; });
+  all[k] = { bushu: { o: 1, x: 0, run: 1 } };
+  out.stillAsked = buildSession({ kstats: all, dayKey: "t1", unsureTarget: 10 })
+                     .items.some(q => q.kanji === k && q.field === "bushu");
+  KSTATS[k].bushu = { o: 2, x: 0, run: 2 };           // 2回続けて正解した状態
+  out.twoDone = fieldDone(KSTATS[k].bushu, "bushu");
+  out.twoOK   = isOK(k);
+  // 書く形式は当てずっぽうで当たらないので1回でよい
+  out.writeOneDone = fieldDone({ o: 1, x: 0 }, "kaki");
+  // 続けて正解が途切れたら振り出しに戻る
+  out.brokenRun = !fieldDone({ o: 5, x: 1, run: 0 }, "bushu");
+  delete KSTATS[k];
+  return out;
+});
+ok("4択は1回正解しただけでは「できた」にしない", fluke.oneNotDone);
+ok("1回正解しただけの字は「できた字」に数えない", fluke.oneNotOK);
+ok("1回正解しただけの字は、できた字より先に出る（最後尾に回されない）", fluke.stillAsked);
+ok("2回続けて正解したら「できた」になる", fluke.twoDone);
+ok("2回続けて正解した字は「できた字」に数える", fluke.twoOK);
+ok("書く形式は1回でよい（当てずっぽうで当たらないため）", fluke.writeOneDone);
+ok("続けて正解が途切れたら「できた」に戻らない", fluke.brokenRun);
+
+console.log("\n=== 選り分け（できた字を出さない） ===");
+const sort = await page.evaluate(() => {
+  const done = KANJI_MASTER.slice(0, 300).map(r => r.k);
+  const ks = {};
+  done.forEach(k => { ks[k] = { kaki: { o: 3, x: 0 }, kakusu: { o: 3, x: 0 }, bushu: { o: 3, x: 0 }, onkun: { o: 3, x: 0 } }; });
+  const s = buildSession({ kstats: ks, dayKey: "2026-09-10" });
+  return { leaked: s.items.filter(q => done.includes(q.kanji)).length, n: s.items.length };
+});
+ok("できている字が次の日に出てこない", sort.leaked === 0, `${sort.leaked}/${sort.n}`);
+
+console.log("\n=== 保存が残るか（リロード） ===");
+await page.reload({ waitUntil: "networkidle" });
+const kept = await page.evaluate(() => ({ k: Object.keys(KSTATS).length, s: SESSION && SESSION.done }));
+ok("記録がリロード後も残っている", kept.k > 0, String(kept.k));
+ok("セッションの状態も残っている", kept.s === true);
+ok("リロード後もJSエラーが無い", errors.length === 0, errors.join(" | "));
+
+await browser.close();
+server.close();
+console.log(`\n${fail === 0 ? "★ 全通過" : "★ 失敗あり"}  通過 ${pass} / 失敗 ${fail}`);
+process.exit(fail ? 1 : 0);
