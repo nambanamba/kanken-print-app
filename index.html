@@ -198,9 +198,9 @@
       <div class="card">
         <h2>▶️ きょうのぶん</h2>
         <div class="muted" style="margin-bottom:12px">
-          漢字が1つずつ出ます。<br>
-          <b>書けそうなら「書ける」、あやしければ「あやしい」</b>をおしてください。<br>
-          <b>「あやしい」が10こ たまったら、きょうはおしまいです。</b>
+          <b>まえはん</b>は、えらぶ問題です。おしたらすぐ〇✕が出ます。<br>
+          <b>こうはん</b>は、紙に書く分をえらびます。<br>
+          ぜんぶで <b>10分ぐらい</b>です。
         </div>
         <button class="btn" onclick="startSession()">はじめる</button>
         <div class="muted" style="margin-top:10px" id="ky-info"></div>
@@ -218,6 +218,23 @@
         <div class="ky-ask muted" id="ky-ask"></div>
         <div id="ky-choices"></div>
         <div class="ky-fb" id="ky-fb"></div>
+      </div>
+    </div>
+
+    <!-- 前半→後半の切りかえ。★頭の使い方が変わるので、一拍おく -->
+    <div id="ky-switch" style="display:none">
+      <div class="card" style="text-align:center">
+        <div style="font-size:1.3rem;font-weight:800;color:var(--good)">まえはん おわり！</div>
+        <div class="muted" id="ky-swsub" style="margin-top:6px"></div>
+      </div>
+      <div class="card">
+        <h2>✏️ ここからは 紙に書く分をえらぶよ</h2>
+        <div class="muted" style="margin-bottom:12px">
+          漢字が1つずつ出ます。<br>
+          <b>書けそうなら「書ける」、あやしければ「あやしい」</b>をおしてください。<br>
+          <b>「あやしい」が10こ たまったら、きょうはおしまいです。</b>
+        </div>
+        <button class="btn" onclick="startWritePhase()">すすむ</button>
       </div>
     </div>
 
@@ -531,7 +548,10 @@ function startSession(force){
     SESSION.unsure=(SESSION.preUnsure||[]).slice();
     SESSION.know=[];        // 「書ける」と言った字
     SESSION.sel={o:0,x:0};  // 選択式の正誤
+    SESSION.phase="select"; // ★前半＝選択式、後半＝書き
     SESSION.done=false;
+    // 前半に出す問題が無ければ、いきなり後半から
+    if(SESSION.firstWrite<=0) SESSION.phase="write";
     save(K_SESSION,SESSION);
     // ★聞かずに入れた字だけで10字に達する日は、もう出す必要がない。
     //   量を増やさないのが 12-2 の設計なので、その場で終わりにする
@@ -547,31 +567,38 @@ function currentItem(){
 
 function renderKyou(){
   var start=document.getElementById("ky-start"), run=document.getElementById("ky-run"),
-      end=document.getElementById("ky-end");
+      end=document.getElementById("ky-end"), sw=document.getElementById("ky-switch");
   var live=SESSION && SESSION.date===todayStr();
+  function only(el){
+    [start,run,end,sw].forEach(function(e){ e.style.display=(e===el?"":"none"); });
+  }
 
   if(!live){
-    start.style.display=""; run.style.display="none"; end.style.display="none";
+    only(start);
     var left=KANJI_MASTER.filter(function(r){return !isOK(r.k);}).length;
     document.getElementById("ky-info").innerHTML=
       "受検日まで <b>あと "+daysLeft()+" 日</b>。まだ確かめていない字が <b>"+left+" 字</b>あります。";
     return;
   }
-  if(SESSION.done){
-    start.style.display="none"; run.style.display="none"; end.style.display="";
-    renderKyouEnd(); return;
-  }
-  start.style.display="none"; run.style.display=""; end.style.display="none";
+  if(SESSION.done){ only(end); renderKyouEnd(); return; }
+  if(SESSION.phase==="switch"){ only(sw); renderKyouSwitch(); return; }
+  only(run);
 
   var q=currentItem();
   if(!q){ finishSession(true); return; }
 
-  // 進み具合。★「あと何個」ではなく「たまった数」を出す（責めない見せ方）
+  // 進み具合。
+  // ★前半は「といた数」を出す。**「まちがえた N/10」とは出さない。**
+  //   まちがいを集める表示になり、責める画面になる（応援が要件）。
+  //   まちがいが10個で切り上がるのは、**早く終わるという形でだけ**表に出る。
+  // ★後半は「たまった数」。「あと何個」とは出さない（同じ理由）
+  var isSel=(SESSION.phase==="select"), s=SESSION.sel||{o:0,x:0};
+  var now  = isSel ? (s.o+s.x)              : SESSION.unsure.length;
+  var goal = isSel ? SESSION.selectLimit    : SESSION.unsureTarget;
   document.getElementById("ky-count").textContent=
-    "あやしい "+SESSION.unsure.length+" / "+SESSION.unsureTarget;
+    (isSel ? "といた " : "あやしい ")+now+" / "+goal;
   var dots="";
-  for(var i=0;i<SESSION.unsureTarget;i++)
-    dots+='<i class="'+(i<SESSION.unsure.length?"on":"")+'"></i>';
+  for(var i=0;i<goal;i++) dots+='<i class="'+(i<now?"on":"")+'"></i>';
   document.getElementById("ky-dots").innerHTML=dots;
 
   document.getElementById("ky-fb").textContent="";
@@ -655,9 +682,29 @@ function answerSelectVal(val){
   setTimeout(function(){ nextItem(false); }, ok?550:1500);
 }
 
+/* ★前半（選択式）の終わり。
+   「まちがえた字が10個」か「20問」か、**早いほう**（kanken-gen.js の SELECT_LIMIT / SELECT_MISS_TARGET）。 */
+function selectPhaseOver(){
+  var s=SESSION.sel||{o:0,x:0};
+  return (s.o+s.x)>=SESSION.selectLimit || s.x>=SESSION.selectMissTarget;
+}
+function toSwitch(){
+  SESSION.phase="switch";
+  SESSION.pos=SESSION.firstWrite;      // 前半を切り上げて、後半の先頭へ飛ぶ
+  save(K_SESSION,SESSION);
+  if(SESSION.pos>=SESSION.items.length){ finishSession(true); return; }
+  renderKyou();
+}
+function startWritePhase(){
+  SESSION.phase="write"; save(K_SESSION,SESSION); renderKyou();
+}
 function nextItem(finish){
   SESSION.pos++;
   if(finish || SESSION.pos>=SESSION.items.length){ finishSession(!finish); return; }
+  // 前半が終わったら、後半に入る前に一拍おく（頭の使い方が変わるため）
+  if(SESSION.phase==="select" && (selectPhaseOver() || SESSION.pos>=SESSION.firstWrite)){
+    toSwitch(); return;
+  }
   save(K_SESSION,SESSION);
   renderKyou();
 }
@@ -677,6 +724,19 @@ function finishSession(ranOut){
     .filter(function(v,i,a){return a.indexOf(v)===i;});
   save(K_SESSION,SESSION); save(K_SET,SET);
   renderAll();
+}
+
+/* 前半→後半の切りかえ画面。
+   ★ここで「まちがえた字は、あしたもう一回出るよ」と予告する。
+     わざと間違えれば前半を10問で終われてしまうが、**まちがえた字は翌日また出る**ので
+     損得が釣り合う（12-3 の抜け道対策と同じ形）。既に pickKanji が拾う実装は入っていて、
+     **見えていなかっただけ**なので、ここで見えるようにする。
+     責める文ではなく**予告**として書くこと。 */
+function renderKyouSwitch(){
+  var s=SESSION.sel||{o:0,x:0};
+  document.getElementById("ky-swsub").innerHTML=
+    "えらぶ問題を <b>"+(s.o+s.x)+" 問</b>やって、<b>"+s.o+" 問</b>せいかいしたよ。"
+    +(s.x ? "<br>まちがえた字は、あしたもう一回出るよ。" : "");
 }
 
 function renderKyouEnd(){

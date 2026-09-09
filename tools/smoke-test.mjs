@@ -97,10 +97,20 @@ ok("選択式の問題が存在する", !!selFirst);
 // ★3問に1問は「書ける」を押す。**押さないと自己申告が1件も残らず、
 //   抜き取り検証（12-3）の検査が「空配列に every」で丸ごと素通りする**
 //   （実際、最初に書いたときは素通りしていた。引き継ぎ.md 8章の教訓）。
-let guard = 0, kakiSeen = 0, saidKnow = 0;
+let guard = 0, kakiSeen = 0, saidKnow = 0, sawSwitch = false, selAtSwitch = null;
 while (guard++ < 400) {
-  const st = await page.evaluate(() => ({ done: SESSION.done, field: (SESSION.items[SESSION.pos] || {}).field }));
+  const st = await page.evaluate(() => ({
+    done: SESSION.done, phase: SESSION.phase,
+    field: (SESSION.items[SESSION.pos] || {}).field,
+    sel: SESSION.sel, limit: SESSION.selectLimit, missTarget: SESSION.selectMissTarget
+  }));
   if (st.done) break;
+  // ★前半→後半の切りかえ画面。ここで一拍おく
+  if (st.phase === "switch") {
+    if (!sawSwitch) { sawSwitch = true; selAtSwitch = st; }
+    await page.click('button:has-text("すすむ")');
+    continue;
+  }
   if (st.field === "kaki") {
     if (kakiSeen++ % 3 === 2) { await page.click('button:has-text("書ける")'); saidKnow++; }
     else { await page.click('button:has-text("あやしい")'); }
@@ -122,6 +132,35 @@ const s1 = await page.evaluate(() => ({
   // ★紙に出るのは「あやしい」＋黙って混ぜた検証字（12-3）。件数は決め打ちしない（C-8b）
   audit: (SESSION.audit || []).length, sheet: (SESSION.sheet || []).length
 }));
+// ★前半＝選択式・後半＝書き（2026-09-09 の設計変更）
+ok("前半→後半の切りかえ画面を通った", sawSwitch);
+ok("前半は20問か、まちがい10個で終わっている",
+   !!selAtSwitch && ((selAtSwitch.sel.o + selAtSwitch.sel.x) >= selAtSwitch.limit
+                     || selAtSwitch.sel.x >= selAtSwitch.missTarget),
+   JSON.stringify(selAtSwitch && selAtSwitch.sel));
+const order = await page.evaluate(() => {
+  const it = SESSION.items, fw = SESSION.firstWrite;
+  return {
+    // 前半に書きが混ざっていない／後半に選択式が混ざっていない
+    frontAllSelect: it.slice(0, fw).every(q => q.field !== "kaki"),
+    backAllWrite:   it.slice(fw).every(q => q.field === "kaki"),
+    // ★1形式に偏らせない（画数・部首・音訓＝50点は短時間で伸びる。引き継ぎ.md 6章）
+    fields: [...new Set(it.slice(0, fw).map(q => q.field))].length,
+    frontN: fw,
+    limit: SESSION.selectLimit,
+    // ★★前半で聞いた字が、後半経由で紙に載らないこと（A-1）。
+    //   練習プリントは字と読みを印刷するので、載ると答えが紙に出る
+    noShared: (() => {
+      const f = new Set(it.slice(0, fw).map(q => q.kanji));
+      return it.slice(fw).every(q => !f.has(q.kanji));
+    })()
+  };
+});
+ok("前半は選択式だけ", order.frontAllSelect);
+ok("後半は書きだけ", order.backAllWrite);
+ok("前半が1形式に偏っていない", order.fields > 1, String(order.fields));
+ok("前半の問題数が上限を超えていない", order.frontN <= order.limit, `${order.frontN}/${order.limit}`);
+ok("★前半で聞いた字が後半（＝紙）に出てこない（A-1）", order.noShared);
 ok("「書ける」も押している（検証の入口ができている）", saidKnow > 0, String(saidKnow));
 ok("セッションが終了した", s1.done === true);
 ok("「あやしい」が10個たまって終わった", s1.unsure === s1.target, `${s1.unsure}/${s1.target}`);
@@ -296,21 +335,68 @@ ok("2回続けて正解した字は「できた字」に数える", fluke.twoOK)
 ok("書く形式は1回でよい（当てずっぽうで当たらないため）", fluke.writeOneDone);
 ok("続けて正解が途切れたら「できた」に戻らない", fluke.brokenRun);
 
+console.log("\n=== 前半は「まちがい10個」でも切り上がるか ===");
+// ★20問の上限だけでなく、**まちがいが10個たまったら早く終わる**ほうも確かめる。
+//   上を通しただけだと、こちらの分岐は一度も動かない。
+await page.click('.tab[data-page="kyou"]');
+await page.evaluate(() => resetSession());
+let g2 = 0, wrongCut = null;
+while (g2++ < 200) {
+  const st = await page.evaluate(() => ({
+    done: SESSION.done, phase: SESSION.phase, sel: SESSION.sel,
+    field: (SESSION.items[SESSION.pos] || {}).field
+  }));
+  if (st.done) break;
+  if (st.phase === "switch") { wrongCut = st.sel; break; }
+  if (st.field === "kaki") { wrongCut = st.sel; break; }   // 前半が無かった場合の保険
+  // わざと不正解を押す
+  await page.evaluate(() => {
+    const q = SESSION.items[SESSION.pos];
+    const btns = [...document.querySelectorAll("#ky-choices .ky-btn")];
+    const miss = btns.find(b => !b.textContent.replace(/\s|画/g, "").endsWith(String(q.a).replace(/\s/g, "")));
+    (miss || btns[0]).click();
+  });
+  await page.waitForTimeout(1600);
+}
+ok("まちがいが10個たまった時点で前半が終わった",
+   !!wrongCut && wrongCut.x >= 10 && (wrongCut.o + wrongCut.x) < 20,
+   JSON.stringify(wrongCut));
+const swText = await page.evaluate(() => document.getElementById("ky-swsub").textContent);
+ok("「あしたもう一回出るよ」と予告している（責める文にしない）",
+   swText.includes("あした"), swText);
+
 console.log("\n=== 選り分け（できた字を出さない） ===");
 const sort = await page.evaluate(() => {
   const done = KANJI_MASTER.slice(0, 300).map(r => r.k);
   const ks = {};
-  done.forEach(k => { ks[k] = { kaki: { o: 3, x: 0 }, kakusu: { o: 3, x: 0 }, bushu: { o: 3, x: 0 }, onkun: { o: 3, x: 0 } }; });
+  // ★選択式は run>=2 で初めて「できた」（12-1 の ⚠）。
+  //   run を入れないと「できた字」を作ったつもりで作れておらず、この検査が意味を失う
+  done.forEach(k => { ks[k] = { kaki: { o: 3, x: 0 },
+                                kakusu: { o: 3, x: 0, run: 3 },
+                                bushu:  { o: 3, x: 0, run: 3 },
+                                onkun:  { o: 3, x: 0, run: 3 } }; });
   const s = buildSession({ kstats: ks, dayKey: "2026-09-10" });
   return { leaked: s.items.filter(q => done.includes(q.kanji)).length, n: s.items.length };
 });
 ok("できている字が次の日に出てこない", sort.leaked === 0, `${sort.leaked}/${sort.n}`);
 
 console.log("\n=== 保存が残るか（リロード） ===");
+// ★done===true と決め打ちしない。**リロードの前後で状態が変わらないこと**が主旨なので、
+//   直前の状態を控えてから見比べる（C-8b「その場のデータから数える」）。
+const beforeReload = await page.evaluate(() => ({
+  done: SESSION.done, phase: SESSION.phase, pos: SESSION.pos,
+  unsure: (SESSION.unsure || []).length, sheet: (SESSION.sheet || []).length
+}));
 await page.reload({ waitUntil: "networkidle" });
-const kept = await page.evaluate(() => ({ k: Object.keys(KSTATS).length, s: SESSION && SESSION.done }));
+const kept = await page.evaluate(() => ({
+  k: Object.keys(KSTATS).length,
+  s: { done: SESSION.done, phase: SESSION.phase, pos: SESSION.pos,
+       unsure: (SESSION.unsure || []).length, sheet: (SESSION.sheet || []).length }
+}));
 ok("記録がリロード後も残っている", kept.k > 0, String(kept.k));
-ok("セッションの状態も残っている", kept.s === true);
+ok("セッションの状態も残っている（前後で変わらない）",
+   JSON.stringify(kept.s) === JSON.stringify(beforeReload),
+   `${JSON.stringify(beforeReload)} -> ${JSON.stringify(kept.s)}`);
 ok("リロード後もJSエラーが無い", errors.length === 0, errors.join(" | "));
 
 await browser.close();

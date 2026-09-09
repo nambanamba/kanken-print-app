@@ -310,6 +310,18 @@ function hashCode(s) {
    ========================================================================= */
 var SELECT_FIELDS = ["kakusu", "bushu", "onkun"];
 
+/* ★前半（選択式）の終わり方（2026-09-09 決定）。
+   「まちがえた字が10個」か「20問」か、**早いほう**で終わる。
+
+   ・問題数だけで区切らない … 固定20問にすると **できる字を20問やらせる**ことになる。
+     12-2 で「1日1枚固定」を捨てたのと同じ理由。
+   ・間違いの数だけでも区切れない … 間違いは**押して選べない**ので、
+     できる日はいつまでも終わらない。上限が要る。
+   ・数を後半（あやしい10個）とそろえてある。**子どもが覚えるルールは1つだけ**になる。
+   ・20問の根拠: 1問≒10秒（フィードバック込み）で3〜4分。
+     後半は1問≒5秒で2〜3分。**合わせて10分に収まる。** */
+var SELECT_LIMIT = 20, SELECT_MISS_TARGET = 10;
+
 /* ★選択式（4択）かどうか。まぐれ当たり対策の判定に使う（引き継ぎ.md 12-1 の ⚠）。
    書く形式（kaki・yomi）は当てずっぽうで当たらないので、この扱いをしない。 */
 function isSelectField(f) { return SELECT_FIELDS.indexOf(f) >= 0; }
@@ -344,32 +356,54 @@ function buildSession(opts) {
   writeK.forEach(function (r) { used[r.k] = 1; });
 
   // 選択式の候補。書き取りに使う字は避ける
-  var selItems = [];
+  // ★★この除外は絶対に外さないこと（確認ポイント A-1）。
+  //   練習プリントは **字とその読みを印刷する**（`氏（シ・うじ）`）ので、
+  //   前半で「氏の音読みは？」と聞いた字が後半経由で紙に載ると、
+  //   **答えがそのまま紙に印刷される。**前後に分けたあとも同じ。
+  var selItems = [], byField = [];
   SELECT_FIELDS.forEach(function (f) {
+    var one = [];
     pickKanji(f, kstats, opts.selPool || 30, rnd, opts.grades, used).forEach(function (r) {
       var q = GENERATORS[f](r.k, rnd, used);
-      if (q) { selItems.push(q); used[r.k] = 1; }
+      if (q) { one.push(q); used[r.k] = 1; }
     });
+    byField.push(one);
   });
-  selItems = shuffle(selItems, rnd);
+  // ★形式ごとに順ぐりに取る（1形式に偏らせない）。
+  //   画数10・音訓20・部首20＝50点は規則的で短時間で伸びる（引き継ぎ.md 6章）。
+  //   ここで偏らせると、コスパの高い分野がまるごと育たない日が出る。
+  selItems = roundRobin(byField, rnd).slice(0, opts.selectLimit || SELECT_LIMIT);
 
   var writeItems = [];
   writeK.forEach(function (r) { var q = genKaki(r.k, rnd); if (q) writeItems.push(q); });
 
-  // 書き取りと選択式を交互に。書き取りだけが続くと単調になる
-  var items = [];
-  for (var i = 0; i < Math.max(writeItems.length, selItems.length); i++) {
-    if (writeItems[i]) items.push(writeItems[i]);
-    if (selItems[i]) items.push(selItems[i]);
-  }
+  // ★前半＝選択式、後半＝書き（2026-09-09 の設計変更）。
+  //   もとは交互だったが、次の理由で分けた。
+  //   ・頭の使い方が違う（選択式＝知識で選ぶ／書き＝自分は書けるかの自己評価）
+  //   ・**終わりの基準が書きにしか無く、選択式が「おまけ」になっていた**（120点分あるのに）
+  //   ・選択式はその場で〇✕が出る。**先にすると「今日もできた」で始められる**（ユーザー判断）
+  //   前任が交互にした理由は「書きだけ続くと単調」だが、
+  //   **選択式が速いので前半がテンポよく流れ、単調さは起きない**と判断した。
+  var items = selItems.concat(writeItems);
   items.forEach(function (q, i) { q.no = i + 1; });
 
   return {
     date: opts.dayKey,
     unsureTarget: opts.unsureTarget || 10,
+    selectLimit: opts.selectLimit || SELECT_LIMIT,
+    selectMissTarget: opts.selectMissTarget || SELECT_MISS_TARGET,
+    firstWrite: selItems.length,   // ここから後半（書き）。前半を切り上げたらここへ飛ぶ
     items: items,
-    preUnsure: mustWrite        // 聞かずに最初から「あやしい」に入れる字
+    preUnsure: mustWrite           // 聞かずに最初から「あやしい」に入れる字
   };
+}
+
+/* 形式ごとのリストから順ぐりに1つずつ取る（部首→画数→音訓→部首→…） */
+function roundRobin(lists, rnd) {
+  var out = [], n = 0, i;
+  lists.forEach(function (l) { if (l.length > n) n = l.length; });
+  for (i = 0; i < n; i++) lists.forEach(function (l) { if (l[i]) out.push(l[i]); });
+  return out;
 }
 
 /* ---------- 抜き取り検証（引き継ぎ.md 12-3・12-3b） ----------
