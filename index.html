@@ -506,8 +506,9 @@ function renderOuen(){
             .sort(function(a,b){return (WEAK[b].gotAt||0)-(WEAK[a].gotAt||0);});
   document.getElementById("got-box").innerHTML=got.length
     ? '<div class="chips">'+got.slice(0,40).map(function(k){return '<span class="chip got">'+k+'</span>';}).join("")+'</div>'
-      +'<div class="muted" style="margin-top:8px">'+got.length+" 字、書けるようになりました。</div>"
-    : '<div class="muted">まちがえた字が書けるようになると、ここに名前が出ます。</div>';
+      // ★「書ける」と言い切らない。読みで卒業した字もここに並ぶ（読み30点分を後半に足したため）
+      +'<div class="muted" style="margin-top:8px">'+got.length+" 字、できるようになりました。</div>"
+    : '<div class="muted">できなかった字ができるようになると、ここに名前が出ます。</div>';
 
   // ★連続日数は使わない。途切れても0に戻らない
   var dows=["日","月","火","水","木","金","土"], wk=[], hit=0, dates={};
