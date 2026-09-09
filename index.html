@@ -366,7 +366,46 @@ function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} 
 
 var RECORDS=load(K_REC,{}), WEAK=load(K_WEAK,{}), SET=load(K_SET,{examDate:KANKEN.examDate}),
     KSTATS=load(K_KSTAT,{}), SHEET=load(K_SHEET,null), SESSION=load(K_SESSION,null),
-    UNITS=load(K_UNITS,null)||DEFAULT_UNITS.map(function(u){return Object.assign({},u);});
+    UNITS=mergeUnits(load(K_UNITS,null),DEFAULT_UNITS);
+
+/* ★保存ずみの目次と DEFAULT_UNITS を、id をキーにして合流させる。
+   ⚠️ もとは `load(K_UNITS,null) || DEFAULT_UNITS` だった。これだと
+      **保存ずみが1度でもできると DEFAULT_UNITS が永久に無視され、
+      端末に【仮】の目次が焼き付いた。**「きろく」で1件登録するだけで保存される
+      （recordUnit の save(K_UNITS,...)）ので、必ず起きる。
+      `if(!既にある){使う}` が2回目に沈黙する型（確認ポイント C-7b）。
+
+   合流のきまり:
+     ・保存ずみに無い id      → 足す（新しい教材・回が既存の端末にも届く）
+     ・両方にある id          → **人が直せる欄だけ**保存ずみを優先する。
+                               ★人が直せるのは field / pages / qs の3つだけ
+                                 （renderSetei の入力欄がこの3つ。label と mat はただの表示）。
+                                 だから label と mat は**常に DEFAULT を採る。**
+                                 ここを「値が入っていれば保存ずみ優先」にすると、
+                                 旧版の自動ラベル「第1回」が人の編集と区別できず、
+                                 **本物の見出し「第1回 漢字の読み①」に一生変わらない。**
+                                 （テストで実際に落ちて分かった）
+     ・保存ずみにしか無い id  → **消さずに残す**（RECORDS[id] が指しているため。C-5）
+
+   ★ここで save しないこと。保存しないから毎回やり直され、
+     **この先 DEFAULT_UNITS を更新すれば、すべての端末に届き続ける。**
+     一度でも焼き付けると、また同じ不具合に戻る。 */
+function mergeUnits(saved,defaults){
+  var byId={}; (saved||[]).forEach(function(u){ byId[u.id]=u; });
+  var out=[], seen={};
+  defaults.forEach(function(d){
+    var s=byId[d.id], u=Object.assign({},d);
+    // ★人が「せってい」で直せる欄だけ、保存ずみを優先する。
+    //   label と mat は表示専用なので、必ず DEFAULT の値になる。
+    if(s) ["field","pages","qs"].forEach(function(k){
+      // 空文字・0・null は「未入力」とみなし、DEFAULT 側を残す
+      if(s[k]!==""&&s[k]!==null&&s[k]!==undefined&&s[k]!==0) u[k]=s[k];
+    });
+    out.push(u); seen[d.id]=1;
+  });
+  (saved||[]).forEach(function(u){ if(!seen[u.id]) out.push(Object.assign({},u)); });
+  return out;
+}
 
 function fieldOf(k){ return FIELDS.filter(function(f){return f.key===k;})[0]; }
 function matOf(k){ return MATERIALS.filter(function(m){return m.key===k;})[0]; }

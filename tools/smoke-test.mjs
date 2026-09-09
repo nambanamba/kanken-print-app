@@ -536,6 +536,91 @@ ok("セッションの状態も残っている（前後で変わらない）",
    `${JSON.stringify(beforeReload)} -> ${JSON.stringify(kept.s)}`);
 ok("リロード後もJSエラーが無い", errors.length === 0, errors.join(" | "));
 
+console.log("\n=== 目次のマージ（★焼き付いた端末が直るか。C-7b） ===");
+// もとの実装は `load(K_UNITS,null) || DEFAULT_UNITS` で、**保存ずみが1件でもあると
+// DEFAULT_UNITS が永久に無視され、端末に【仮】の目次が焼き付いた。**
+// 「きろく」で1件登録すると save(K_UNITS,...) が走るので、必ず起きる。
+// ここで見るのは「1回目に動くか」ではなく **「すでに焼き付いた状態から直るか」** と
+// **「2回目・3回目も壊れないか」**（確認ポイント C-7b）。
+
+// ① 旧版の端末を再現する。25回ぶんが field も pages も空（＝【仮】）で保存ずみ。
+//    さらに「人が手で直した1件」と「DEFAULT に無い古い id」を混ぜる。
+await page.evaluate(() => {
+  const sealed = [];
+  for (let i = 1; i <= 25; i++) {
+    sealed.push({ id: "tn_" + String(i).padStart(2, "0"), mat: "tn",
+                  label: "第" + i + "回", field: "", pages: "", qs: 0 });
+  }
+  sealed[2].qs = 99;                 // ← 人が「せってい」で入れた値（tn_03）
+  sealed[4].field = "kaki";          // ← 人が入れた分野（tn_05。DEFAULT は yomi）
+  sealed.push({ id: "zz_old", mat: "tn", label: "むかしの回", field: "", pages: "", qs: 7 });
+  localStorage.setItem("kanken7_units_v1", JSON.stringify(sealed));
+  // 記録も1件置く。**この id を指す単元が消えないこと**が要点（C-5）
+  const rec = JSON.parse(localStorage.getItem("kanken7_records_v1") || "{}");
+  rec["zz_old"] = { correct: 5, total: 7, field: "", date: "2026-09-10" };
+  localStorage.setItem("kanken7_records_v1", JSON.stringify(rec));
+});
+
+const snap = async () => await page.evaluate(() => ({
+  n: UNITS.length,
+  ids: UNITS.map(u => u.id),
+  tn01: UNITS.find(u => u.id === "tn_01"),
+  tn03: UNITS.find(u => u.id === "tn_03"),
+  tn05: UNITS.find(u => u.id === "tn_05"),
+  zz:   UNITS.find(u => u.id === "zz_old"),
+  blankField: UNITS.filter(u => !u.field).length,
+  recKeys: Object.keys(RECORDS)
+}));
+
+await page.reload({ waitUntil: "networkidle" });
+const m1 = await snap();
+
+ok("★焼き付いた端末でも、空だった分野が埋まる", m1.tn01 && m1.tn01.field === "yomi",
+   JSON.stringify(m1.tn01));
+ok("★空だったページも埋まる", m1.tn01 && m1.tn01.pages === "2-3", JSON.stringify(m1.tn01));
+ok("★仮のラベルが本物の見出しに変わる", !!(m1.tn01 && m1.tn01.label.includes("漢字の読み")),
+   m1.tn01 && m1.tn01.label);
+ok("人が入れた問数を上書きしない（tn_03 qs=99）", m1.tn03 && m1.tn03.qs === 99,
+   JSON.stringify(m1.tn03));
+ok("人が入れた分野を上書きしない（tn_05 = kaki）", m1.tn05 && m1.tn05.field === "kaki",
+   JSON.stringify(m1.tn05));
+ok("★DEFAULT に無い古い id を消さない（記録が指しているため C-5）", !!m1.zz,
+   JSON.stringify(m1.zz));
+ok("その記録も残っている", m1.recKeys.includes("zz_old"), m1.recKeys.join(","));
+ok("id に重複が出ていない", m1.ids.length === new Set(m1.ids).size,
+   `${m1.ids.length} / ${new Set(m1.ids).size}`);
+ok("実戦テストも足された", m1.ids.includes("tn_t1") && m1.ids.includes("tn_t3"));
+
+// ② 2回目。**ここが本体。**一度きりの処理は2回目に沈黙して壊れることがある（C-7b）
+await page.reload({ waitUntil: "networkidle" });
+const m2 = await snap();
+ok("2回目のリロードでも同じ結果（増殖しない）",
+   JSON.stringify(m1.ids) === JSON.stringify(m2.ids), `${m1.n} -> ${m2.n}`);
+ok("2回目でも人が入れた値が残っている", m2.tn03.qs === 99 && m2.tn05.field === "kaki",
+   JSON.stringify([m2.tn03.qs, m2.tn05.field]));
+
+// ③ 3回目。さらに「記録して保存が走った状態」からもう一度
+await page.evaluate(() => { save(K_UNITS, UNITS); });   // アプリが保存する経路を再現
+await page.reload({ waitUntil: "networkidle" });
+const m3 = await snap();
+ok("3回目（保存が走ったあと）でも同じ結果",
+   JSON.stringify(m2.ids) === JSON.stringify(m3.ids), `${m2.n} -> ${m3.n}`);
+ok("★保存で焼き付いていない（分野が消えていない）", m3.tn01.field === "yomi",
+   JSON.stringify(m3.tn01));
+
+// ④ 保存ずみを空にしたら DEFAULT から入り直すか（＝毎回やり直している証拠）
+await page.evaluate(() => {
+  const u = JSON.parse(localStorage.getItem("kanken7_units_v1") || "[]");
+  const t = u.find(x => x.id === "tn_01"); if (t) { t.field = ""; t.pages = ""; }
+  localStorage.setItem("kanken7_units_v1", JSON.stringify(u));
+});
+await page.reload({ waitUntil: "networkidle" });
+const m4 = await snap();
+ok("★あとから空になっても、次に開いたとき埋め直される",
+   m4.tn01.field === "yomi" && m4.tn01.pages === "2-3", JSON.stringify(m4.tn01));
+
+ok("目次のマージでJSエラーが出ていない", errors.length === 0, errors.join(" | "));
+
 await browser.close();
 server.close();
 console.log(`\n${fail === 0 ? "★ 全通過" : "★ 失敗あり"}  通過 ${pass} / 失敗 ${fail}`);
