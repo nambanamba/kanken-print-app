@@ -424,7 +424,10 @@ function estimate(){
   keys.forEach(function(k){ var f=fieldOf(k); w+=(agg[k].c/agg[k].t)*f.points; p+=f.points; });
   return { agg:agg, est:p>0?Math.round(w/p*KANKEN.fullMarks):null,
            testScore:test?Math.round(test.correct/test.total*KANKEN.fullMarks):null,
-           covered:keys.length, totalFields:FIELDS.length };
+           covered:keys.length, totalFields:FIELDS.length,
+           // ★分野の「数」ではなく「配点」で、どれだけ測れたかを持つ。
+           //   対義語10点と書き取り40点を1個ずつ数えるのは、点を語るうえで意味がない
+           coveredPoints:p, totalPoints:FIELDS.reduce(function(a,f){return a+f.points;},0) };
 }
 
 /* できている字＝どれか1つでも形式で正解し、いま✕が残っていない字 */
@@ -468,7 +471,14 @@ function renderOuen(){
   //   「合格圏に入っています」と出すと【事実と違う励まし】になる。
   //   本番直前に「できるはずだったのに」となるのが、いちばん避けたいこと。
   var hasTest=(e.testScore!==null&&e.testScore!==undefined);
-  var reliable=hasTest||e.covered>=Math.ceil(e.totalFields/2);
+  // ★★「分野をいくつ測ったか」では判定しない。**配点で測る。**
+  //   分野の数で数えると、対義語10点と書き取り40点が同じ1個になる。
+  //   実際、読みを足して 5/10 分野になった瞬間に「合格圏に入っています！」と出た。
+  //   そのとき未測定だったのは 80点分（漢字えらび20・対義語10・じゅく語作り20・
+  //   同じ読み16・送りがな14）で、**合格ライン140点を語れる状態ではなかった。**
+  //   → **合格ラインと同じ140点分を測るまでは、合格圏かどうかを言わない。**
+  //     140点分を測っていなければ、140点に届くかは原理的に分からない。
+  var reliable=hasTest||e.coveredPoints>=KANKEN.passMark;
   if(shown===null||shown===undefined){
     sc.innerHTML="—<small> 点</small>";
     cap.textContent="1枚やって採点すると出ます";
@@ -481,11 +491,12 @@ function renderOuen(){
       cap.innerHTML=diff>0?'合格圏まで <b style="color:#f59e0b">あと '+diff+' 点</b>'
                           :'<b style="color:#16a34a">合格圏に入っています！</b>';
       note.innerHTML=hasTest ? "実戦テストの点です。<br>"+KANKEN.passNote
-                             : e.covered+" / "+e.totalFields+" 分野を測ったところからの目安です。";
+                             : e.coveredPoints+" 点分を測ったところからの目安です。";
     }else{
       cap.innerHTML='いまのところ <b style="color:#2563eb">'+shown+' 点</b>のペースです';
-      note.innerHTML="まだ <b>"+e.covered+" / "+e.totalFields+" 分野</b>しか測っていないので、"
-        +"これは<b>その分野だけの目安</b>です。ほかの分野もやると、本当の点数に近づきます。"
+      // ★ここも「分野の数」ではなく「点」で言う（設計: 距離は点で言う）
+      note.innerHTML="まだ <b>"+e.coveredPoints+" / "+e.totalPoints+" 点分</b>しか測っていないので、"
+        +"これは<b>その分だけの目安</b>です。ほかの分野もやると、本当の点数に近づきます。"
         +"（合格は "+KANKEN.passMark+" 点あたり）";
     }
   }
@@ -604,13 +615,14 @@ function renderKyou(){
   document.getElementById("ky-fb").textContent="";
   document.getElementById("ky-fb").className="ky-fb";
 
-  if(q.field==="kaki"){
-    // 書き取りは自己申告。★正誤はここでは決まらない（紙で書いてから）
+  if(isWriteField(q.field)){
+    // 書き取り・読みは自己申告。★正誤はここでは決まらない（紙で書いてから）
+    var yomi=(q.field==="yomi");
     document.getElementById("ky-q").innerHTML=
       q.q+(q.hint?'<span class="sub">（'+q.hint+'）</span>':"");
-    document.getElementById("ky-ask").textContent="この字、書ける？";
+    document.getElementById("ky-ask").textContent=yomi?"これ、読める？":"この字、書ける？";
     document.getElementById("ky-choices").innerHTML=
-      '<button class="ky-btn know" onclick="answerWrite(true)">書ける</button>'
+      '<button class="ky-btn know" onclick="answerWrite(true)">'+(yomi?"読める":"書ける")+'</button>'
       +'<button class="ky-btn unsure" onclick="answerWrite(false)">あやしい</button>';
   }else{
     // 選択式はその場で自動判定
@@ -642,12 +654,17 @@ function answerWrite(canWrite){
   var q=currentItem(); if(!q) return;
   if(!KSTATS[q.kanji]) KSTATS[q.kanji]={};
   var s=KSTATS[q.kanji].self||(KSTATS[q.kanji].self={say:0,hit:0,miss:0});
+  s.f=q.field;                     // ★書きの申告か、読みの申告か（紙の作り分けに要る）
   if(canWrite){
-    s.say++;                       // 「書ける」と言った回数
+    s.say++;                       // 「書ける／読める」と言った回数
     s.lastSayAt=Date.now();        // 古い申告から先に抜き取る（12-3）
     SESSION.know.push(q.kanji);
   }else{
     if(SESSION.unsure.indexOf(q.kanji)<0) SESSION.unsure.push(q.kanji);
+    // ★どちらの形式で「あやしい」と言われたかを覚えておく。
+    //   紙は形式ごとにブロックを分ける（読みを「なぞらせて」も意味がない）
+    SESSION.unsureField=SESSION.unsureField||{};
+    SESSION.unsureField[q.kanji]=q.field;
     if(!WEAK[q.kanji]) WEAK[q.kanji]={wrong:0,got:false};
     WEAK[q.kanji].got=false; WEAK[q.kanji].lastAt=Date.now();
   }
@@ -720,6 +737,21 @@ function finishSession(ranOut){
   // ★どれが検証用かは紙に書かない。並び順でも分からないように混ぜる
   SESSION.sheet=shuffle((SESSION.unsure||[]).concat(SESSION.audit), rnd);
 
+  // ★紙に出す字が、書きの分か読みの分か。ブロックを分けるのに使う
+  SESSION.sheetField={};
+  SESSION.sheet.forEach(function(k){
+    SESSION.sheetField[k]=(SESSION.unsureField&&SESSION.unsureField[k])
+      || ((KSTATS[k]&&KSTATS[k].self&&KSTATS[k].self.f) || "kaki");
+  });
+  // ★「あやしい10個」の内訳（読み何個・書き何個）。
+  //   読みが枠を奪っていないかを、推測ではなく実測で見るための記録。
+  //   ⚠️ 画面には出さない（self:{say,hit,miss} と同じ理由）
+  SESSION.mix={kaki:0,yomi:0};
+  (SESSION.unsure||[]).forEach(function(k){
+    var f=(SESSION.unsureField&&SESSION.unsureField[k])||"kaki";
+    if(SESSION.mix[f]!==undefined) SESSION.mix[f]++;
+  });
+
   SET.doneDays=(SET.doneDays||[]).concat([todayStr()])
     .filter(function(v,i,a){return a.indexOf(v)===i;});
   save(K_SESSION,SESSION); save(K_SET,SET);
@@ -734,9 +766,17 @@ function finishSession(ranOut){
      責める文ではなく**予告**として書くこと。 */
 function renderKyouSwitch(){
   var s=SESSION.sel||{o:0,x:0};
+  // ★正解数は出さない（ユーザー判断・C案）。
+  //   前半は本人の言葉で「ウォームアップ」なので、**ここで点数を出すと出鼻をくじく。**
+  //   「できている字は出さない」「あと◯点で言う」「連続日数を使わない」と同じ、
+  //   やる気を削がない設計の一貫。**正解数を戻さないこと。**
+  // ★予告の一文は残す。わざと間違えれば前半を早く終われてしまうので、
+  //   **翌日また出る**ことが見えていないと損得が釣り合わない（12-3 の抜け道対策）。
+  //   ただし「まちがえた字」とは言わない。**アプリ全体で「もうすこし」を使う**
+  //   （「にがて」と呼ばないのと同じ理由。責める語感にしない）。
   document.getElementById("ky-swsub").innerHTML=
-    "えらぶ問題を <b>"+(s.o+s.x)+" 問</b>やって、<b>"+s.o+" 問</b>せいかいしたよ。"
-    +(s.x ? "<br>まちがえた字は、あしたもう一回出るよ。" : "");
+    "えらぶ問題を <b>"+(s.o+s.x)+" 問</b>やったよ。よくがんばったね。"
+    +(s.x ? "<br>きょう もうすこしだった字は、あした もう一回出るよ。" : "");
 }
 
 function renderKyouEnd(){
@@ -766,12 +806,20 @@ function printSessionPractice(){
   //   紙の上では両者を区別しない。区別すると、検証字だけ身構えて実力が測れない（12-3）
   var list=practiceList();
   if(!list.length){ alert("れんしゅうする字がありません。"); return; }
-  document.getElementById("print-region").innerHTML=
+
+  // ★形式ごとにブロックを分ける（前任が buildSheet に残してくれた考え方の流用）。
+  //   読みを「なぞらせて」も意味がない。**やることが違うので、紙の上でも分ける。**
+  var kaki=list.filter(function(k){ return sheetFieldOf(k)!=="yomi"; });
+  var yomi=list.filter(function(k){ return sheetFieldOf(k)==="yomi"; });
+
+  var html=
     '<div class="p-title">漢検7級　きょう れんしゅうする字（'+list.length+'字）</div>'
-    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>'
-    +'<div class="p-sec">■ なぞってから、あいているマスに書きましょう。'
-    +'<span class="p-ask">（　）は読みです。</span></div>'
-    +'<table class="p-tbl">'+list.map(function(k){
+    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>';
+
+  if(kaki.length){
+    html+='<div class="p-sec">■ なぞってから、あいているマスに書きましょう。'
+      +'<span class="p-ask">（　）は読みです。</span></div>'
+      +'<table class="p-tbl">'+kaki.map(function(k){
         var r=MASTER_BY_K[k]||{on:[],kun:[]};
         var cue=[].concat(r.on||[],r.kun||[]).slice(0,3).join("・");
         return "<tr><td class='p-q' style='width:24%'>"+k
@@ -780,10 +828,27 @@ function printSessionPractice(){
           +"<td class='p-model'>"+k+"</td>"
           +"<td class='p-blank'></td><td class='p-blank'></td>"
           +"<td class='p-blank'></td><td class='p-blank'></td></tr>";
-      }).join("")+'</table>'
-    +'<div class="p-key"><b>おうちの方へ</b><br>'
-    +'書けたかどうかを「きろく」画面で入れてください。'
-    +'書けなかった字は、次の日の練習に回ります。</div>';
+      }).join("")+'</table>';
+  }
+  var yomiKey=[];
+  if(yomi.length){
+    html+='<div class="p-sec">■ 読みかたを、ひらがなで書きましょう。</div>'
+      +'<table class="p-tbl">'+yomi.map(function(k){
+        var q=genYomi(k, seededRandom(SESSION.date+"|y|"+k));
+        if(q) yomiKey.push(q.q+"＝"+q.a);
+        return "<tr><td class='p-q' style='width:24%'>"+(q?q.q:k)
+          +(q&&q.hint?"<br><span style='font-size:8pt;color:#666'>（"+q.hint+"）</span>":"")
+          +"</td><td class='p-blank' colspan='5'></td></tr>";
+      }).join("")+'</table>';
+  }
+
+  // ★答えを紙の下に印刷する（設計:「親御さんが紙1枚で採点を完結できる」）。
+  //   書きはお手本が出ているので答えは要らないが、**読みは答えが紙に無いと採点できない。**
+  html+='<div class="p-key"><b>おうちの方へ</b><br>'
+    +(yomiKey.length ? "読みの答え … "+yomiKey.join("／")+"<br>" : "")
+    +'できたかどうかを「きろく」画面で入れてください。'
+    +'できなかった字は、次の日の練習に回ります。</div>';
+  document.getElementById("print-region").innerHTML=html;
   window.print();
 }
 
@@ -799,6 +864,11 @@ function practiceList(){
   return SESSION.sheet || SESSION.unsure || [];
 }
 function isAudit(k){ return !!(SESSION && SESSION.audit && SESSION.audit.indexOf(k)>=0); }
+/* その字が紙のどちらのブロックか（書き＝kaki／読み＝yomi）。
+   ★採点の書き込み先もこれで決まる。取りちがえると別の分野の記録になる。 */
+function sheetFieldOf(k){
+  return (SESSION && SESSION.sheetField && SESSION.sheetField[k]) || "kaki";
+}
 function renderMarks(){
   var box=document.getElementById("mark-box"), list=practiceList();
   if(!list.length){
@@ -822,7 +892,10 @@ function saveSheetResult(){
   list.forEach(function(k){
     var wrong=!!(SESSION.results&&SESSION.results[k]==="x");
     if(!KSTATS[k]) KSTATS[k]={};
-    var s=KSTATS[k].kaki||(KSTATS[k].kaki={o:0,x:0});
+    // ★紙のどちらのブロックだったかで、記録する分野を分ける。
+    //   まとめて kaki に入れると、読みの結果が書き取りの点として計上される
+    var fld=sheetFieldOf(k);
+    var s=KSTATS[k][fld]||(KSTATS[k][fld]={o:0,x:0});
     var audit=isAudit(k);
     // ★検証字は「書ける」と申告した字。当たったか外したかをここで記録する（12-3b）
     var self=audit ? (KSTATS[k].self||(KSTATS[k].self={say:0,hit:0,miss:0})) : null;

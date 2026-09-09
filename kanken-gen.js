@@ -322,7 +322,12 @@ var SELECT_FIELDS = ["kakusu", "bushu", "onkun"];
      後半は1問≒5秒で2〜3分。**合わせて10分に収まる。** */
 var SELECT_LIMIT = 20, SELECT_MISS_TARGET = 10;
 
-/* ★選択式（4択）かどうか。まぐれ当たり対策の判定に使う（引き継ぎ.md 12-1 の ⚠）。
+/* ★後半（自己申告→紙）で出す形式。どちらも「思い出して書く」力を見るので、
+   選択肢を出さない。**読みを4択にしないこと**（引き継ぎ.md 6章・12-1）。 */
+var WRITE_FIELDS = ["kaki", "yomi"];
+function isWriteField(f) { return WRITE_FIELDS.indexOf(f) >= 0; }
+
+/* ★選択式かどうか。まぐれ当たり対策の判定に使う（引き継ぎ.md 12-1 の ⚠）。
    書く形式（kaki・yomi）は当てずっぽうで当たらないので、この扱いをしない。 */
 function isSelectField(f) { return SELECT_FIELDS.indexOf(f) >= 0; }
 
@@ -355,6 +360,22 @@ function buildSession(opts) {
   var writeK = pickKanji("kaki", kstats, opts.writePool || 80, rnd, opts.grades, used);
   writeK.forEach(function (r) { used[r.k] = 1; });
 
+  // ★読みも後半（自己申告→紙）に入れる。**4択にしない。**
+  //   本番の(一)(二)は「ひらがなで書きなさい」で、**思い出して書く**力を見る。
+  //   4択にすると「見て分かる」力を測って30点分に引き伸ばすことになり、
+  //   見かけの点だけ上がって本番では取れない（＝事実と違う励まし。引き継ぎ.md 6章）。
+  //   書き取りの字を先に押さえてから取る（書き取り40点のほうが大きいため）。
+  //   ★書き取りができる字は、読みを出さない。**書ける ⊃ 読める** なので、
+  //     読みを出すのは時間の無駄（45日×10分しかない。「できている字は出さない」）。
+  //     逆は成り立たないので、読めるからといって書き取りを外してはいけない。
+  var yomiSkip = {};
+  Object.keys(used).forEach(function (k) { yomiSkip[k] = 1; });
+  KANJI_MASTER.forEach(function (r) {
+    if (fieldDone((kstats[r.k] || {}).kaki, "kaki")) yomiSkip[r.k] = 1;
+  });
+  var yomiK = pickKanji("yomi", kstats, opts.yomiPool || 40, rnd, opts.grades, yomiSkip);
+  yomiK.forEach(function (r) { used[r.k] = 1; });
+
   // 選択式の候補。書き取りに使う字は避ける
   // ★★この除外は絶対に外さないこと（確認ポイント A-1）。
   //   練習プリントは **字とその読みを印刷する**（`氏（シ・うじ）`）ので、
@@ -374,8 +395,12 @@ function buildSession(opts) {
   //   ここで偏らせると、コスパの高い分野がまるごと育たない日が出る。
   selItems = roundRobin(byField, rnd).slice(0, opts.selectLimit || SELECT_LIMIT);
 
-  var writeItems = [];
-  writeK.forEach(function (r) { var q = genKaki(r.k, rnd); if (q) writeItems.push(q); });
+  // 後半は書きと読みを順ぐりに。どちらも「自分はできるか」の自己申告なので、
+  // 頭の切りかえは起きない（前半と後半を分けたのは、そこが違うため）
+  var kakiItems = [], yomiItems = [];
+  writeK.forEach(function (r) { var q = genKaki(r.k, rnd); if (q) kakiItems.push(q); });
+  yomiK.forEach(function (r) { var q = genYomi(r.k, rnd); if (q) yomiItems.push(q); });
+  var writeItems = roundRobin([kakiItems, yomiItems], rnd);
 
   // ★前半＝選択式、後半＝書き（2026-09-09 の設計変更）。
   //   もとは交互だったが、次の理由で分けた。

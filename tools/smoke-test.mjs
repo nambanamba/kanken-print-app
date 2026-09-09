@@ -111,9 +111,12 @@ while (guard++ < 400) {
     await page.click('button:has-text("すすむ")');
     continue;
   }
-  if (st.field === "kaki") {
-    if (kakiSeen++ % 3 === 2) { await page.click('button:has-text("書ける")'); saidKnow++; }
-    else { await page.click('button:has-text("あやしい")'); }
+  if (st.field === "kaki" || st.field === "yomi") {
+    // ★読みのボタンは「読める」、書きは「書ける」。文言が違うので分ける
+    if (kakiSeen++ % 3 === 2) {
+      await page.click(st.field === "yomi" ? 'button:has-text("読める")' : 'button:has-text("書ける")');
+      saidKnow++;
+    } else { await page.click('button:has-text("あやしい")'); }
   } else {
     // 選択式は正解を押す（自動判定が働くか見る）
     const clicked = await page.evaluate(() => {
@@ -143,7 +146,9 @@ const order = await page.evaluate(() => {
   return {
     // 前半に書きが混ざっていない／後半に選択式が混ざっていない
     frontAllSelect: it.slice(0, fw).every(q => q.field !== "kaki"),
-    backAllWrite:   it.slice(fw).every(q => q.field === "kaki"),
+    // 後半は自己申告の形式（書き・読み）だけ。★読みは4択にしないので、ここに入る
+    backAllWrite:   it.slice(fw).every(q => isWriteField(q.field)),
+    backHasYomi:    it.slice(fw).some(q => q.field === "yomi"),
     // ★1形式に偏らせない（画数・部首・音訓＝50点は短時間で伸びる。引き継ぎ.md 6章）
     fields: [...new Set(it.slice(0, fw).map(q => q.field))].length,
     frontN: fw,
@@ -157,7 +162,8 @@ const order = await page.evaluate(() => {
   };
 });
 ok("前半は選択式だけ", order.frontAllSelect);
-ok("後半は書きだけ", order.backAllWrite);
+ok("後半は自己申告の形式だけ（書き・読み）", order.backAllWrite);
+ok("後半に読みが入っている（30点分）", order.backHasYomi);
 ok("前半が1形式に偏っていない", order.fields > 1, String(order.fields));
 ok("前半の問題数が上限を超えていない", order.frontN <= order.limit, `${order.frontN}/${order.limit}`);
 ok("★前半で聞いた字が後半（＝紙）に出てこない（A-1）", order.noShared);
@@ -204,6 +210,13 @@ const allInPrint = await page.evaluate(() => {
 });
 ok("紙の字がすべて出ている（あやしい＋検証字）", allInPrint.all);
 ok("どれが検証用か紙に書いていない", allInPrint.noLabel);
+// ★読みは答えが紙に無いと、親御さんが採点できない（設計:「紙1枚で採点を完結」）
+const key = await page.evaluate(() => {
+  const h = document.getElementById("print-region").innerHTML;
+  const y = (SESSION.sheet || []).filter(k => sheetFieldOf(k) === "yomi");
+  return { n: y.length, hasKey: !y.length || h.includes("読みの答え") };
+});
+ok("読みの答えが紙に印刷されている（親が採点できる）", key.hasKey, `読み${key.n}字`);
 
 console.log("\n=== ④ 採点して記録する（既定〇・✕だけタップ） ===");
 await page.click('.tab[data-page="kiroku"]');
@@ -238,8 +251,13 @@ const after = await page.evaluate(() => {
   // 「あやしい」と言った字だけ（＝検証字を除く）で見る項目
   const oUnsure = o.filter(k => !isA(k));
   return {
-    wrongOK: x.every(k => KSTATS[k] && KSTATS[k].kaki && KSTATS[k].kaki.x > 0),
-    rightOK: o.every(k => KSTATS[k] && KSTATS[k].kaki && KSTATS[k].kaki.o > 0),
+    // ★紙のどちらのブロックだったかで、記録する分野が変わる（読みを kaki に入れない）
+    wrongOK: x.every(k => KSTATS[k] && KSTATS[k][sheetFieldOf(k)] && KSTATS[k][sheetFieldOf(k)].x > 0),
+    rightOK: o.every(k => KSTATS[k] && KSTATS[k][sheetFieldOf(k)] && KSTATS[k][sheetFieldOf(k)].o > 0),
+    // 読みの結果が書き取りの記録に混ざっていないこと
+    noMix: sh.filter(k => sheetFieldOf(k) === "yomi")
+             .every(k => !(KSTATS[k].kaki && (KSTATS[k].kaki.o + KSTATS[k].kaki.x) > 0)),
+    mix: SESSION.mix,
     wrongStillWeak: x.every(k => WEAK[k] && !WEAK[k].got),
     // ★自分で「あやしい」と言った字は、1回書けただけでは卒業させない（12-3の5番）
     notGraduatedYet: oUnsure.every(k => WEAK[k] && !WEAK[k].got),
@@ -257,7 +275,10 @@ const after = await page.evaluate(() => {
     est: estimate().est
   };
 });
-ok("✕にした字が「書けなかった」として記録された", after.wrongOK);
+ok("✕にした字が「できなかった」として記録された", after.wrongOK);
+ok("読みの結果が書き取りの記録に混ざっていない", after.noMix);
+ok("「あやしい」の内訳（読み／書き）を記録している", !!after.mix
+   && (after.mix.kaki + after.mix.yomi) > 0, JSON.stringify(after.mix));
 ok("〇の字が「書けた」として記録された", after.rightOK);
 ok("✕の字は「もうすこしの字」に残る（次の日また出る）", after.wrongStillWeak);
 ok("1回書けただけでは卒業させない（2回必要）", after.notGraduatedYet);
@@ -284,7 +305,7 @@ ok("できた字の数が出ている", /\d+\s*\/\s*\d+\s*字/.test(ouen.done.re
 ok("予想得点が数字で出ている", /\d+/.test(ouen.score), ouen.score);
 ok("合格までの距離を「点」で言っている（字で言っていない）",
   ouen.cap.includes("点") && !/あと\s*\d+\s*字/.test(ouen.cap), ouen.cap);
-ok("測った分野が少ないうちは合格圏だと断言しない",
+ok("測った配点が少ないうちは合格圏だと断言しない",
   !ouen.cap.includes("合格圏に入っています") && ouen.note.includes("分野"), ouen.cap);
 ok("未実施の分野は「まだ」と出る（0%と出さない）", ouen.fields.includes("まだ"));
 ok("今週やった日に印がついた", ouen.week >= 1, String(ouen.week));
@@ -363,7 +384,9 @@ ok("まちがいが10個たまった時点で前半が終わった",
    JSON.stringify(wrongCut));
 const swText = await page.evaluate(() => document.getElementById("ky-swsub").textContent);
 ok("「あしたもう一回出るよ」と予告している（責める文にしない）",
-   swText.includes("あした"), swText);
+   swText.includes("あした") && !/せいかい/.test(swText), swText);
+ok("前半の画面で正解数を出していない（C案・出鼻をくじかない）",
+   !/せいかい|正解|\d+\s*問せい/.test(swText), swText);
 
 console.log("\n=== 選り分け（できた字を出さない） ===");
 const sort = await page.evaluate(() => {
@@ -372,6 +395,7 @@ const sort = await page.evaluate(() => {
   // ★選択式は run>=2 で初めて「できた」（12-1 の ⚠）。
   //   run を入れないと「できた字」を作ったつもりで作れておらず、この検査が意味を失う
   done.forEach(k => { ks[k] = { kaki: { o: 3, x: 0 },
+                                yomi: { o: 3, x: 0 },
                                 kakusu: { o: 3, x: 0, run: 3 },
                                 bushu:  { o: 3, x: 0, run: 3 },
                                 onkun:  { o: 3, x: 0, run: 3 } }; });
@@ -379,6 +403,33 @@ const sort = await page.evaluate(() => {
   return { leaked: s.items.filter(q => done.includes(q.kanji)).length, n: s.items.length };
 });
 ok("できている字が次の日に出てこない", sort.leaked === 0, `${sort.leaked}/${sort.n}`);
+
+// ★書き取りができる字は、読みを出さない（書ける ⊃ 読める）。
+//   45日×10分しかないので、読めると分かっている字に時間を使わない。
+//   逆は成り立たない（読めても書けるとは限らない）ので、そちらは出す。
+const cover = await page.evaluate(() => {
+  const k = KANJI_MASTER.find(r => genYomi(r.k, seededRandom("p")) && genKaki(r.k, seededRandom("p"))).k;
+  const DONE = { o: 3, x: 0 };
+  // ★「出るはず／出ないはず」を偶然に任せない（C-8b）。
+  //   ほかの字を全部その形式で「できた」にして、**この字だけが候補になる**状態を作る。
+  //   そうしないと、手つかずの字が600以上あるので拾われるかどうかは運になる。
+  const only = (target, field) => {
+    const ks = {};
+    KANJI_MASTER.forEach(r => { ks[r.k] = { kaki: DONE, yomi: DONE }; });
+    ks[target] = field;                     // この字だけ、指定の状態にする
+    return ks;
+  };
+  const has = (ks, f) => buildSession({ kstats: ks, dayKey: "cv" })
+                           .items.some(q => q.kanji === k && q.field === f);
+  return {
+    // 書きができる字 → 読みは出さない（ほかは全部 読みができている＝この字しか候補がない）
+    yomiSkipped: !has(only(k, { kaki: DONE }), "yomi"),
+    // 読めるだけの字 → 書き取りはまだ出す（ほかは全部 書きができている）
+    kakiKept:     has(only(k, { yomi: DONE }), "kaki")
+  };
+});
+ok("書き取りができる字は、読みを出さない", cover.yomiSkipped);
+ok("読めるだけの字は、書き取りをまだ出す（逆は成り立たない）", cover.kakiKept);
 
 console.log("\n=== 保存が残るか（リロード） ===");
 // ★done===true と決め打ちしない。**リロードの前後で状態が変わらないこと**が主旨なので、
