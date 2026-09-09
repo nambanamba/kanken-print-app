@@ -265,7 +265,7 @@
     <div class="card">
       <div class="note">
         <b>未完成:</b> <b>漢字えらび・対義語・じゅく語作り・同じ読み（66点分）</b>は、まだ出せません。
-        問題集が届いてから足します。
+        いま順に足しているところです（問題集は読み終えていて、待ち状態ではありません）。
       </div>
     </div>
   </div>
@@ -627,7 +627,10 @@ function renderKyou(){
       +'<button class="ky-btn unsure" onclick="answerWrite(false)">あやしい</button>';
   }else{
     // 選択式はその場で自動判定
-    document.getElementById("ky-q").innerHTML=q.q;
+    // ★hint（部首名など）は分かっている字にだけ付いている。
+    //   ⚠️ 無いときは括弧ごと出さないこと。「部首（）」のような空の括弧になる
+    document.getElementById("ky-q").innerHTML=
+      q.q+(q.hint?'<span class="sub">（'+q.hint+'）</span>':"");
     document.getElementById("ky-ask").textContent=q.ask;
     var ch=document.getElementById("ky-choices");
     if(q.choices){

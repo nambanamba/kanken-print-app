@@ -414,6 +414,66 @@ ok("「あしたもう一回出るよ」と予告している（責める文に�
 ok("前半の画面で正解数を出していない（C案・出鼻をくじかない）",
    !/せいかい|正解|\d+\s*問せい/.test(swText), swText);
 
+console.log("\n=== 部首名（radName）が空でも画面が壊れないか ===");
+// ★7級の審査基準は《部首》「部首を理解している。」だけで、**部首名は問われない**
+//   （公式サイトの逐語 ＋ 実物の過去問(八)「同じ部首のなかまの漢字」の2つで確認）。
+//   だから642字ぶん集めない。**分かっている字にだけラベルとして出す。**
+//   空の字が301字あるので、**空のときに「（）」を出さないこと**が必ず踏まれる。
+const rn = await page.evaluate(() => {
+  const named = KANJI_MASTER.filter(r => r.radName);
+  const blank = KANJI_MASTER.filter(r => !r.radName);
+  // ★この検査は SESSION をいじって描画するので、**必ず元に戻す。**
+  //   戻さないと、あとの「リロードで状態が変わらない」検査が巻き添えで落ちる（実際に落ちた）
+  const keep = { item: SESSION.items[SESSION.pos], phase: SESSION.phase, done: SESSION.done };
+  const mk = k => genBushu(k, seededRandom("rn"), {});
+  // 名前がある字・無い字の両方で問題を作ってみる
+  const withName = named.map(r => mk(r.k)).filter(Boolean)[0];
+  const noName   = blank.map(r => mk(r.k)).filter(Boolean)[0];
+  // 実際に画面へ出したときのHTMLを見る（空の括弧が出ないこと）
+  const render = q => {
+    SESSION.items[SESSION.pos] = q; SESSION.phase = "select"; SESSION.done = false;
+    renderKyou();
+    return document.getElementById("ky-q").innerHTML;
+  };
+  return {
+    named: named.length, blank: blank.length,
+    checked: KANJI_MASTER.filter(r => r.radChecked).length,
+    withNameHasHint: !!(withName && withName.hint),
+    noNameHasNoHint: !!(noName && !("hint" in noName)),
+    htmlWith: withName ? render(withName) : "",
+    htmlWithout: noName ? render(noName) : "",
+    restored: (() => {
+      SESSION.items[SESSION.pos] = keep.item;
+      SESSION.phase = keep.phase;
+      SESSION.done = keep.done;
+      renderKyou();
+      return SESSION.phase === keep.phase && SESSION.done === keep.done;
+    })()
+  };
+});
+ok("部首名を持つ字と、持たない字の両方が存在する", rn.named > 0 && rn.blank > 0,
+   `名前あり${rn.named} / 空${rn.blank}`);
+ok("漢検の答えで照合できた字に印がついている", rn.checked > 0, String(rn.checked));
+ok("名前がある字には hint が付く", rn.withNameHasHint);
+ok("名前が無い字には hint を付けない", rn.noNameHasNoHint);
+ok("★名前が無いとき、空の括弧「（）」を出さない",
+   !/（\s*）/.test(rn.htmlWithout), rn.htmlWithout);
+ok("検査のあと SESSION を元に戻した", rn.restored);
+ok("名前があるときは括弧の中身が入っている",
+   !rn.htmlWith || /（.+）/.test(rn.htmlWith), rn.htmlWith);
+
+// ★漢検の分類に直した2字（KANJIDIC2 と食い違っていた）
+const fixed = await page.evaluate(() => {
+  const g = k => KANJI_MASTER.find(r => r.k === k);
+  return { tan: g("単"), su: g("巣") };
+});
+ok("単の部首を漢検の分類（つかんむり・番号42）に直した",
+   fixed.tan.radNo === 42 && fixed.tan.radName === "つかんむり",
+   JSON.stringify({ radNo: fixed.tan.radNo, radName: fixed.tan.radName }));
+ok("巣の部首を漢検の分類（つかんむり・番号42）に直した",
+   fixed.su.radNo === 42 && fixed.su.radName === "つかんむり",
+   JSON.stringify({ radNo: fixed.su.radNo, radName: fixed.su.radName }));
+
 console.log("\n=== 選り分け（できた字を出さない） ===");
 const sort = await page.evaluate(() => {
   const done = KANJI_MASTER.slice(0, 300).map(r => r.k);

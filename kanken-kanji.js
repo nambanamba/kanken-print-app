@@ -9,8 +9,23 @@
 //  strokes/radNo … KANJIDIC2 (EDRDG)。字の属性なので2017年改定の影響を受けません
 //               ★実物の過去問(2022年度第3回)の総画数5問・部首10字と照合し、全一致を確認済み
 //  rad … 康熙部首番号からUnicode康熙部首ブロックへの定義上の変換（推測ではありません）
-//  radName … ★未取得。漢検の部首名は「漢検要覧」準拠で、無料の一次資料が見つかっていません。
-//             推測で埋めていません（確認ポイントA-6）。問題集の巻末で確認して埋めてください
+//  radName … 341/642字。★出典＝トレーニングノート7級 回20・21（本のp40〜43）の部首の単元に
+//             印刷されている「部首の形（部首名）」。**巻末の一覧表は2冊とも存在しません。**
+//             45個の形＝康熙部首番号44種を読み取り、うち40種をマスタへ適用（作業メモ.md「区切り②」）。
+//             ⚠️ 読み取れたのに未適用が5種16字あります: 15にすい(冬冷)／28む(去参)／
+//                31くにがまえ(四園図国回固)／83うじ(民氏)／169もんがまえ(間門開関)。
+//             ⚠️ 残り301字は空のままです。**推測で埋めないでください（A-6）。**
+//             空でも画面が壊れないことは smoke-test で固定してあります（「部首（）」を出さない）。
+//             ※7級の審査基準は《部首》「部首を理解している。」だけで**部首名は問われません**
+//               （公式資料\漢検公式サイト_採点基準と7級審査基準_2026-09-09.md）。
+//               radName は答えではなく、画面に添えるラベルです。
+//  radChecked … ★意味は1つだけ:「**その字の部首（radNo）**が、漢検の答え（トレーニングノート
+//             別冊答え10ページ＝部首①②の答え）と照合ずみか」。true=137字 / false=505字。
+//             ⚠️ **「部首名(radName)が照合ずみ」という意味ではありません。**
+//                radName は上記のとおり部首番号ごとに当てているので、radChecked=false の字にも
+//                名前が付いていることがあります（204字が該当）。その名前の正しさは、
+//                **KANJIDIC2 由来の radNo が漢検と一致していることに依存**しています。
+//                実測の食い違いは137字中2字（単・巣。修正ずみ）＝1.5%（確認ポイント C-10）。
 //
 // ⚠️ ユーザーから届いた 級別漢字表_outline_degree_national_list.pdf は【2020年改定前の古い版】です
 //    （7級=200字/累計640字）。48字ずれるので使っていません。詳しくは作業メモ.md を参照。
@@ -25,6 +40,7 @@ const KANJI_MASTER = [
 "radNo": 106,
 "rad": "⽩",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヒャク"
 ],
@@ -42,6 +58,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "チョウ"
 ],
@@ -61,7 +78,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 10,
 "rad": "⼉",
-"radName": "",
+"radName": "ひとあし・にんにょう",
+"radChecked": false,
 "on": [
 "セン"
 ],
@@ -82,6 +100,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジン",
 "ニン"
@@ -104,6 +123,7 @@ const KANJI_MASTER = [
 "radNo": 128,
 "rad": "⽿",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジ"
 ],
@@ -124,6 +144,7 @@ const KANJI_MASTER = [
 "radNo": 7,
 "rad": "⼆",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゴ"
 ],
@@ -145,7 +166,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 39,
 "rad": "⼦",
-"radName": "",
+"radName": "こ",
+"radChecked": true,
 "on": [
 "ガク"
 ],
@@ -166,6 +188,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "イチ",
 "イツ"
@@ -190,6 +213,7 @@ const KANJI_MASTER = [
 "radNo": 67,
 "rad": "⽂",
 "radName": "",
+"radChecked": false,
 "on": [
 "ブン",
 "モン"
@@ -211,7 +235,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": false,
 "on": [
 "テン"
 ],
@@ -232,7 +257,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ソウ",
 "サッ"
@@ -258,7 +284,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "スイ"
 ],
@@ -279,6 +306,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "シチ",
 "シツ"
@@ -307,6 +335,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ",
 "ク"
@@ -329,6 +358,7 @@ const KANJI_MASTER = [
 "radNo": 84,
 "rad": "⽓",
 "radName": "",
+"radChecked": false,
 "on": [
 "キ",
 "ケ"
@@ -348,6 +378,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ウ",
 "ユウ"
@@ -370,6 +401,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ボク",
 "モク"
@@ -394,6 +426,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "デン"
 ],
@@ -413,7 +446,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "ソウ"
 ],
@@ -434,6 +468,7 @@ const KANJI_MASTER = [
 "radNo": 77,
 "rad": "⽌",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -459,7 +494,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 159,
 "rad": "⾞",
-"radName": "",
+"radName": "くるまへん",
+"radChecked": false,
 "on": [
 "シャ"
 ],
@@ -480,6 +516,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -497,6 +534,7 @@ const KANJI_MASTER = [
 "radNo": 5,
 "rad": "⼄",
 "radName": "",
+"radChecked": false,
 "on": [
 "キュウ",
 "ク"
@@ -521,6 +559,7 @@ const KANJI_MASTER = [
 "radNo": 173,
 "rad": "⾬",
 "radName": "",
+"radChecked": false,
 "on": [
 "ウ"
 ],
@@ -543,6 +582,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ホン"
 ],
@@ -562,7 +602,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": false,
 "on": [
 "ド",
 "ト"
@@ -585,6 +626,7 @@ const KANJI_MASTER = [
 "radNo": 157,
 "rad": "⾜",
 "radName": "",
+"radChecked": false,
 "on": [
 "ソク"
 ],
@@ -611,6 +653,7 @@ const KANJI_MASTER = [
 "radNo": 100,
 "rad": "⽣",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -650,7 +693,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "シュ"
 ],
@@ -673,6 +717,7 @@ const KANJI_MASTER = [
 "radNo": 48,
 "rad": "⼯",
 "radName": "",
+"radChecked": false,
 "on": [
 "サ"
 ],
@@ -693,6 +738,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -717,6 +763,7 @@ const KANJI_MASTER = [
 "radNo": 13,
 "rad": "⼌",
 "radName": "",
+"radChecked": false,
 "on": [
 "エン"
 ],
@@ -737,6 +784,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "メイ",
 "ミョウ"
@@ -759,6 +807,7 @@ const KANJI_MASTER = [
 "radNo": 7,
 "rad": "⼆",
 "radName": "",
+"radChecked": false,
 "on": [
 "ニ"
 ],
@@ -781,6 +830,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ソン"
 ],
@@ -801,6 +851,7 @@ const KANJI_MASTER = [
 "radNo": 174,
 "rad": "⾭",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -824,7 +875,8 @@ const KANJI_MASTER = [
 "strokes": 2,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": false,
 "on": [
 "ジュウ",
 "ジッ"
@@ -849,6 +901,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "サン"
 ],
@@ -873,6 +926,7 @@ const KANJI_MASTER = [
 "radNo": 96,
 "rad": "⽟",
 "radName": "",
+"radChecked": false,
 "on": [
 "ギョク"
 ],
@@ -893,6 +947,7 @@ const KANJI_MASTER = [
 "radNo": 96,
 "rad": "⽟",
 "radName": "",
+"radChecked": false,
 "on": [
 "オウ"
 ],
@@ -910,6 +965,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "モク",
 "ボク"
@@ -933,7 +989,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ニチ",
 "ジツ"
@@ -957,7 +1014,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": false,
 "on": [
 "ダイ",
 "タイ"
@@ -984,6 +1042,7 @@ const KANJI_MASTER = [
 "radNo": 36,
 "rad": "⼣",
 "radName": "",
+"radChecked": false,
 "on": [
 "セキ"
 ],
@@ -1004,6 +1063,7 @@ const KANJI_MASTER = [
 "radNo": 17,
 "rad": "⼐",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュツ",
 "スイ"
@@ -1027,7 +1087,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": false,
 "on": [
 "サン"
 ],
@@ -1046,7 +1107,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 167,
 "rad": "⾦",
-"radName": "",
+"radName": "かねへん",
+"radChecked": false,
 "on": [
 "キン",
 "コン"
@@ -1071,6 +1133,7 @@ const KANJI_MASTER = [
 "radNo": 180,
 "rad": "⾳",
 "radName": "",
+"radChecked": false,
 "on": [
 "オン",
 "イン"
@@ -1095,6 +1158,7 @@ const KANJI_MASTER = [
 "radNo": 117,
 "rad": "⽴",
 "radName": "",
+"radChecked": false,
 "on": [
 "リツ",
 "リュウ"
@@ -1119,6 +1183,7 @@ const KANJI_MASTER = [
 "radNo": 11,
 "rad": "⼊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ニュウ"
 ],
@@ -1143,6 +1208,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "ダン",
 "ナン"
@@ -1165,6 +1231,7 @@ const KANJI_MASTER = [
 "radNo": 112,
 "rad": "⽯",
 "radName": "",
+"radChecked": false,
 "on": [
 "セキ",
 "シャク",
@@ -1188,7 +1255,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": false,
 "on": [
 "ジョ",
 "ニョ",
@@ -1214,7 +1282,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 39,
 "rad": "⼦",
-"radName": "",
+"radName": "こ",
+"radChecked": false,
 "on": [
 "シ",
 "ス"
@@ -1237,6 +1306,7 @@ const KANJI_MASTER = [
 "radNo": 116,
 "rad": "⽳",
 "radName": "",
+"radChecked": false,
 "on": [
 "クウ"
 ],
@@ -1263,6 +1333,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "カ",
 "ゲ"
@@ -1302,7 +1373,8 @@ const KANJI_MASTER = [
 "strokes": 2,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": false,
 "on": [
 "リョク",
 "リキ"
@@ -1325,6 +1397,7 @@ const KANJI_MASTER = [
 "radNo": 51,
 "rad": "⼲",
 "radName": "",
+"radChecked": false,
 "on": [
 "ネン"
 ],
@@ -1344,7 +1417,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "チク"
 ],
@@ -1365,6 +1439,7 @@ const KANJI_MASTER = [
 "radNo": 155,
 "rad": "⾚",
 "radName": "",
+"radChecked": false,
 "on": [
 "セキ",
 "シャク"
@@ -1392,7 +1467,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 42,
 "rad": "⼩",
-"radName": "",
+"radName": "つかんむり",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -1417,6 +1493,7 @@ const KANJI_MASTER = [
 "radNo": 31,
 "rad": "⼞",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -1443,6 +1520,7 @@ const KANJI_MASTER = [
 "radNo": 74,
 "rad": "⽉",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゲツ",
 "ガツ"
@@ -1464,7 +1542,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [
 "カ"
 ],
@@ -1487,6 +1566,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "リン"
 ],
@@ -1507,6 +1587,7 @@ const KANJI_MASTER = [
 "radNo": 106,
 "rad": "⽩",
 "radName": "",
+"radChecked": false,
 "on": [
 "ハク",
 "ビャク"
@@ -1533,6 +1614,7 @@ const KANJI_MASTER = [
 "radNo": 2,
 "rad": "⼁",
 "radName": "",
+"radChecked": false,
 "on": [
 "チュウ",
 "ジュウ"
@@ -1554,7 +1636,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": false,
 "on": [
 "セン"
 ],
@@ -1575,6 +1658,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジョウ",
 "ショウ"
@@ -1610,7 +1694,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -1631,6 +1716,7 @@ const KANJI_MASTER = [
 "radNo": 94,
 "rad": "⽝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケン"
 ],
@@ -1649,7 +1735,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "カ"
 ],
@@ -1669,7 +1756,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": false,
 "on": [
 "ロク"
 ],
@@ -1695,7 +1783,8 @@ const KANJI_MASTER = [
 "strokes": 2,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": false,
 "on": [
 "ハチ"
 ],
@@ -1722,6 +1811,7 @@ const KANJI_MASTER = [
 "radNo": 142,
 "rad": "⾍",
 "radName": "",
+"radChecked": false,
 "on": [
 "チュウ"
 ],
@@ -1742,6 +1832,7 @@ const KANJI_MASTER = [
 "radNo": 47,
 "rad": "⼮",
 "radName": "",
+"radChecked": false,
 "on": [
 "セン"
 ],
@@ -1762,6 +1853,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -1780,7 +1872,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 39,
 "rad": "⼦",
-"radName": "",
+"radName": "こ",
+"radChecked": false,
 "on": [
 "ジ"
 ],
@@ -1800,7 +1893,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 147,
 "rad": "⾒",
-"radName": "",
+"radName": "みる",
+"radChecked": false,
 "on": [
 "ケン"
 ],
@@ -1824,7 +1918,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 154,
 "rad": "⾙",
-"radName": "",
+"radName": "かい・こがい",
+"radChecked": false,
 "on": [],
 "kun": [
 "かい"
@@ -1842,6 +1937,7 @@ const KANJI_MASTER = [
 "radNo": 80,
 "rad": "⽏",
 "radName": "",
+"radChecked": false,
 "on": [
 "マイ"
 ],
@@ -1859,6 +1955,7 @@ const KANJI_MASTER = [
 "radNo": 130,
 "rad": "⾁",
 "radName": "",
+"radChecked": false,
 "on": [
 "ニク"
 ],
@@ -1875,7 +1972,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ツウ",
 "ツ"
@@ -1901,7 +1999,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 18,
 "rad": "⼑",
-"radName": "",
+"radName": "りっとう",
+"radChecked": true,
 "on": [
 "ゼン"
 ],
@@ -1921,7 +2020,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": false,
 "on": [
 "ジョウ",
 "ジョウ"
@@ -1943,6 +2043,7 @@ const KANJI_MASTER = [
 "radNo": 111,
 "rad": "⽮",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -1962,7 +2063,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 10,
 "rad": "⼉",
-"radName": "",
+"radName": "ひとあし・にんにょう",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -1984,7 +2086,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "キン"
 ],
@@ -2005,6 +2108,7 @@ const KANJI_MASTER = [
 "radNo": 148,
 "rad": "⾓",
 "radName": "",
+"radChecked": false,
 "on": [
 "カク"
 ],
@@ -2027,6 +2131,7 @@ const KANJI_MASTER = [
 "radNo": 57,
 "rad": "⼸",
 "radName": "",
+"radChecked": false,
 "on": [
 "イン"
 ],
@@ -2048,7 +2153,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": false,
 "on": [
 "マイ"
 ],
@@ -2068,6 +2174,7 @@ const KANJI_MASTER = [
 "radNo": 187,
 "rad": "⾺",
 "radName": "",
+"radChecked": false,
 "on": [
 "バ"
 ],
@@ -2090,6 +2197,7 @@ const KANJI_MASTER = [
 "radNo": 57,
 "rad": "⼸",
 "radName": "",
+"radChecked": false,
 "on": [
 "テイ",
 "ダイ",
@@ -2112,7 +2220,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "ソ"
 ],
@@ -2135,6 +2244,7 @@ const KANJI_MASTER = [
 "radNo": 139,
 "rad": "⾊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショク",
 "シキ"
@@ -2156,7 +2266,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -2177,6 +2288,7 @@ const KANJI_MASTER = [
 "radNo": 125,
 "rad": "⽼",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -2196,7 +2308,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 10,
 "rad": "⼉",
-"radName": "",
+"radName": "ひとあし・にんにょう",
+"radChecked": false,
 "on": [
 "ケイ",
 "キョウ"
@@ -2218,6 +2331,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ガク",
 "ラク"
@@ -2242,6 +2356,7 @@ const KANJI_MASTER = [
 "radNo": 124,
 "rad": "⽻",
 "radName": "",
+"radChecked": false,
 "on": [
 "ウ"
 ],
@@ -2264,6 +2379,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "マン",
 "バン"
@@ -2283,6 +2399,7 @@ const KANJI_MASTER = [
 "radNo": 33,
 "rad": "⼠",
 "radName": "",
+"radChecked": false,
 "on": [
 "バイ"
 ],
@@ -2304,7 +2421,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": false,
 "on": [
 "テン"
 ],
@@ -2325,6 +2443,7 @@ const KANJI_MASTER = [
 "radNo": 156,
 "rad": "⾛",
 "radName": "",
+"radChecked": false,
 "on": [
 "ソウ"
 ],
@@ -2344,7 +2463,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 184,
 "rad": "⾷",
-"radName": "",
+"radName": "しょくへん",
+"radChecked": false,
 "on": [
 "ショク",
 "ジキ"
@@ -2370,7 +2490,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -2391,6 +2512,7 @@ const KANJI_MASTER = [
 "radNo": 144,
 "rad": "⾏",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ",
 "ギョウ",
@@ -2419,6 +2541,7 @@ const KANJI_MASTER = [
 "radNo": 59,
 "rad": "⼺",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケイ",
 "ギョウ"
@@ -2441,7 +2564,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "カツ"
 ],
@@ -2459,6 +2583,7 @@ const KANJI_MASTER = [
 "radNo": 173,
 "rad": "⾬",
 "radName": "",
+"radChecked": false,
 "on": [
 "ウン"
 ],
@@ -2478,7 +2603,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "メイ",
 "ミョウ"
@@ -2516,7 +2642,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 154,
 "rad": "⾙",
-"radName": "",
+"radName": "かい・こがい",
+"radChecked": false,
 "on": [
 "バイ"
 ],
@@ -2536,7 +2663,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [
 "テン"
 ],
@@ -2554,6 +2682,7 @@ const KANJI_MASTER = [
 "radNo": 36,
 "rad": "⼣",
 "radName": "",
+"radChecked": false,
 "on": [
 "タ"
 ],
@@ -2573,7 +2702,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -2593,7 +2723,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -2614,6 +2745,7 @@ const KANJI_MASTER = [
 "radNo": 189,
 "rad": "⾼",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -2639,7 +2771,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "ケイ"
 ],
@@ -2662,6 +2795,7 @@ const KANJI_MASTER = [
 "radNo": 169,
 "rad": "⾨",
 "radName": "",
+"radChecked": false,
 "on": [
 "カン",
 "ケン"
@@ -2686,6 +2820,7 @@ const KANJI_MASTER = [
 "radNo": 31,
 "rad": "⼞",
 "radName": "",
+"radChecked": false,
 "on": [
 "エン"
 ],
@@ -2706,6 +2841,7 @@ const KANJI_MASTER = [
 "radNo": 196,
 "rad": "⿃",
 "radName": "",
+"radChecked": false,
 "on": [
 "メイ"
 ],
@@ -2730,6 +2866,7 @@ const KANJI_MASTER = [
 "radNo": 199,
 "rad": "⿆",
 "radName": "",
+"radChecked": false,
 "on": [
 "バク"
 ],
@@ -2750,6 +2887,7 @@ const KANJI_MASTER = [
 "radNo": 173,
 "rad": "⾬",
 "radName": "",
+"radChecked": false,
 "on": [
 "デン"
 ],
@@ -2766,7 +2904,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": false,
 "on": [
 "タイ",
 "タ"
@@ -2791,6 +2930,7 @@ const KANJI_MASTER = [
 "radNo": 69,
 "rad": "⽄",
 "radName": "",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -2815,6 +2955,7 @@ const KANJI_MASTER = [
 "radNo": 41,
 "rad": "⼨",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジ"
 ],
@@ -2835,6 +2976,7 @@ const KANJI_MASTER = [
 "radNo": 201,
 "rad": "⿈",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ",
 "オウ"
@@ -2858,7 +3000,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 10,
 "rad": "⼉",
-"radName": "",
+"radName": "ひとあし・にんにょう",
+"radChecked": true,
 "on": [
 "ゲン",
 "ガン"
@@ -2881,6 +3024,7 @@ const KANJI_MASTER = [
 "radNo": 3,
 "rad": "⼂",
 "radName": "",
+"radChecked": false,
 "on": [
 "ガン"
 ],
@@ -2904,7 +3048,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "エン",
 "オン"
@@ -2927,6 +3072,7 @@ const KANJI_MASTER = [
 "radNo": 82,
 "rad": "⽑",
 "radName": "",
+"radChecked": false,
 "on": [
 "モウ"
 ],
@@ -2946,7 +3092,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": false,
 "on": [
 "ハン"
 ],
@@ -2967,6 +3114,7 @@ const KANJI_MASTER = [
 "radNo": 18,
 "rad": "⼑",
 "radName": "",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -2986,6 +3134,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "タイ",
 "テイ"
@@ -3007,7 +3156,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 147,
 "rad": "⾒",
-"radName": "",
+"radName": "みる",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -3032,6 +3182,7 @@ const KANJI_MASTER = [
 "radNo": 132,
 "rad": "⾃",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジ",
 "シ"
@@ -3054,6 +3205,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゴウ",
 "ガッ",
@@ -3081,7 +3233,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "ゲン",
 "ゴン"
@@ -3105,7 +3258,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": false,
 "on": [
 "ガン"
 ],
@@ -3126,6 +3280,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "カ"
 ],
@@ -3148,6 +3303,7 @@ const KANJI_MASTER = [
 "radNo": 169,
 "rad": "⾨",
 "radName": "",
+"radChecked": false,
 "on": [
 "モン"
 ],
@@ -3168,6 +3324,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "バン"
 ],
@@ -3185,6 +3342,7 @@ const KANJI_MASTER = [
 "radNo": 15,
 "rad": "⼎",
 "radName": "",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -3205,6 +3363,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ダイ",
 "タイ"
@@ -3224,6 +3383,7 @@ const KANJI_MASTER = [
 "radNo": 31,
 "rad": "⼞",
 "radName": "",
+"radChecked": false,
 "on": [
 "ズ",
 "ト"
@@ -3245,7 +3405,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ジ"
 ],
@@ -3266,6 +3427,7 @@ const KANJI_MASTER = [
 "radNo": 150,
 "rad": "⾕",
 "radName": "",
+"radChecked": false,
 "on": [
 "コク"
 ],
@@ -3286,6 +3448,7 @@ const KANJI_MASTER = [
 "radNo": 27,
 "rad": "⼚",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゲン"
 ],
@@ -3305,7 +3468,8 @@ const KANJI_MASTER = [
 "strokes": 18,
 "radNo": 181,
 "rad": "⾴",
-"radName": "",
+"radName": "おおがい",
+"radChecked": false,
 "on": [
 "ガン"
 ],
@@ -3325,7 +3489,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 115,
 "rad": "⽲",
-"radName": "",
+"radName": "のぎへん",
+"radChecked": true,
 "on": [
 "カ"
 ],
@@ -3343,6 +3508,7 @@ const KANJI_MASTER = [
 "radNo": 36,
 "rad": "⼣",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヤ"
 ],
@@ -3365,6 +3531,7 @@ const KANJI_MASTER = [
 "radNo": 88,
 "rad": "⽗",
 "radName": "",
+"radChecked": false,
 "on": [
 "フ"
 ],
@@ -3385,6 +3552,7 @@ const KANJI_MASTER = [
 "radNo": 58,
 "rad": "⼹",
 "radName": "",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -3406,7 +3574,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": false,
 "on": [
 "チ",
 "ジ"
@@ -3425,7 +3594,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": false,
 "on": [
 "スウ",
 "ス"
@@ -3448,7 +3618,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "シツ"
 ],
@@ -3469,6 +3640,7 @@ const KANJI_MASTER = [
 "radNo": 31,
 "rad": "⼞",
 "radName": "",
+"radChecked": false,
 "on": [
 "コク"
 ],
@@ -3489,6 +3661,7 @@ const KANJI_MASTER = [
 "radNo": 63,
 "rad": "⼾",
 "radName": "",
+"radChecked": false,
 "on": [
 "コ"
 ],
@@ -3508,7 +3681,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "キ"
 ],
@@ -3526,6 +3700,7 @@ const KANJI_MASTER = [
 "radNo": 35,
 "rad": "⼢",
 "radName": "",
+"radChecked": false,
 "on": [
 "カ",
 "ゲ",
@@ -3549,6 +3724,7 @@ const KANJI_MASTER = [
 "radNo": 166,
 "rad": "⾥",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヤ"
 ],
@@ -3569,6 +3745,7 @@ const KANJI_MASTER = [
 "radNo": 182,
 "rad": "⾵",
 "radName": "",
+"radChecked": false,
 "on": [
 "フウ",
 "フ"
@@ -3593,6 +3770,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -3612,7 +3790,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "チ"
 ],
@@ -3633,6 +3812,7 @@ const KANJI_MASTER = [
 "radNo": 146,
 "rad": "⾑",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "サイ"
@@ -3654,7 +3834,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": false,
 "on": [
 "シャ"
 ],
@@ -3674,6 +3855,7 @@ const KANJI_MASTER = [
 "radNo": 203,
 "rad": "⿊",
 "radName": "",
+"radChecked": false,
 "on": [
 "コク"
 ],
@@ -3696,6 +3878,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "コ"
 ],
@@ -3717,7 +3900,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "キ"
 ],
@@ -3737,7 +3921,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "カ",
 "ケ"
@@ -3762,6 +3947,7 @@ const KANJI_MASTER = [
 "radNo": 29,
 "rad": "⼜",
 "radName": "",
+"radChecked": false,
 "on": [
 "ユウ"
 ],
@@ -3780,7 +3966,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 18,
 "rad": "⼑",
-"radName": "",
+"radName": "かたな",
+"radChecked": true,
 "on": [
 "ブン",
 "フン",
@@ -3810,7 +3997,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -3833,6 +4021,7 @@ const KANJI_MASTER = [
 "radNo": 111,
 "rad": "⽮",
 "radName": "",
+"radChecked": false,
 "on": [
 "チ"
 ],
@@ -3853,6 +4042,7 @@ const KANJI_MASTER = [
 "radNo": 33,
 "rad": "⼠",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -3877,6 +4067,7 @@ const KANJI_MASTER = [
 "radNo": 57,
 "rad": "⼸",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジャク"
 ],
@@ -3903,6 +4094,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "コン",
 "キン"
@@ -3924,7 +4116,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": false,
 "on": [
 "ゴ"
 ],
@@ -3941,7 +4134,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 50,
 "rad": "⼱",
-"radName": "",
+"radName": "はば",
+"radChecked": false,
 "on": [
 "キ"
 ],
@@ -3964,6 +4158,7 @@ const KANJI_MASTER = [
 "radNo": 76,
 "rad": "⽋",
 "radName": "",
+"radChecked": false,
 "on": [
 "カ",
 "カ"
@@ -3986,6 +4181,7 @@ const KANJI_MASTER = [
 "radNo": 101,
 "rad": "⽤",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -4006,6 +4202,7 @@ const KANJI_MASTER = [
 "radNo": 128,
 "rad": "⽿",
 "radName": "",
+"radChecked": false,
 "on": [
 "ブン",
 "モン"
@@ -4029,7 +4226,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 181,
 "rad": "⾴",
-"radName": "",
+"radName": "おおがい",
+"radChecked": false,
 "on": [
 "トウ",
 "ズ",
@@ -4055,7 +4253,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "チャ",
 "サ"
@@ -4074,7 +4273,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -4097,6 +4297,7 @@ const KANJI_MASTER = [
 "radNo": 185,
 "rad": "⾸",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュ"
 ],
@@ -4116,7 +4317,8 @@ const KANJI_MASTER = [
 "strokes": 3,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "サイ"
 ],
@@ -4133,7 +4335,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 60,
 "rad": "⼻",
-"radName": "",
+"radName": "ぎょうにんべん",
+"radChecked": false,
 "on": [
 "ゴ",
 "コウ"
@@ -4162,6 +4365,7 @@ const KANJI_MASTER = [
 "radNo": 57,
 "rad": "⼸",
 "radName": "",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -4182,6 +4386,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "ガ",
 "カク"
@@ -4200,7 +4405,8 @@ const KANJI_MASTER = [
 "strokes": 18,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -4218,6 +4424,7 @@ const KANJI_MASTER = [
 "radNo": 119,
 "rad": "⽶",
 "radName": "",
+"radChecked": false,
 "on": [
 "ベイ",
 "マイ"
@@ -4240,6 +4447,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ドウ"
 ],
@@ -4259,7 +4467,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "チュウ"
 ],
@@ -4279,7 +4488,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "セイ"
 ],
@@ -4301,7 +4511,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 115,
 "rad": "⽲",
-"radName": "",
+"radName": "のぎへん",
+"radChecked": false,
 "on": [
 "シュウ"
 ],
@@ -4320,7 +4531,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "サイ"
 ],
@@ -4346,7 +4558,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "ゴ"
 ],
@@ -4368,7 +4581,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 93,
 "rad": "⽜",
-"radName": "",
+"radName": "うしへん",
+"radChecked": false,
 "on": [
 "ギュウ"
 ],
@@ -4388,6 +4602,7 @@ const KANJI_MASTER = [
 "radNo": 31,
 "rad": "⼞",
 "radName": "",
+"radChecked": false,
 "on": [
 "カイ",
 "エ"
@@ -4412,6 +4627,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ライ"
 ],
@@ -4436,6 +4652,7 @@ const KANJI_MASTER = [
 "radNo": 77,
 "rad": "⽌",
 "radName": "",
+"radChecked": false,
 "on": [
 "ホ",
 "ブ",
@@ -4460,7 +4677,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ドウ",
 "トウ"
@@ -4483,6 +4701,7 @@ const KANJI_MASTER = [
 "radNo": 168,
 "rad": "⾧",
 "radName": "",
+"radChecked": false,
 "on": [
 "チョウ"
 ],
@@ -4503,6 +4722,7 @@ const KANJI_MASTER = [
 "radNo": 18,
 "rad": "⼑",
 "radName": "",
+"radChecked": false,
 "on": [
 "セツ",
 "サイ"
@@ -4526,7 +4746,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "シュウ"
 ],
@@ -4544,6 +4765,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "サク",
 "サ"
@@ -4566,6 +4788,7 @@ const KANJI_MASTER = [
 "radNo": 48,
 "rad": "⼯",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ",
 "ク"
@@ -4585,6 +4808,7 @@ const KANJI_MASTER = [
 "radNo": 195,
 "rad": "⿂",
 "radName": "",
+"radChecked": false,
 "on": [
 "ギョ"
 ],
@@ -4607,6 +4831,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "カイ",
 "エ"
@@ -4629,6 +4854,7 @@ const KANJI_MASTER = [
 "radNo": 166,
 "rad": "⾥",
 "radName": "",
+"radChecked": false,
 "on": [
 "リ"
 ],
@@ -4649,6 +4875,7 @@ const KANJI_MASTER = [
 "radNo": 80,
 "rad": "⽏",
 "radName": "",
+"radChecked": false,
 "on": [
 "ボ"
 ],
@@ -4668,7 +4895,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "ドク",
 "トク",
@@ -4693,6 +4921,7 @@ const KANJI_MASTER = [
 "radNo": 196,
 "rad": "⿃",
 "radName": "",
+"radChecked": false,
 "on": [
 "チョウ"
 ],
@@ -4713,6 +4942,7 @@ const KANJI_MASTER = [
 "radNo": 173,
 "rad": "⾬",
 "radName": "",
+"radChecked": false,
 "on": [
 "セツ"
 ],
@@ -4732,7 +4962,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "シュン"
 ],
@@ -4752,7 +4983,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "サン"
 ],
@@ -4769,7 +5001,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -4789,6 +5022,7 @@ const KANJI_MASTER = [
 "radNo": 8,
 "rad": "⼇",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョウ",
 "ケイ"
@@ -4807,7 +5041,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "カイ"
 ],
@@ -4828,6 +5063,7 @@ const KANJI_MASTER = [
 "radNo": 96,
 "rad": "⽟",
 "radName": "",
+"radChecked": false,
 "on": [
 "リ"
 ],
@@ -4845,6 +5081,7 @@ const KANJI_MASTER = [
 "radNo": 70,
 "rad": "⽅",
 "radName": "",
+"radChecked": false,
 "on": [
 "ホウ"
 ],
@@ -4865,6 +5102,7 @@ const KANJI_MASTER = [
 "radNo": 13,
 "rad": "⼌",
 "radName": "",
+"radChecked": false,
 "on": [
 "ナイ",
 "ダイ"
@@ -4887,6 +5125,7 @@ const KANJI_MASTER = [
 "radNo": 74,
 "rad": "⽉",
 "radName": "",
+"radChecked": false,
 "on": [
 "チョウ"
 ],
@@ -4907,6 +5146,7 @@ const KANJI_MASTER = [
 "radNo": 137,
 "rad": "⾈",
 "radName": "",
+"radChecked": false,
 "on": [
 "セン"
 ],
@@ -4929,6 +5169,7 @@ const KANJI_MASTER = [
 "radNo": 73,
 "rad": "⽈",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショ"
 ],
@@ -4949,6 +5190,7 @@ const KANJI_MASTER = [
 "radNo": 77,
 "rad": "⽌",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -4970,7 +5212,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -4999,6 +5242,7 @@ const KANJI_MASTER = [
 "radNo": 57,
 "rad": "⼸",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョウ",
 "ゴウ"
@@ -5026,7 +5270,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "カイ",
 "エ"
@@ -5045,7 +5290,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "ワ"
 ],
@@ -5068,6 +5314,7 @@ const KANJI_MASTER = [
 "radNo": 21,
 "rad": "⼔",
 "radName": "",
+"radChecked": false,
 "on": [
 "ホク"
 ],
@@ -5087,7 +5334,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": false,
 "on": [
 "ナン",
 "ナ"
@@ -5110,6 +5358,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "チョク",
 "ジキ"
@@ -5135,7 +5384,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "セン"
 ],
@@ -5152,7 +5402,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 42,
 "rad": "⼩",
-"radName": "",
+"radName": "つかんむり",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -5174,7 +5425,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 50,
 "rad": "⼱",
-"radName": "",
+"radName": "はば",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -5195,6 +5447,7 @@ const KANJI_MASTER = [
 "radNo": 8,
 "rad": "⼇",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -5226,7 +5479,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": false,
 "on": [
 "キョウ"
 ],
@@ -5249,6 +5503,7 @@ const KANJI_MASTER = [
 "radNo": 36,
 "rad": "⼣",
 "radName": "",
+"radChecked": false,
 "on": [
 "ガイ",
 "ゲ"
@@ -5277,6 +5532,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "ユ",
 "ユウ",
@@ -5300,7 +5556,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ヒョウ"
 ],
@@ -5321,7 +5578,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -5341,7 +5599,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [
 "タン"
 ],
@@ -5362,6 +5621,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -5381,7 +5641,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "シュウ",
 "ジュウ"
@@ -5404,6 +5665,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ",
 "ジ"
@@ -5425,7 +5687,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 167,
 "rad": "⾦",
-"radName": "",
+"radName": "かねへん",
+"radChecked": false,
 "on": [
 "ギン"
 ],
@@ -5443,6 +5706,7 @@ const KANJI_MASTER = [
 "radNo": 169,
 "rad": "⾨",
 "radName": "",
+"radChecked": false,
 "on": [
 "カイ",
 "カイ"
@@ -5469,7 +5733,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "アク",
 "オ"
@@ -5491,7 +5756,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ユ"
 ],
@@ -5512,6 +5778,7 @@ const KANJI_MASTER = [
 "radNo": 145,
 "rad": "⾐",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヒョウ"
 ],
@@ -5536,6 +5803,7 @@ const KANJI_MASTER = [
 "radNo": 105,
 "rad": "⽨",
 "radName": "",
+"radChecked": false,
 "on": [
 "トウ",
 "ト"
@@ -5558,6 +5826,7 @@ const KANJI_MASTER = [
 "radNo": 111,
 "rad": "⽮",
 "radName": "",
+"radChecked": false,
 "on": [
 "タン"
 ],
@@ -5577,7 +5846,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "シン",
 "シン"
@@ -5602,7 +5872,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "シュウ"
 ],
@@ -5625,6 +5896,7 @@ const KANJI_MASTER = [
 "radNo": 78,
 "rad": "⽍",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -5645,6 +5917,7 @@ const KANJI_MASTER = [
 "radNo": 23,
 "rad": "⼖",
 "radName": "",
+"radChecked": false,
 "on": [
 "ク"
 ],
@@ -5661,7 +5934,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": true,
 "on": [
 "カイ"
 ],
@@ -5678,7 +5952,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "アン"
 ],
@@ -5699,6 +5974,7 @@ const KANJI_MASTER = [
 "radNo": 74,
 "rad": "⽉",
 "radName": "",
+"radChecked": false,
 "on": [
 "ユウ",
 "ウ"
@@ -5720,7 +5996,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 115,
 "rad": "⽲",
-"radName": "",
+"radName": "のぎへん",
+"radChecked": false,
 "on": [
 "ビョウ"
 ],
@@ -5737,7 +6014,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -5757,7 +6035,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "ダン"
 ],
@@ -5774,7 +6053,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -5797,6 +6077,7 @@ const KANJI_MASTER = [
 "radNo": 124,
 "rad": "⽻",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュウ"
 ],
@@ -5817,6 +6098,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -5836,7 +6118,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": true,
 "on": [
 "ク"
 ],
@@ -5864,7 +6147,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "カン"
 ],
@@ -5884,7 +6168,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": true,
 "on": [
 "アン"
 ],
@@ -5904,7 +6189,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ユウ",
 "ユ"
@@ -5927,6 +6213,7 @@ const KANJI_MASTER = [
 "radNo": 104,
 "rad": "⽧",
 "radName": "",
+"radChecked": false,
 "on": [
 "ビョウ",
 "ヘイ"
@@ -5949,7 +6236,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": false,
 "on": [
 "ドウ"
 ],
@@ -5972,6 +6260,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "チャク",
 "ジャク"
@@ -6000,6 +6289,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "セ"
@@ -6022,6 +6312,7 @@ const KANJI_MASTER = [
 "radNo": 172,
 "rad": "⾫",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュウ"
 ],
@@ -6045,7 +6336,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -6067,7 +6359,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": false,
 "on": [
 "グ"
 ],
@@ -6084,7 +6377,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "カン"
 ],
@@ -6102,6 +6396,7 @@ const KANJI_MASTER = [
 "radNo": 23,
 "rad": "⼖",
 "radName": "",
+"radChecked": false,
 "on": [
 "イ"
 ],
@@ -6119,6 +6414,7 @@ const KANJI_MASTER = [
 "radNo": 6,
 "rad": "⼅",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヨ"
 ],
@@ -6136,6 +6432,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヒン"
 ],
@@ -6156,6 +6453,7 @@ const KANJI_MASTER = [
 "radNo": 117,
 "rad": "⽴",
 "radName": "",
+"radChecked": false,
 "on": [
 "ドウ"
 ],
@@ -6175,7 +6473,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "チュウ"
 ],
@@ -6195,7 +6494,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": false,
 "on": [
 "セイ",
 "セイ"
@@ -6219,6 +6519,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジュウ"
 ],
@@ -6240,7 +6541,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "シ",
 "シ"
@@ -6264,6 +6566,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "クン"
 ],
@@ -6283,7 +6586,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "カン"
 ],
@@ -6300,7 +6604,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": false,
 "on": [
 "イ"
 ],
@@ -6321,6 +6626,7 @@ const KANJI_MASTER = [
 "radNo": 123,
 "rad": "⽺",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -6339,7 +6645,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 154,
 "rad": "⾙",
-"radName": "",
+"radName": "かい・こがい",
+"radChecked": false,
 "on": [
 "フ"
 ],
@@ -6364,6 +6671,7 @@ const KANJI_MASTER = [
 "radNo": 161,
 "rad": "⾠",
 "radName": "",
+"radChecked": false,
 "on": [
 "ノウ"
 ],
@@ -6381,6 +6689,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "チュウ"
 ],
@@ -6400,7 +6709,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "セキ",
 "シャク"
@@ -6423,6 +6733,7 @@ const KANJI_MASTER = [
 "radNo": 166,
 "rad": "⾥",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジュウ",
 "チョウ"
@@ -6451,6 +6762,7 @@ const KANJI_MASTER = [
 "radNo": 77,
 "rad": "⽌",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -6471,6 +6783,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケイ"
 ],
@@ -6492,7 +6805,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 184,
 "rad": "⾷",
-"radName": "",
+"radName": "しょくへん",
+"radChecked": true,
 "on": [
 "カン"
 ],
@@ -6511,7 +6825,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "イ",
 "イ"
@@ -6529,7 +6844,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -6547,6 +6863,7 @@ const KANJI_MASTER = [
 "radNo": 163,
 "rad": "⾢",
 "radName": "",
+"radChecked": false,
 "on": [
 "ブ"
 ],
@@ -6563,7 +6880,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ハ"
 ],
@@ -6584,6 +6902,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "チョウ",
 "テイ"
@@ -6603,6 +6922,7 @@ const KANJI_MASTER = [
 "radNo": 11,
 "rad": "⼊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゼン"
 ],
@@ -6624,7 +6944,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "シュク"
 ],
@@ -6648,7 +6969,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -6665,7 +6987,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 159,
 "rad": "⾞",
-"radName": "",
+"radName": "くるまへん",
+"radChecked": false,
 "on": [
 "ケイ"
 ],
@@ -6687,7 +7010,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": false,
 "on": [
 "ガン"
 ],
@@ -6708,6 +7032,7 @@ const KANJI_MASTER = [
 "radNo": 130,
 "rad": "⾁",
 "radName": "",
+"radChecked": false,
 "on": [
 "イク"
 ],
@@ -6731,7 +7056,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -6752,6 +7078,7 @@ const KANJI_MASTER = [
 "radNo": 74,
 "rad": "⽉",
 "radName": "",
+"radChecked": false,
 "on": [
 "フク"
 ],
@@ -6769,6 +7096,7 @@ const KANJI_MASTER = [
 "radNo": 164,
 "rad": "⾣",
 "radName": "",
+"radChecked": false,
 "on": [
 "ハイ"
 ],
@@ -6788,7 +7116,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 50,
 "rad": "⼱",
-"radName": "",
+"radName": "はば",
+"radChecked": false,
 "on": [
 "チョウ"
 ],
@@ -6806,6 +7135,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "ソウ",
 "ショウ"
@@ -6828,6 +7158,7 @@ const KANJI_MASTER = [
 "radNo": 63,
 "rad": "⼾",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショ"
 ],
@@ -6848,6 +7179,7 @@ const KANJI_MASTER = [
 "radNo": 76,
 "rad": "⽋",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジ",
 "シ"
@@ -6872,6 +7204,7 @@ const KANJI_MASTER = [
 "radNo": 143,
 "rad": "⾎",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケツ"
 ],
@@ -6892,6 +7225,7 @@ const KANJI_MASTER = [
 "radNo": 156,
 "rad": "⾛",
 "radName": "",
+"radChecked": false,
 "on": [
 "キ"
 ],
@@ -6916,6 +7250,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "イン"
 ],
@@ -6932,7 +7267,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -6949,7 +7285,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": false,
 "on": [
 "フク"
 ],
@@ -6967,6 +7304,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "バイ"
 ],
@@ -6983,7 +7321,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": false,
 "on": [
 "チョウ"
 ],
@@ -7007,7 +7346,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ソウ"
 ],
@@ -7027,7 +7367,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ショ"
 ],
@@ -7048,6 +7389,7 @@ const KANJI_MASTER = [
 "radNo": 6,
 "rad": "⼅",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジ",
 "ズ"
@@ -7069,7 +7411,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ケツ"
 ],
@@ -7092,6 +7435,7 @@ const KANJI_MASTER = [
 "radNo": 74,
 "rad": "⽉",
 "radName": "",
+"radChecked": false,
 "on": [
 "キ",
 "ゴ"
@@ -7110,7 +7454,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": false,
 "on": [
 "イン"
 ],
@@ -7128,6 +7473,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -7147,7 +7493,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 93,
 "rad": "⽜",
-"radName": "",
+"radName": "うしへん",
+"radChecked": true,
 "on": [
 "ブツ",
 "モツ"
@@ -7169,7 +7516,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": true,
 "on": [],
 "kun": [
 "はこ"
@@ -7186,7 +7534,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ツイ"
 ],
@@ -7206,7 +7555,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "ソウ",
 "ソ"
@@ -7225,7 +7575,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": false,
 "on": [
 "ジョ"
 ],
@@ -7249,7 +7600,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": true,
 "on": [
 "ジ"
 ],
@@ -7270,6 +7622,7 @@ const KANJI_MASTER = [
 "radNo": 112,
 "rad": "⽯",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケン"
 ],
@@ -7289,7 +7642,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "キャク",
 "カク"
@@ -7308,7 +7662,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 184,
 "rad": "⾷",
-"radName": "",
+"radName": "しょくへん",
+"radChecked": true,
 "on": [
 "イン"
 ],
@@ -7328,7 +7683,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "ラク"
 ],
@@ -7351,6 +7707,7 @@ const KANJI_MASTER = [
 "radNo": 51,
 "rad": "⼲",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヘイ",
 "ビョウ"
@@ -7375,6 +7732,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [],
 "kun": [
 "はた",
@@ -7393,7 +7751,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "テイ",
 "ジョウ"
@@ -7419,7 +7778,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "ソク"
 ],
@@ -7439,7 +7799,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -7457,6 +7818,7 @@ const KANJI_MASTER = [
 "radNo": 56,
 "rad": "⼷",
 "radName": "",
+"radChecked": false,
 "on": [
 "シキ"
 ],
@@ -7474,6 +7836,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケン"
 ],
@@ -7491,6 +7854,7 @@ const KANJI_MASTER = [
 "radNo": 116,
 "rad": "⽳",
 "radName": "",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -7510,7 +7874,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ウン"
 ],
@@ -7530,7 +7895,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "リュウ",
 "ル"
@@ -7554,7 +7920,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ヘン"
 ],
@@ -7577,6 +7944,7 @@ const KANJI_MASTER = [
 "radNo": 105,
 "rad": "⽨",
 "radName": "",
+"radChecked": false,
 "on": [
 "ハツ",
 "ホツ"
@@ -7595,7 +7963,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": true,
 "on": [
 "テイ"
 ],
@@ -7615,7 +7984,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": false,
 "on": [
 "ソク"
 ],
@@ -7641,7 +8011,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -7663,7 +8034,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "ジツ"
 ],
@@ -7685,7 +8057,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": false,
 "on": [
 "コ",
 "ク"
@@ -7704,7 +8077,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -7724,7 +8098,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "エイ"
 ],
@@ -7745,6 +8120,7 @@ const KANJI_MASTER = [
 "radNo": 70,
 "rad": "⽅",
 "radName": "",
+"radChecked": false,
 "on": [
 "リョ"
 ],
@@ -7764,7 +8140,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": false,
 "on": [
 "ベン"
 ],
@@ -7782,6 +8159,7 @@ const KANJI_MASTER = [
 "radNo": 29,
 "rad": "⼜",
 "radName": "",
+"radChecked": false,
 "on": [
 "ハン",
 "ホン",
@@ -7807,7 +8185,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "テキ"
 ],
@@ -7828,6 +8207,7 @@ const KANJI_MASTER = [
 "radNo": 70,
 "rad": "⽅",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゾク"
 ],
@@ -7845,6 +8225,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -7865,6 +8246,7 @@ const KANJI_MASTER = [
 "radNo": 14,
 "rad": "⼍",
 "radName": "",
+"radChecked": false,
 "on": [
 "シャ"
 ],
@@ -7886,7 +8268,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "コ"
 ],
@@ -7905,7 +8288,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -7923,6 +8307,7 @@ const KANJI_MASTER = [
 "radNo": 187,
 "rad": "⾺",
 "radName": "",
+"radChecked": false,
 "on": [
 "エキ"
 ],
@@ -7940,6 +8325,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "リョウ"
 ],
@@ -7956,7 +8342,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": false,
 "on": [
 "ホウ"
 ],
@@ -7982,7 +8369,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": false,
 "on": [
 "ハン"
 ],
@@ -8002,7 +8390,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 167,
 "rad": "⾦",
-"radName": "",
+"radName": "かねへん",
+"radChecked": true,
 "on": [
 "テツ"
 ],
@@ -8020,6 +8409,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "タ"
 ],
@@ -8040,6 +8430,7 @@ const KANJI_MASTER = [
 "radNo": 117,
 "rad": "⽴",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -8057,6 +8448,7 @@ const KANJI_MASTER = [
 "radNo": 125,
 "rad": "⽼",
 "radName": "",
+"radChecked": false,
 "on": [
 "シャ"
 ],
@@ -8077,6 +8469,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -8102,7 +8495,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "キュウ",
 "グウ",
@@ -8126,7 +8520,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": false,
 "on": [
 "オウ"
 ],
@@ -8143,7 +8538,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "リョク",
 "ロク"
@@ -8165,7 +8561,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 30,
 "rad": "⼝",
-"radName": "",
+"radName": "くちへん",
+"radChecked": true,
 "on": [
 "ミ"
 ],
@@ -8188,6 +8585,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ハン",
 "バン"
@@ -8209,7 +8607,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 159,
 "rad": "⾞",
-"radName": "",
+"radName": "くるまへん",
+"radChecked": true,
 "on": [
 "テン"
 ],
@@ -8235,7 +8634,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "ダ"
 ],
@@ -8255,7 +8655,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -8278,6 +8679,7 @@ const KANJI_MASTER = [
 "radNo": 3,
 "rad": "⼂",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュ",
 "ス"
@@ -8302,6 +8704,7 @@ const KANJI_MASTER = [
 "radNo": 51,
 "rad": "⼲",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -8325,6 +8728,7 @@ const KANJI_MASTER = [
 "radNo": 96,
 "rad": "⽟",
 "radName": "",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -8344,6 +8748,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "オウ"
 ],
@@ -8363,7 +8768,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": true,
 "on": [
 "レイ",
 "ライ"
@@ -8383,6 +8789,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "メイ",
 "ミョウ"
@@ -8405,6 +8812,7 @@ const KANJI_MASTER = [
 "radNo": 107,
 "rad": "⽪",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヒ"
 ],
@@ -8425,6 +8833,7 @@ const KANJI_MASTER = [
 "radNo": 163,
 "rad": "⾢",
 "radName": "",
+"radChecked": false,
 "on": [
 "ト",
 "ツ"
@@ -8447,6 +8856,7 @@ const KANJI_MASTER = [
 "radNo": 41,
 "rad": "⼨",
 "radName": "",
+"radChecked": false,
 "on": [
 "タイ",
 "ツイ"
@@ -8466,6 +8876,7 @@ const KANJI_MASTER = [
 "radNo": 4,
 "rad": "⼃",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジョウ"
 ],
@@ -8487,7 +8898,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": false,
 "on": [
 "シュ",
 "ス"
@@ -8511,7 +8923,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -8531,6 +8944,7 @@ const KANJI_MASTER = [
 "radNo": 28,
 "rad": "⼛",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョ",
 "コ"
@@ -8553,6 +8967,7 @@ const KANJI_MASTER = [
 "radNo": 44,
 "rad": "⼫",
 "radName": "",
+"radChecked": false,
 "on": [
 "オク"
 ],
@@ -8573,6 +8988,7 @@ const KANJI_MASTER = [
 "radNo": 18,
 "rad": "⼑",
 "radName": "",
+"radChecked": false,
 "on": [
 "レツ"
 ],
@@ -8590,6 +9006,7 @@ const KANJI_MASTER = [
 "radNo": 176,
 "rad": "⾯",
 "radName": "",
+"radChecked": false,
 "on": [
 "メン"
 ],
@@ -8613,7 +9030,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": false,
 "on": [
 "ヒ"
 ],
@@ -8635,7 +9053,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": false,
 "on": [
 "ド",
 "ト",
@@ -8659,7 +9078,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 60,
 "rad": "⼻",
-"radName": "",
+"radName": "ぎょうにんべん",
+"radChecked": false,
 "on": [
 "タイ"
 ],
@@ -8680,6 +9100,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショク"
 ],
@@ -8702,6 +9123,7 @@ const KANJI_MASTER = [
 "radNo": 29,
 "rad": "⼜",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュ"
 ],
@@ -8722,6 +9144,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ゴウ"
 ],
@@ -8739,6 +9162,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョウ"
 ],
@@ -8758,7 +9182,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "オン"
 ],
@@ -8784,7 +9209,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "レン"
 ],
@@ -8805,6 +9231,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "モン"
 ],
@@ -8829,6 +9256,7 @@ const KANJI_MASTER = [
 "radNo": 123,
 "rad": "⽺",
 "radName": "",
+"radChecked": false,
 "on": [
 "ビ"
 ],
@@ -8848,7 +9276,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -8869,6 +9298,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "ダイ",
 "タイ"
@@ -8897,6 +9327,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -8917,6 +9348,7 @@ const KANJI_MASTER = [
 "radNo": 164,
 "rad": "⾣",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュ"
 ],
@@ -8939,6 +9371,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "コン"
 ],
@@ -8959,6 +9392,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ギョウ",
 "ゴウ"
@@ -8981,6 +9415,7 @@ const KANJI_MASTER = [
 "radNo": 21,
 "rad": "⼔",
 "radName": "",
+"radChecked": false,
 "on": [
 "カ",
 "ケ"
@@ -9005,6 +9440,7 @@ const KANJI_MASTER = [
 "radNo": 157,
 "rad": "⾜",
 "radName": "",
+"radChecked": false,
 "on": [
 "ロ"
 ],
@@ -9024,7 +9460,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 60,
 "rad": "⼻",
-"radName": "",
+"radName": "ぎょうにんべん",
+"radChecked": false,
 "on": [
 "ヤク",
 "エキ"
@@ -9044,6 +9481,7 @@ const KANJI_MASTER = [
 "radNo": 209,
 "rad": "⿐",
 "radName": "",
+"radChecked": false,
 "on": [
 "ビ"
 ],
@@ -9064,6 +9502,7 @@ const KANJI_MASTER = [
 "radNo": 151,
 "rad": "⾖",
 "radName": "",
+"radChecked": false,
 "on": [
 "トウ",
 "ズ"
@@ -9085,7 +9524,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "ダイ"
 ],
@@ -9103,6 +9543,7 @@ const KANJI_MASTER = [
 "radNo": 158,
 "rad": "⾝",
 "radName": "",
+"radChecked": false,
 "on": [
 "シン"
 ],
@@ -9123,6 +9564,7 @@ const KANJI_MASTER = [
 "radNo": 29,
 "rad": "⼜",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジュ"
 ],
@@ -9144,7 +9586,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": false,
 "on": [
 "サイ"
 ],
@@ -9167,6 +9610,7 @@ const KANJI_MASTER = [
 "radNo": 73,
 "rad": "⽈",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョク"
 ],
@@ -9188,7 +9632,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "カ"
 ],
@@ -9209,6 +9654,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "ワ",
 "オ"
@@ -9236,7 +9682,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "ヤク"
 ],
@@ -9256,7 +9703,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "ヒツ"
 ],
@@ -9276,7 +9724,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -9296,7 +9745,8 @@ const KANJI_MASTER = [
 "strokes": 18,
 "radNo": 181,
 "rad": "⾴",
-"radName": "",
+"radName": "おおがい",
+"radChecked": false,
 "on": [
 "ダイ"
 ],
@@ -9313,7 +9763,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": false,
 "on": [
 "シン",
 "ジン"
@@ -9340,6 +9791,7 @@ const KANJI_MASTER = [
 "radNo": 47,
 "rad": "⼮",
 "radName": "",
+"radChecked": false,
 "on": [
 "シュウ"
 ],
@@ -9360,6 +9812,7 @@ const KANJI_MASTER = [
 "radNo": 108,
 "rad": "⽫",
 "radName": "",
+"radChecked": false,
 "on": [],
 "kun": [
 "さら"
@@ -9377,6 +9830,7 @@ const KANJI_MASTER = [
 "radNo": 44,
 "rad": "⼫",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョク"
 ],
@@ -9394,6 +9848,7 @@ const KANJI_MASTER = [
 "radNo": 102,
 "rad": "⽥",
 "radName": "",
+"radChecked": false,
 "on": [
 "カイ"
 ],
@@ -9411,6 +9866,7 @@ const KANJI_MASTER = [
 "radNo": 83,
 "rad": "⽒",
 "radName": "",
+"radChecked": false,
 "on": [
 "ミン"
 ],
@@ -9429,7 +9885,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": false,
 "on": [
 "ヒョウ"
 ],
@@ -9446,7 +9903,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": true,
 "on": [
 "テン"
 ],
@@ -9463,7 +9921,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": true,
 "on": [
 "ゼン",
 "ネン"
@@ -9482,7 +9941,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 30,
 "rad": "⼝",
-"radName": "",
+"radName": "くちへん",
+"radChecked": true,
 "on": [
 "ショウ"
 ],
@@ -9503,6 +9963,7 @@ const KANJI_MASTER = [
 "radNo": 100,
 "rad": "⽣",
 "radName": "",
+"radChecked": false,
 "on": [
 "サン"
 ],
@@ -9527,6 +9988,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケン"
 ],
@@ -9546,7 +10008,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -9566,7 +10029,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "きへん",
+"radChecked": true,
 "on": [
 "カイ"
 ],
@@ -9583,7 +10047,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": true,
 "on": [
 "アイ"
 ],
@@ -9600,7 +10065,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": true,
 "on": [
 "ム",
 "ブ"
@@ -9622,7 +10088,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "きへん",
+"radChecked": true,
 "on": [
 "ヒョウ"
 ],
@@ -9639,7 +10106,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "デン"
 ],
@@ -9664,6 +10132,7 @@ const KANJI_MASTER = [
 "radNo": 6,
 "rad": "⼅",
 "radName": "",
+"radChecked": false,
 "on": [
 "ソウ"
 ],
@@ -9683,7 +10152,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -9705,7 +10175,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": true,
 "on": [
 "サン"
 ],
@@ -9732,6 +10203,7 @@ const KANJI_MASTER = [
 "radNo": 187,
 "rad": "⾺",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケン",
 "ゲン"
@@ -9750,7 +10222,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": true,
 "on": [
 "キュウ"
 ],
@@ -9767,7 +10240,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": true,
 "on": [
 "ガイ"
 ],
@@ -9785,6 +10259,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "アン"
 ],
@@ -9801,7 +10276,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": true,
 "on": [
 "ヤク"
 ],
@@ -9819,6 +10295,7 @@ const KANJI_MASTER = [
 "radNo": 1,
 "rad": "⼀",
 "radName": "",
+"radChecked": false,
 "on": [
 "フ",
 "ブ"
@@ -9837,7 +10314,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 60,
 "rad": "⼻",
-"radName": "",
+"radName": "ぎょうにんべん",
+"radChecked": true,
 "on": [
 "ト"
 ],
@@ -9854,7 +10332,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "ひとやね",
+"radChecked": true,
 "on": [
 "ソウ"
 ],
@@ -9874,7 +10353,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": true,
 "on": [
 "ショウ"
 ],
@@ -9899,6 +10379,7 @@ const KANJI_MASTER = [
 "radNo": 78,
 "rad": "⽍",
 "radName": "",
+"radChecked": false,
 "on": [
 "ザン"
 ],
@@ -9921,6 +10402,7 @@ const KANJI_MASTER = [
 "radNo": 31,
 "rad": "⼞",
 "radName": "",
+"radChecked": false,
 "on": [
 "コ"
 ],
@@ -9944,7 +10426,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": false,
 "on": [
 "キョ"
 ],
@@ -9967,6 +10450,7 @@ const KANJI_MASTER = [
 "radNo": 144,
 "rad": "⾏",
 "radName": "",
+"radChecked": false,
 "on": [
 "ガイ",
 "カイ"
@@ -9989,6 +10473,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "イ"
 ],
@@ -10005,7 +10490,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": true,
 "on": [
 "ユウ"
 ],
@@ -10025,7 +10511,8 @@ const KANJI_MASTER = [
 "strokes": 4,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": true,
 "on": [
 "フ",
 "フウ"
@@ -10046,7 +10533,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": true,
 "on": [
 "ド"
 ],
@@ -10064,9 +10552,10 @@ const KANJI_MASTER = [
 "kyu": "7級",
 "grade": 4,
 "strokes": 11,
-"radNo": 47,
-"rad": "⼮",
-"radName": "",
+"radNo": 42,
+"rad": "⼩",
+"radName": "つかんむり",
+"radChecked": true,
 "on": [
 "ソウ"
 ],
@@ -10086,7 +10575,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": true,
 "on": [
 "ジョウ"
 ],
@@ -10107,6 +10597,7 @@ const KANJI_MASTER = [
 "radNo": 83,
 "rad": "⽒",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -10126,7 +10617,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": true,
 "on": [
 "コウ",
 "ク"
@@ -10145,7 +10637,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "ギョ",
 "リョウ"
@@ -10164,7 +10657,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 30,
 "rad": "⼝",
-"radName": "",
+"radName": "くち",
+"radChecked": true,
 "on": [
 "カク"
 ],
@@ -10184,6 +10678,7 @@ const KANJI_MASTER = [
 "radNo": 145,
 "rad": "⾐",
 "radName": "",
+"radChecked": false,
 "on": [
 "イ"
 ],
@@ -10204,6 +10699,7 @@ const KANJI_MASTER = [
 "radNo": 146,
 "rad": "⾑",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -10225,6 +10721,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "フ"
 ],
@@ -10246,7 +10743,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [
 "トウ"
 ],
@@ -10265,7 +10763,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "き",
+"radChecked": true,
 "on": [
 "ソク"
 ],
@@ -10285,7 +10784,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": true,
 "on": [
 "ジョウ"
 ],
@@ -10306,6 +10806,7 @@ const KANJI_MASTER = [
 "radNo": 30,
 "rad": "⼝",
 "radName": "",
+"radChecked": false,
 "on": [
 "シ"
 ],
@@ -10322,7 +10823,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": true,
 "on": [
 "コウ",
 "コウ"
@@ -10345,7 +10847,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": true,
 "on": [
 "キョウ"
 ],
@@ -10365,7 +10868,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 147,
 "rad": "⾒",
-"radName": "",
+"radName": "みる",
+"radChecked": true,
 "on": [
 "カク"
 ],
@@ -10389,7 +10893,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "イ"
 ],
@@ -10409,7 +10914,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 184,
 "rad": "⾷",
-"radName": "",
+"radName": "しょくへん",
+"radChecked": false,
 "on": [
 "ヨウ"
 ],
@@ -10429,7 +10935,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": true,
 "on": [
 "フ"
 ],
@@ -10446,7 +10953,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "ドウ"
 ],
@@ -10466,7 +10974,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "ソク"
 ],
@@ -10487,6 +10996,7 @@ const KANJI_MASTER = [
 "radNo": 131,
 "rad": "⾂",
 "radName": "",
+"radChecked": false,
 "on": [
 "シン",
 "ジン"
@@ -10505,7 +11015,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": true,
 "on": [
 "シ"
 ],
@@ -10528,6 +11039,7 @@ const KANJI_MASTER = [
 "radNo": 186,
 "rad": "⾹",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ",
 "キョウ"
@@ -10553,7 +11065,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": true,
 "on": [
 "キョウ"
 ],
@@ -10570,7 +11083,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [],
 "kun": [
 "かた"
@@ -10587,7 +11101,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [],
 "kun": [
 "いばら"
@@ -10604,7 +11119,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "ヨク"
 ],
@@ -10626,7 +11142,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": false,
 "on": [
 "フ"
 ],
@@ -10643,7 +11160,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 93,
 "rad": "⽜",
-"radName": "",
+"radName": "うしへん",
+"radChecked": true,
 "on": [
 "トク"
 ],
@@ -10660,7 +11178,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": true,
 "on": [
 "ゾク"
 ],
@@ -10682,7 +11201,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "シン"
 ],
@@ -10699,7 +11219,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 10,
 "rad": "⼉",
-"radName": "",
+"radName": "ひとあし・にんにょう",
+"radChecked": true,
 "on": [
 "ジ",
 "ニ"
@@ -10719,6 +11240,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "コウ"
 ],
@@ -10738,7 +11260,8 @@ const KANJI_MASTER = [
 "strokes": 19,
 "radNo": 167,
 "rad": "⾦",
-"radName": "",
+"radName": "かねへん",
+"radChecked": true,
 "on": [
 "キョウ"
 ],
@@ -10757,7 +11280,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": true,
 "on": [
 "カン"
 ],
@@ -10775,6 +11299,7 @@ const KANJI_MASTER = [
 "radNo": 26,
 "rad": "⼙",
 "radName": "",
+"radChecked": false,
 "on": [
 "イン"
 ],
@@ -10794,7 +11319,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 18,
 "rad": "⼑",
-"radName": "",
+"radName": "りっとう",
+"radChecked": true,
 "on": [
 "リ"
 ],
@@ -10814,7 +11340,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": true,
 "on": [
 "フ",
 "フウ"
@@ -10837,7 +11364,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 60,
 "rad": "⼻",
-"radName": "",
+"radName": "ぎょうにんべん",
+"radChecked": true,
 "on": [
 "トク"
 ],
@@ -10854,7 +11382,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": true,
 "on": [
 "ソツ"
 ],
@@ -10872,6 +11401,7 @@ const KANJI_MASTER = [
 "radNo": 7,
 "rad": "⼆",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -10893,7 +11423,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "ジ",
 "チ"
@@ -10921,7 +11452,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": true,
 "on": [
 "コウ"
 ],
@@ -10939,6 +11471,7 @@ const KANJI_MASTER = [
 "radNo": 117,
 "rad": "⽴",
 "radName": "",
+"radChecked": false,
 "on": [
 "キョウ",
 "ケイ"
@@ -10962,7 +11495,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": true,
 "on": [
 "カン"
 ],
@@ -10979,7 +11513,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": true,
 "on": [
 "エイ"
 ],
@@ -10996,7 +11531,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": true,
 "on": [
 "リク"
 ],
@@ -11013,7 +11549,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 18,
 "rad": "⼑",
-"radName": "",
+"radName": "りっとう",
+"radChecked": true,
 "on": [
 "フク"
 ],
@@ -11031,6 +11568,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [],
 "kun": [
 "とち"
@@ -11047,7 +11585,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 39,
 "rad": "⼦",
-"radName": "",
+"radName": "こ",
+"radChecked": false,
 "on": [
 "ソン"
 ],
@@ -11066,7 +11605,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 62,
 "rad": "⼽",
-"radName": "",
+"radName": "ほこづくり・ほこがまえ",
+"radChecked": true,
 "on": [
 "セイ",
 "ジョウ"
@@ -11090,7 +11630,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "ジ"
 ],
@@ -11108,6 +11649,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "サ"
 ],
@@ -11124,7 +11666,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "きへん",
+"radChecked": true,
 "on": [
 "キョク",
 "ゴク"
@@ -11150,7 +11693,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": true,
 "on": [
 "カン"
 ],
@@ -11170,6 +11714,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "エイ"
 ],
@@ -11194,6 +11739,7 @@ const KANJI_MASTER = [
 "radNo": 138,
 "rad": "⾉",
 "radName": "",
+"radChecked": false,
 "on": [
 "リョウ"
 ],
@@ -11213,7 +11759,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 12,
 "rad": "⼋",
-"radName": "",
+"radName": "は",
+"radChecked": true,
 "on": [
 "ヘイ",
 "ヒョウ"
@@ -11232,7 +11779,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": true,
 "on": [
 "ナ"
 ],
@@ -11249,7 +11797,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 50,
 "rad": "⼱",
-"radName": "",
+"radName": "はば",
+"radChecked": true,
 "on": [
 "タイ"
 ],
@@ -11272,6 +11821,7 @@ const KANJI_MASTER = [
 "radNo": 109,
 "rad": "⽬",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ショウ"
@@ -11296,6 +11846,7 @@ const KANJI_MASTER = [
 "radNo": 160,
 "rad": "⾟",
 "radName": "",
+"radChecked": false,
 "on": [
 "ジ"
 ],
@@ -11316,6 +11867,7 @@ const KANJI_MASTER = [
 "radNo": 48,
 "rad": "⼯",
 "radName": "",
+"radChecked": false,
 "on": [
 "サ"
 ],
@@ -11335,7 +11887,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [],
 "kun": [
 "くま"
@@ -11351,6 +11904,7 @@ const KANJI_MASTER = [
 "radNo": 169,
 "rad": "⾨",
 "radName": "",
+"radChecked": false,
 "on": [
 "カン"
 ],
@@ -11372,7 +11926,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 38,
 "rad": "⼥",
-"radName": "",
+"radName": "おんなへん",
+"radChecked": true,
 "on": [
 "エン"
 ],
@@ -11390,6 +11945,7 @@ const KANJI_MASTER = [
 "radNo": 68,
 "rad": "⽃",
 "radName": "",
+"radChecked": false,
 "on": [
 "リョウ"
 ],
@@ -11406,7 +11962,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 18,
 "rad": "⼑",
-"radName": "",
+"radName": "りっとう",
+"radChecked": true,
 "on": [
 "ベツ"
 ],
@@ -11426,7 +11983,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "き",
+"radChecked": true,
 "on": [],
 "kun": [
 "なし"
@@ -11441,7 +11999,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": true,
 "on": [
 "タイ"
 ],
@@ -11458,7 +12017,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "セイ",
 "ショウ",
@@ -11486,6 +12046,7 @@ const KANJI_MASTER = [
 "radNo": 198,
 "rad": "⿅",
 "radName": "",
+"radChecked": false,
 "on": [],
 "kun": [
 "しか",
@@ -11503,7 +12064,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": true,
 "on": [
 "サイ"
 ],
@@ -11523,7 +12085,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": true,
 "on": [
 "クン"
 ],
@@ -11540,7 +12103,8 @@ const KANJI_MASTER = [
 "strokes": 18,
 "radNo": 147,
 "rad": "⾒",
-"radName": "",
+"radName": "みる",
+"radChecked": true,
 "on": [
 "カン"
 ],
@@ -11557,7 +12121,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": true,
 "on": [
 "エン"
 ],
@@ -11578,6 +12143,7 @@ const KANJI_MASTER = [
 "radNo": 166,
 "rad": "⾥",
 "radName": "",
+"radChecked": false,
 "on": [
 "リョウ"
 ],
@@ -11597,7 +12163,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": true,
 "on": [
 "ヘン"
 ],
@@ -11619,7 +12186,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 86,
 "rad": "⽕",
-"radName": "",
+"radName": "れんが・れっか",
+"radChecked": false,
 "on": [
 "ネツ"
 ],
@@ -11639,7 +12207,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": true,
 "on": [
 "タツ"
 ],
@@ -11657,6 +12226,7 @@ const KANJI_MASTER = [
 "radNo": 174,
 "rad": "⾭",
 "radName": "",
+"radChecked": false,
 "on": [
 "セイ",
 "ジョウ"
@@ -11684,7 +12254,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 37,
 "rad": "⼤",
-"radName": "",
+"radName": "だい",
+"radChecked": true,
 "on": [
 "シツ"
 ],
@@ -11705,6 +12276,7 @@ const KANJI_MASTER = [
 "radNo": 73,
 "rad": "⽈",
 "radName": "",
+"radChecked": false,
 "on": [
 "サイ"
 ],
@@ -11724,7 +12296,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 159,
 "rad": "⾞",
-"radName": "",
+"radName": "くるまへん",
+"radChecked": false,
 "on": [
 "グン"
 ],
@@ -11741,7 +12314,8 @@ const KANJI_MASTER = [
 "strokes": 19,
 "radNo": 181,
 "rad": "⾴",
-"radName": "",
+"radName": "おおがい",
+"radChecked": true,
 "on": [
 "ガン"
 ],
@@ -11761,7 +12335,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": false,
 "on": [],
 "kun": [
 "おか"
@@ -11778,7 +12353,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 159,
 "rad": "⾞",
-"radName": "",
+"radName": "くるまへん",
+"radChecked": true,
 "on": [
 "リン"
 ],
@@ -11799,6 +12375,7 @@ const KANJI_MASTER = [
 "radNo": 34,
 "rad": "⼡",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヘン"
 ],
@@ -11820,7 +12397,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": true,
 "on": [
 "ネン"
 ],
@@ -11835,9 +12413,10 @@ const KANJI_MASTER = [
 "kyu": "7級",
 "grade": 4,
 "strokes": 9,
-"radNo": 24,
-"rad": "⼗",
-"radName": "",
+"radNo": 42,
+"rad": "⼩",
+"radName": "つかんむり",
+"radChecked": true,
 "on": [
 "タン"
 ],
@@ -11854,7 +12433,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 50,
 "rad": "⼱",
-"radName": "",
+"radName": "はば",
+"radChecked": true,
 "on": [
 "セキ"
 ],
@@ -11871,7 +12451,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "シャク"
 ],
@@ -11891,7 +12472,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 32,
 "rad": "⼟",
-"radName": "",
+"radName": "つちへん",
+"radChecked": true,
 "on": [],
 "kun": [
 "さい"
@@ -11909,6 +12491,7 @@ const KANJI_MASTER = [
 "radNo": 163,
 "rad": "⾢",
 "radName": "",
+"radChecked": false,
 "on": [
 "グン"
 ],
@@ -11925,7 +12508,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": true,
 "on": [
 "キ"
 ],
@@ -11942,7 +12526,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "オク"
 ],
@@ -11959,7 +12544,8 @@ const KANJI_MASTER = [
 "strokes": 18,
 "radNo": 181,
 "rad": "⾴",
-"radName": "",
+"radName": "おおがい",
+"radChecked": true,
 "on": [
 "ルイ"
 ],
@@ -11979,7 +12565,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "にんべん",
+"radChecked": true,
 "on": [
 "ベン",
 "ビン"
@@ -12001,7 +12588,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": true,
 "on": [
 "ハイ"
 ],
@@ -12022,6 +12610,7 @@ const KANJI_MASTER = [
 "radNo": 122,
 "rad": "⽹",
 "radName": "",
+"radChecked": false,
 "on": [
 "チ"
 ],
@@ -12041,7 +12630,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 115,
 "rad": "⽲",
-"radName": "",
+"radName": "のぎへん",
+"radChecked": true,
 "on": [
 "セキ"
 ],
@@ -12063,7 +12653,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 115,
 "rad": "⽲",
-"radName": "",
+"radName": "のぎへん",
+"radChecked": true,
 "on": [
 "シュ"
 ],
@@ -12084,6 +12675,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ザイ"
 ],
@@ -12101,6 +12693,7 @@ const KANJI_MASTER = [
 "radNo": 123,
 "rad": "⽺",
 "radName": "",
+"radChecked": false,
 "on": [
 "グン"
 ],
@@ -12124,7 +12717,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 50,
 "rad": "⼱",
-"radName": "",
+"radName": "はば",
+"radChecked": true,
 "on": [
 "キ"
 ],
@@ -12141,7 +12735,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": false,
 "on": [
 "カ"
 ],
@@ -12163,7 +12758,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 9,
 "rad": "⼈",
-"radName": "",
+"radName": "ひとやね",
+"radChecked": true,
 "on": [
 "レイ"
 ],
@@ -12181,6 +12777,7 @@ const KANJI_MASTER = [
 "radNo": 20,
 "rad": "⼓",
 "radName": "",
+"radChecked": false,
 "on": [
 "ホウ"
 ],
@@ -12201,6 +12798,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "バイ"
 ],
@@ -12221,6 +12819,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "チュウ"
 ],
@@ -12240,7 +12839,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 64,
 "rad": "⼿",
-"radName": "",
+"radName": "てへん",
+"radChecked": true,
 "on": [
 "セツ"
 ],
@@ -12264,7 +12864,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 30,
 "rad": "⼝",
-"radName": "",
+"radName": "くち",
+"radChecked": true,
 "on": [
 "シュウ"
 ],
@@ -12284,7 +12885,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 46,
 "rad": "⼭",
-"radName": "",
+"radName": "やまへん",
+"radChecked": true,
 "on": [],
 "kun": [
 "さき"
@@ -12301,7 +12903,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 60,
 "rad": "⼻",
-"radName": "",
+"radName": "ぎょうにんべん",
+"radChecked": true,
 "on": [
 "ケイ"
 ],
@@ -12318,7 +12921,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 39,
 "rad": "⼦",
-"radName": "",
+"radName": "こ",
+"radChecked": true,
 "on": [
 "キ"
 ],
@@ -12335,7 +12939,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "き",
+"radChecked": true,
 "on": [
 "カ"
 ],
@@ -12360,6 +12965,7 @@ const KANJI_MASTER = [
 "radNo": 15,
 "rad": "⼎",
 "radName": "",
+"radChecked": false,
 "on": [
 "レイ"
 ],
@@ -12391,7 +12997,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "ホウ",
 "ハッ",
@@ -12412,7 +13019,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 24,
 "rad": "⼗",
-"radName": "",
+"radName": "じゅう",
+"radChecked": true,
 "on": [
 "ハク",
 "バク"
@@ -12431,7 +13039,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "チュウ"
 ],
@@ -12450,7 +13059,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": true,
 "on": [
 "セツ",
 "セチ"
@@ -12472,7 +13082,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 113,
 "rad": "⽰",
-"radName": "",
+"radName": "しめすへん",
+"radChecked": true,
 "on": [
 "シュク",
 "シュウ"
@@ -12494,7 +13105,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": true,
 "on": [
 "サク"
 ],
@@ -12511,7 +13123,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 72,
 "rad": "⽇",
-"radName": "",
+"radName": "ひへん",
+"radChecked": false,
 "on": [
 "ケイ"
 ],
@@ -12529,6 +13142,7 @@ const KANJI_MASTER = [
 "radNo": 70,
 "rad": "⽅",
 "radName": "",
+"radChecked": false,
 "on": [
 "キ"
 ],
@@ -12548,7 +13162,8 @@ const KANJI_MASTER = [
 "strokes": 11,
 "radNo": 154,
 "rad": "⾙",
-"radName": "",
+"radName": "かい・こがい",
+"radChecked": true,
 "on": [
 "カ"
 ],
@@ -12566,6 +13181,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "レイ"
 ],
@@ -12586,6 +13202,7 @@ const KANJI_MASTER = [
 "radNo": 74,
 "rad": "⽉",
 "radName": "",
+"radChecked": false,
 "on": [
 "ボウ",
 "モウ"
@@ -12607,7 +13224,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 170,
 "rad": "⾩",
-"radName": "",
+"radName": "こざとへん",
+"radChecked": false,
 "on": [
 "ハン"
 ],
@@ -12624,7 +13242,8 @@ const KANJI_MASTER = [
 "strokes": 6,
 "radNo": 10,
 "rad": "⼉",
-"radName": "",
+"radName": "ひとあし・にんにょう",
+"radChecked": true,
 "on": [
 "チョウ"
 ],
@@ -12646,7 +13265,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": true,
 "on": [
 "セツ",
 "ゼイ"
@@ -12668,7 +13288,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 181,
 "rad": "⾴",
-"radName": "",
+"radName": "おおがい",
+"radChecked": true,
 "on": [
 "ジュン"
 ],
@@ -12685,7 +13306,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "きへん",
+"radChecked": true,
 "on": [
 "サツ"
 ],
@@ -12705,7 +13327,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "ゲイ"
 ],
@@ -12722,7 +13345,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 30,
 "rad": "⼝",
-"radName": "",
+"radName": "くち",
+"radChecked": true,
 "on": [
 "キ"
 ],
@@ -12741,7 +13365,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": true,
 "on": [
 "カ"
 ],
@@ -12758,7 +13383,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": true,
 "on": [
 "レン"
 ],
@@ -12782,7 +13408,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 93,
 "rad": "⽜",
-"radName": "",
+"radName": "うしへん",
+"radChecked": true,
 "on": [
 "ボク"
 ],
@@ -12802,7 +13429,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 184,
 "rad": "⾷",
-"radName": "",
+"radName": "しょくへん",
+"radChecked": true,
 "on": [
 "ハン"
 ],
@@ -12823,6 +13451,7 @@ const KANJI_MASTER = [
 "radNo": 9,
 "rad": "⼈",
 "radName": "",
+"radChecked": false,
 "on": [
 "テイ"
 ],
@@ -12846,7 +13475,8 @@ const KANJI_MASTER = [
 "strokes": 9,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "セン"
 ],
@@ -12866,7 +13496,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 18,
 "rad": "⼑",
-"radName": "",
+"radName": "かたな",
+"radChecked": true,
 "on": [
 "ショ"
 ],
@@ -12895,6 +13526,7 @@ const KANJI_MASTER = [
 "radNo": 18,
 "rad": "⼑",
 "radName": "",
+"radChecked": false,
 "on": [
 "サツ"
 ],
@@ -12915,6 +13547,7 @@ const KANJI_MASTER = [
 "radNo": 76,
 "rad": "⽋",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケツ"
 ],
@@ -12937,6 +13570,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "キ"
 ],
@@ -12956,7 +13590,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 140,
 "rad": "⾋",
-"radName": "",
+"radName": "くさかんむり",
+"radChecked": false,
 "on": [
 "ガ"
 ],
@@ -12977,6 +13612,7 @@ const KANJI_MASTER = [
 "radNo": 125,
 "rad": "⽼",
 "radName": "",
+"radChecked": false,
 "on": [
 "ロウ"
 ],
@@ -12999,6 +13635,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "マツ",
 "バツ"
@@ -13021,6 +13658,7 @@ const KANJI_MASTER = [
 "radNo": 183,
 "rad": "⾶",
 "radName": "",
+"radChecked": false,
 "on": [
 "ヒ"
 ],
@@ -13042,7 +13680,8 @@ const KANJI_MASTER = [
 "strokes": 8,
 "radNo": 53,
 "rad": "⼴",
-"radName": "",
+"radName": "まだれ",
+"radChecked": false,
 "on": [
 "テイ"
 ],
@@ -13062,7 +13701,8 @@ const KANJI_MASTER = [
 "strokes": 13,
 "radNo": 62,
 "rad": "⼽",
-"radName": "",
+"radName": "ほこづくり・ほこがまえ",
+"radChecked": true,
 "on": [
 "セン"
 ],
@@ -13085,6 +13725,7 @@ const KANJI_MASTER = [
 "radNo": 75,
 "rad": "⽊",
 "radName": "",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -13104,7 +13745,8 @@ const KANJI_MASTER = [
 "strokes": 14,
 "radNo": 40,
 "rad": "⼧",
-"radName": "",
+"radName": "うかんむり",
+"radChecked": true,
 "on": [
 "サツ"
 ],
@@ -13121,7 +13763,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 120,
 "rad": "⽷",
-"radName": "",
+"radName": "いとへん",
+"radChecked": false,
 "on": [
 "ケツ"
 ],
@@ -13145,7 +13788,8 @@ const KANJI_MASTER = [
 "strokes": 20,
 "radNo": 149,
 "rad": "⾔",
-"radName": "",
+"radName": "ごんべん",
+"radChecked": true,
 "on": [
 "ギ"
 ],
@@ -13162,7 +13806,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 154,
 "rad": "⾙",
-"radName": "",
+"radName": "かい・こがい",
+"radChecked": true,
 "on": [
 "ガ"
 ],
@@ -13179,7 +13824,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 19,
 "rad": "⼒",
-"radName": "",
+"radName": "ちから",
+"radChecked": true,
 "on": [
 "ロウ"
 ],
@@ -13196,7 +13842,8 @@ const KANJI_MASTER = [
 "strokes": 12,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": true,
 "on": [
 "マン"
 ],
@@ -13218,7 +13865,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 61,
 "rad": "⼼",
-"radName": "",
+"radName": "こころ",
+"radChecked": true,
 "on": [
 "ヒツ"
 ],
@@ -13239,6 +13887,7 @@ const KANJI_MASTER = [
 "radNo": 106,
 "rad": "⽩",
 "radName": "",
+"radChecked": false,
 "on": [
 "テキ"
 ],
@@ -13258,7 +13907,8 @@ const KANJI_MASTER = [
 "strokes": 15,
 "radNo": 162,
 "rad": "⾡",
-"radName": "",
+"radName": "しんにょう・しんにゅう",
+"radChecked": true,
 "on": [
 "セン"
 ],
@@ -13278,7 +13928,8 @@ const KANJI_MASTER = [
 "strokes": 10,
 "radNo": 118,
 "rad": "⽵",
-"radName": "",
+"radName": "たけかんむり",
+"radChecked": false,
 "on": [
 "ショウ"
 ],
@@ -13301,6 +13952,7 @@ const KANJI_MASTER = [
 "radNo": 28,
 "rad": "⼛",
 "radName": "",
+"radChecked": false,
 "on": [
 "サン"
 ],
@@ -13321,6 +13973,7 @@ const KANJI_MASTER = [
 "radNo": 54,
 "rad": "⼵",
 "radName": "",
+"radChecked": false,
 "on": [
 "ケン",
 "コン"
@@ -13344,7 +13997,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 85,
 "rad": "⽔",
-"radName": "",
+"radName": "さんずい",
+"radChecked": false,
 "on": [
 "キュウ"
 ],
@@ -13364,7 +14018,8 @@ const KANJI_MASTER = [
 "strokes": 7,
 "radNo": 66,
 "rad": "⽁",
-"radName": "",
+"radName": "のぶん・ぼくづくり",
+"radChecked": true,
 "on": [
 "カイ"
 ],
@@ -13386,7 +14041,8 @@ const KANJI_MASTER = [
 "strokes": 16,
 "radNo": 167,
 "rad": "⾦",
-"radName": "",
+"radName": "かねへん",
+"radChecked": true,
 "on": [
 "ロク"
 ],
@@ -13403,7 +14059,8 @@ const KANJI_MASTER = [
 "strokes": 5,
 "radNo": 75,
 "rad": "⽊",
-"radName": "",
+"radName": "き",
+"radChecked": true,
 "on": [
 "ミ"
 ],
