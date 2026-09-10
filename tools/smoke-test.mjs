@@ -842,6 +842,40 @@ ok("★★採点画面に、実際にその字が並んでいる", gradable.inDo
    "画面に無い字: " + gradable.inDom.join(""));
 ok("★採点画面の並び順が、紙と同じ", gradable.sameOrder);
 ok("本の問題も採点の対象に入っている", gradable.gradable > 0, String(gradable.gradable));
+
+console.log("");
+console.log("=== 進み具合（親御さん向け。2か所に同じ数字が出る） ===");
+// ⚠️ 同じ数字が「きろく」と「せってい」の2か所に出る。
+//   **計算は1か所（progressInfo）だけで、両方がその結果を読む。**
+//   別々に計算すると、片方だけ直したときに食い違い、しかも気づけない。
+const prog = await page.evaluate(() => {
+  renderProgress(); renderKirokuProgress();
+  const p = progressInfo();
+  const setei = document.getElementById("progress-box").textContent;
+  const kiroku = document.getElementById("k-progress").textContent;
+  // お子さんの画面（きょう・おうえん）に「遅れ」が出ていないこと
+  const kid = document.getElementById("page-kyou").textContent
+            + document.getElementById("page-ouen").textContent;
+  return {
+    days: p.days, total: p.total, left: p.left, over: p.over,
+    seteiHasDays: setei.indexOf(String(p.days)) >= 0,
+    seteiHasLeft: setei.indexOf(String(p.left)) >= 0,
+    kirokuHasDays: kiroku.indexOf(String(p.days)) >= 0,
+    kirokuHasToday: kiroku.length > 0,
+    // ★2か所が同じ「のこり日数」を言っていること
+    sameLeft: p.left === 0 || (setei.indexOf(String(p.left)) >= 0 && kiroku.indexOf(String(p.left)) >= 0),
+    // ★お子さんの画面には日割りの「多い◯日ぶん」を出さない
+    kidHasOver: p.over > 0 && kid.indexOf(String(p.over) + " 日ぶん多い") >= 0,
+    kidHasOkure: /遅れ/.test(kid)
+  };
+});
+ok("「せってい」に受検日までの日数が出ている", prog.seteiHasDays);
+ok("「きろく」にも受検日までの日数が出ている", prog.kirokuHasDays);
+ok("「きろく」に、きょうやるところが出ている", prog.kirokuHasToday);
+ok("★2か所が同じ「のこり日数」を言っている（計算が1か所）", prog.sameLeft,
+   `のこり ${prog.left}`);
+ok("★お子さんの画面に、日割りが足りないことを出していない", !prog.kidHasOver);
+ok("★お子さんの画面に「遅れ」を出していない", !prog.kidHasOkure);
 ok("本の問題の答えも、折り線の下に出る", mix.keyHasBushu);
 ok("問題側に答えが混じっていない", !mix.bodyHasAnswer);
 ok("本の問題が混ざっても、答えが折り線をまたがない", mix.keyOverflow <= 0, String(mix.keyOverflow));

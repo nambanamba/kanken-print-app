@@ -342,6 +342,11 @@
       <button class="btn" style="margin-top:12px" onclick="saveSheetResult()">この字を記録する</button>
     </div>
 
+    <!-- ★進み具合（短く）。父親が毎日いるのは「きろく」。詳しくは「せってい」に同じ数字がある -->
+    <div class="card">
+      <div id="k-progress"></div>
+    </div>
+
     <div class="card">
       <h2>📘 本でやった分を入れる</h2>
       <div class="muted" style="margin-bottom:10px">
@@ -1391,24 +1396,38 @@ function renderSetei(){
 }
 /* ★進み具合（親御さん向け）。**お子さんの画面には出さない。**
    ユーザーは「あと何日、何問目まで進んだ」を最初から求めている（司令塔）。
-   ここでだけ、日割りの日数と受検日までの日数を突き合わせて出す。 */
+
+   ⚠️ **同じ数字が2か所に出る**（「きろく」と「せってい」）。
+      **計算はここ1か所だけ。**両方がこの結果を読む。
+      別々に計算すると、**片方だけ直したときに食い違う**（そして気づけない）。 */
+function progressInfo(){
+  var done=PLAN.filter(function(c){return !!RECORDS[c.id];}).length;
+  var left=PLAN.length-done, days=daysLeft(), t=planToday();
+  return {
+    days:days, total:PLAN.length, done:done, left:left,
+    today:t, todayText:t?(chunkLabel(t)+" "+chunkRange(t)+"（"+t.n+"問）"):"ぜんぶ おわりました",
+    short:(left>0?("のこり "+left+" 日ぶん"):"ぜんぶ おわりました"),
+    // 日割りが受検日までに収まらないか（★親御さんにだけ見せる）
+    over:(left>days)?(left-days):0
+  };
+}
+
+/* 「せってい」… 詳しく */
 function renderProgress(){
   var box=document.getElementById("progress-box"); if(!box) return;
-  var done=PLAN.filter(function(c){return !!RECORDS[c.id];}).length;
-  var left=PLAN.length-done, days=daysLeft();
-  var t=planToday();
+  var p=progressInfo();
   var rows=[
-    ["受検日まで", days+" 日"],
-    ["日割り", "全 "+PLAN.length+" 日ぶん（ドリル）"],
-    ["おわった", done+" 日ぶん"],
-    ["のこり", left+" 日ぶん"],
-    ["きょうやるところ", t?(chunkLabel(t)+" "+chunkRange(t)+"（"+t.n+"問）"):"ぜんぶ おわりました"]
+    ["受検日まで", p.days+" 日"],
+    ["日割り", "全 "+p.total+" 日ぶん（ドリル）"],
+    ["おわった", p.done+" 日ぶん"],
+    ["のこり", p.left+" 日ぶん"],
+    ["きょうやるところ", p.todayText]
   ];
   var warn="";
-  if(left>days){
+  if(p.over>0){
     // ★ここは親御さんにだけ見せる。お子さんの画面には出さない
     warn='<div class="note" style="margin-top:10px;text-align:left">'
-      +'<b>のこり '+left+' 日ぶんに対して、受検日まで '+days+' 日です（'+(left-days)+' 日ぶん多い）。</b><br>'
+      +'<b>のこり '+p.left+' 日ぶんに対して、受検日まで '+p.days+' 日です（'+p.over+' 日ぶん多い）。</b><br>'
       +'ドリルはステージ1（1〜29）とステージ2（30〜54）で同じ単元が2巡します。'
       +'<b>ステージ2は、記録で苦手と分かった分野だけ</b>にすると収まります。'
       +'<br><span class="muted">1日の量を増やして間に合わせる作りにはしていません。</span></div>';
@@ -1416,6 +1435,14 @@ function renderProgress(){
   box.innerHTML='<table>'+rows.map(function(r){
     return "<tr><td style='white-space:nowrap'>"+r[0]+"</td><td><b>"+r[1]+"</b></td></tr>";
   }).join("")+'</table>'+warn;
+}
+
+/* 「きろく」… 短く。★父親が毎日いるのはこちら（「せってい」は用があるときしか開かない） */
+function renderKirokuProgress(){
+  var box=document.getElementById("k-progress"); if(!box) return;
+  var p=progressInfo();
+  box.innerHTML='<span class="muted">きょうは <b>'+p.todayText+'</b>'
+    +'　／　'+p.short+'（受検日まで '+p.days+' 日）</span>';
 }
 
 function saveUnits(){
@@ -1570,7 +1597,7 @@ function printPractice(){
 }
 
 function renderAll(){ renderOuen(); renderKyou(); renderKiroku(); renderSetei();
-                      renderQuizBox(); renderProgress(); }
+                      renderQuizBox(); renderProgress(); renderKirokuProgress(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */
 tryLoadBook().then(function(ok){ if(ok) renderAll(); });
