@@ -173,10 +173,18 @@
     .p-tight table.p-tbl td{padding:0.6mm 1.2mm;font-size:9pt;}
     .p-tight .p-q span{font-size:8.5pt !important;}
     .p-tight .p-sec{margin:2mm 0 1mm;padding:0.8mm 2mm;}
+    /* ★ブロック共通の語群。枠で囲って「ここから選ぶ」と分かるようにする */
+    .p-pool{border:1px solid #999;padding:1.5mm 2mm;margin-bottom:1.5mm;font-size:9pt;}
+    .p-poolnote{font-size:7.5pt;color:#666;}
     /* ★選択肢。1つ（「ア 表」）を折り返しの最小単位にする */
     .p-choices{display:inline-block;font-size:8.5pt;}
     .p-choice{display:inline-block;white-space:nowrap;margin-right:2.5mm;}
-    .p-slots{display:flex;gap:1mm;}
+    /* ★書くマスは行の上端にそろえる。
+       ⚠️ 既定（中央そろえ）だと、その行だけ「注意」が長いときにマスが下にずれ、
+          となりの行と高さが合わなくなる（dr_54 の6番で実際にそう見えた）。
+          解答に支障は無いが、そろっていないと採点で目が迷う */
+    .p-ansbox{vertical-align:top;}
+    .p-slots{display:flex;gap:1mm;align-items:flex-start;}
     .p-slot{flex:1 1 0;border:1px solid #999;position:relative;min-width:8mm;}
     .p-slotlab{position:absolute;top:0.3mm;left:0.6mm;font-size:6.5pt;color:#888;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
@@ -1081,6 +1089,12 @@ function buildPaperBlocks(){
   Object.keys(byField).forEach(function(f){
     var b=byField[f], fd=fieldOf(f);
     blocks.push({
+      // ★ブロック共通の語群。**選択肢と同じで、紙に出さないと解けない。**
+      //   ⚠️ `dr_54` は「記号で書きなさい」なのに選択肢を出しておらず、紙で解けなかった。
+      //      **`pool` は「この語群から選ぶ」形なので、出さなければ同じことが起きる。**
+      //      **まだ pool を持つ単元は届いていないが、届いてから直すと同じ失敗を繰り返す。**
+      pool:(b.g.pool||[]).slice(),
+      poolUseOnce:!!b.g.poolUseOnce,
       title:"■ "+(fd?fd.name:"本のもんだい")+"（本のもんだい）",
       // ★答えの見出しは短く固定する。紙の指示文をそのまま使うと長くて照らしにくい
       keyTitle:(fd?fd.name:"本のもんだい")+"の答え",
@@ -1208,9 +1222,18 @@ function splitSheets(blocks, max){
     while(offset<b.rows.length){
       if(n>=max){ sheets.push(cur); cur=[]; n=0; }
       var take=Math.min(max-n, b.rows.length-offset);
-      cur.push({ title:b.title+(offset>0?"（つづき）":""), keyTitle:b.keyTitle,
-                 ask:(offset>0?"":b.ask), src:b.src,
-                 rows:b.rows.slice(offset, offset+take), noBase:offset });
+      // ★★元のブロックを丸ごと引き継いでから、変えるところだけ上書きする。
+      //   ⚠️ **キーを1つずつ書き写してはいけない。**
+      //      そうすると、ブロックにキーを増やしたとき**ここだけ静かに落ちる。**
+      //      実際に `pool`（ブロック共通の語群）が落ち、
+      //      **紙に語群が出ないのに、実装したつもりになっていた。**
+      //      `dr_54` の「選択肢が紙に出ない」と同じで、**紙にすると解けなくなる**型。
+      var part=Object.assign({}, b);
+      part.title = b.title + (offset>0 ? "（つづき）" : "");
+      part.ask   = (offset>0 ? "" : b.ask);
+      part.rows  = b.rows.slice(offset, offset+take);
+      part.noBase= offset;
+      cur.push(part);
       n+=take; offset+=take;
     }
   });
@@ -1235,8 +1258,15 @@ function renderSheet(blocks, page, pages){
   var keys=[];
   blocks.forEach(function(b){
     var ansList=[];
-    html+='<div class="p-sec">'+b.title+(b.ask?'<span class="p-ask">'+b.ask+'</span>':'')+'</div>'
-      +twoCols(b.rows, function(row,i){
+    html+='<div class="p-sec">'+b.title+(b.ask?'<span class="p-ask">'+b.ask+'</span>':'')+'</div>';
+    // ★語群はブロックの先頭に1回だけ出す（各問に繰り返すと紙が埋まる）
+    if(b.pool && b.pool.length){
+      html+='<div class="p-pool">'
+        +b.pool.map(function(w){ return "<span class='p-choice'>"+w+"</span>"; }).join("")
+        +(b.poolUseOnce?"<span class='p-poolnote'>（1つの語は1回だけ使います）</span>":"")
+        +'</div>';
+    }
+    html+=twoCols(b.rows, function(row,i){
         // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
         //   （複数枚に分かれた日は、続きの枚でも通し番号になる）
         var no=(b.noBase||0)+i+1;

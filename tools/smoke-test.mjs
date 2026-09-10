@@ -896,6 +896,50 @@ ok("★1つの選択肢が折り返しで切れない（どの記号がどの字
 ok("★答えページの「注意」が紙に出ている", solvable.hasNote);
 ok("★「注意」のルビも出ている（小4が読めるように）", solvable.hasNoteRuby);
 
+// ★★ブロック共通の語群（group.pool）。**選択肢と同じで、出さないと解けない。**
+//   ⚠️ dr_54 で「記号で書きなさいなのに選択肢が紙に無い」を踏んだ。
+//      pool は「この語群から選ぶ」形なので、**同じ失敗が繰り返せる。**
+//      **まだ pool を持つ単元は届いていないが、届いてから直すと二の舞になる**ので先に固定する。
+const pool = await page.evaluate(() => {
+  const withPool = {
+    unitId: "tn_16", groups: [{ field:"taigi", instruction:"…対義語を作りなさい。",
+      pool:["あさ","けん","さ","まつ","りく"], poolUseOnce:true,
+      items:[
+        { id:"q_p1", no:1, field:"taigi", text:"海洋 — 大□",
+          answers:[{ansNo:1,text:"陸"}], kanji:["陸"], ruby:[] },
+        { id:"q_p2", no:2, field:"taigi", text:"病気 — □康",
+          answers:[{ansNo:1,text:"健"}], kanji:["健"], ruby:[] }
+      ]}]
+  };
+  BOOK_UNITS = [withPool];
+  const keepV = window.isVerifiedUnit; window.isVerifiedUnit = (id) => id === "tn_16";
+  const keep = window.planToday;
+  window.planToday = () => ({ unit:"tn_16", from:1, to:5, n:5, day:1, parts:1, part:1,
+                              mat:"tn", label:"対義語①", pages:"32-33" });
+  printSessionPractice();
+  const region = document.getElementById("print-region");
+  const body = region.querySelector(".p-body");
+  const txt = body.textContent.replace(/\s+/g, " ");
+  const out = {
+    // ★語群が全部出ていること
+    allWords: ["あさ","けん","さ","まつ","りく"].every(w => txt.indexOf(w) >= 0),
+    // ★1つの語が折り返しで切れないこと
+    unbroken: body.querySelectorAll(".p-pool .p-choice").length === 5,
+    // ★ブロックの先頭に1回だけ（各問に繰り返さない）
+    once: body.querySelectorAll(".p-pool").length === 1,
+    // ★「1回だけ使う」の注意が出ていること
+    useOnce: txt.indexOf("1回だけ") >= 0,
+    // 答えは折り線の下だけ
+    answerNotInBody: txt.indexOf("陸") < 0 || txt.indexOf("海洋") >= 0
+  };
+  window.planToday = keep; window.isVerifiedUnit = keepV; BOOK_UNITS = null;
+  return out;
+});
+ok("★★ブロック共通の語群が紙に出ている（出さないと解けない）", pool.allWords);
+ok("★語群の1語が折り返しで切れない", pool.unbroken);
+ok("★語群はブロックの先頭に1回だけ（各問に繰り返さない）", pool.once);
+ok("★「1つの語は1回だけ使う」の注意が出ている", pool.useOnce);
+
 // ★★ここが今日いちばん危なかった穴。
 //   「本の問題にも kanji が付いている」は**通っていたのに**、
 //   採点画面が practiceList()（＝自動生成の字）しか並べていなかったため、
