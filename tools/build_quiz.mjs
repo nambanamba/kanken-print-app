@@ -16,6 +16,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { execFileSync } from "node:child_process";
 import { webcrypto as crypto } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +35,7 @@ const DEFAULT_DIRS = [
   path.resolve(HERE, "..", "..", "司令塔", "漢検書き起こし_ドリル", "data"),
   path.resolve(HERE, "..", "..", "司令塔", "漢検書き起こし_ノート", "data")
 ];
-let dirs = process.argv.slice(2);
+let dirs = process.argv.slice(2).filter(a => a !== "--new-pass");
 if (!dirs.length) {
   dirs = DEFAULT_DIRS.filter(d => fs.existsSync(d));
   if (!dirs.length) {
@@ -73,7 +74,35 @@ const pass = await new Promise(r => rl.question("合言葉を入力してくだ�
 if (!pass || pass.length < 4) { console.error("★中止: 合言葉が短すぎます。"); process.exit(3); }
 
 const enc = new TextEncoder();
-const salt = crypto.getRandomValues(new Uint8Array(16));
+
+/* ★合言葉が「いま配信中の暗号文」を開けるか先に試す（2026-09-11 取り込み担当 claude-91 [2a9e1f]）
+   ⚠️ 実際に起きた: Windows PowerShell 5.1 で `$env:KANKEN_PASS | node build_quiz.mjs` とパイプすると、
+      日本語の合言葉が ASCII に落ちて「?」になり、**違う合言葉で暗号化された暗号文が黙ってできた。**
+      アプリでは誰も開けない。復号して突き合わせる道具（diff_enc.mjs）で初めて気づいた。
+   → 前の暗号文を開けない合言葉では作らない。**合言葉を変えるときだけ** --new-pass を付ける。 */
+/* 基準は「コミット済みの暗号文」（作業ツリーのものは、壊れた作り直しで上書きされているかもしれない） */
+let committed = null;
+try { committed = execFileSync("git", ["show", "HEAD:kanken-quiz.enc.js"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch (e) {}
+if (committed && !process.argv.includes("--new-pass")) {
+  const src = committed;
+  const pick = k => (src.match(new RegExp(k + ':\\s*"([^"]*)"')) || [])[1];
+  const it = Number((src.match(/iter:\s*(\d+)/) || [])[1]);
+  const b = s => Uint8Array.from(Buffer.from(s, "base64"));
+  try {
+    const pb = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+    const pk = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b(pick("salt")), iterations: it, hash: "SHA-256" },
+      pb, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+    await crypto.subtle.decrypt({ name: "AES-GCM", iv: b(pick("iv")) }, pk, b(pick("data")));
+    console.log("合言葉: 配信中の暗号文を開けました（同じ合言葉です）");
+  } catch (e) {
+    console.error("★中止: この合言葉では、配信中の暗号文を開けません。");
+    console.error("  PowerShell 5.1 のパイプだと日本語が「?」に化けます。bash から printf で渡してください。");
+    console.error("  合言葉そのものを変えるときだけ --new-pass を付けてください。");
+    process.exit(3);
+  }
+}
+
+const salt =crypto.getRandomValues(new Uint8Array(16));
 const iv = crypto.getRandomValues(new Uint8Array(12));
 const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
 const key = await crypto.subtle.deriveKey(
