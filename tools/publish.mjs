@@ -1,4 +1,5 @@
 /* ★配信の関門。**push はこれを通すこと。**
+ *   git add <出すファイル>                   … ★先に自分で add する（2026-09-11〜。git add -A はしない）
  *   node tools/publish.mjs "コミットメッセージ"
  *   node tools/publish.mjs -F メッセージファイル
  *   node tools/publish.mjs --dry     … 検査だけして、commit も push もしない
@@ -42,7 +43,43 @@ function run(label, cmd, cmdArgs) {
   }
 }
 
+/* ⓪ 「テストするもの」と「commit するもの」を一致させる（2026-09-11 取り込み担当 claude-91 [2a9e1f]）
+ *   ⚠️ 以前はここで `git add -A` していた。**同じ作業ツリーを2人（アプリ担当・取り込み担当）が使うので、
+ *      相手の作業途中のファイルまで commit・push されていた。**
+ *   → **commit するのは「先に git add したもの」だけ。**
+ *   → 未ステージの変更・追跡外のファイルがあったら止める。
+ *     （テストは作業ツリーで走るので、未ステージがあると「テストしたもの」と「配信するもの」がずれる）
+ *   相手の作業途中があって自分のぶんだけ出したいときは、`git worktree` で別のツリーを作ってそこで通す。 */
+function treeState() {
+  const lines = execSync("git status --porcelain", { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+  return {
+    staged: lines.filter(l => l[0] !== " " && l[0] !== "?"),
+    dirty: lines.filter(l => l[1] !== " " || l.startsWith("??"))
+  };
+}
+function checkTree(when) {
+  const t = treeState();
+  if (t.dirty.length) {
+    console.log(`★★ 止めました（${when}）: 未ステージの変更か、追跡外のファイルがあります。`);
+    console.log("    テストした中身と commit する中身がずれるので、配信しません。");
+    t.dirty.forEach(l => console.log("    " + l));
+    console.log("    自分のぶんは git add する／他人の作業途中なら git worktree で別のツリーから通す。");
+    process.exit(1);
+  }
+  return t;
+}
+
 console.log("=== 配信前の関門 ===");
+process.stdout.write("― 作業ツリーの状態 … ");
+if (dry) {
+  const t = treeState();
+  console.log(t.dirty.length ? `（--dry なので続けます）★未ステージ・追跡外 ${t.dirty.length} 件。このままでは本番は止まります` : "OK");
+} else {
+  const t = checkTree("検査の前");
+  if (!t.staged.length) { console.log("★★ 止めました: git add されたものがありません。"); process.exit(1); }
+  console.log(`OK（ステージ ${t.staged.length} 件・未ステージ 0 件）`);
+  t.staged.forEach(l => console.log("    " + l));
+}
 
 /* ① ② 平文の漏れ（check_leak.mjs が中で自己試験もする） */
 const leak = run("平文の漏れ走査（自己試験つき）", process.execPath, [path.join(HERE, "check_leak.mjs")]);
@@ -76,15 +113,15 @@ if (!msg && !msgFile) {
   console.log("  node tools/publish.mjs --dry   … 検査だけ");
   process.exit(2);
 }
-execSync("git add -A", { cwd: ROOT, stdio: "inherit" });
-const status = execSync("git status --porcelain", { cwd: ROOT, encoding: "utf8" }).trim();
-if (!status) { console.log("\n変更がありません。"); process.exit(0); }
+/* ★テストの間に作業ツリーが変わっていないか、もう一度見る（C-4c: 検査と実行の間にも中身は変わりうる） */
+checkTree("commit の直前");
 
 console.log("\n― commit …");
 if (msgFile) execFileSync("git", ["commit", "-F", msgFile], { cwd: ROOT, stdio: "inherit" });
 else execFileSync("git", ["commit", "-m", msg], { cwd: ROOT, stdio: "inherit" });
 
+/* HEAD:master … worktree の別ブランチから通しても、公開ブランチ（master）に出るように */
 console.log("― push …");
-execFileSync("git", ["push", "origin", "master"], { cwd: ROOT, stdio: "inherit" });
+execFileSync("git", ["push", "origin", "HEAD:master"], { cwd: ROOT, stdio: "inherit" });
 console.log("\n★ 配信しました。");
 console.log("⚠️ 公開への反映は push とは別です。実際に取得して確かめてください。");
