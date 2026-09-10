@@ -116,6 +116,8 @@
   /* アプリでやる問題 */
   .ap-q{font-size:1.25rem;line-height:2.1;margin:8px 0 6px;}
   .ap-q ruby rt{font-size:.6em;}
+  .ap-q.big{font-size:3rem;text-align:center;line-height:1.6;}
+  .ap-q.big ruby rt{font-size:.35em;}
   .ap-ans{font-size:1.1rem;margin:8px 0;padding:10px;background:#f1f5f9;border-radius:10px;text-align:center;}
   .ap-slots{display:flex;gap:10px;justify-content:center;margin:6px 0;font-size:1.3rem;}
   .ap-slot{padding:4px 10px;border:1px solid #cbd5e1;border-radius:8px;}
@@ -163,7 +165,7 @@
        ★1枚ごとに「問題／折り線／答え」がそろうので、**折り方は毎回同じ。**
           そのページの答えは、そのページの下にある。 */
     .p-sheet{display:flex;flex-direction:column;
-             box-sizing:border-box;height:297mm;padding:14mm 16mm;
+             box-sizing:border-box;height:297mm;padding:10mm 14mm;
              page-break-after:always;break-after:page;}
     .p-sheet:last-child{page-break-after:auto;break-after:auto;}
     /* ⚠️ ここは overflow:hidden にしない。**隠すと「入りきらない」ことに気づけない。**
@@ -208,18 +210,24 @@
     .p-key{flex:0 0 auto;height:42mm;overflow:hidden;box-sizing:border-box;}
     @page{size:A4 portrait;margin:0;}
     .p-title{font-size:13pt;font-weight:700;}
-    .p-sub{font-size:8.5pt;color:#555;margin:1mm 0 4mm;}
-    .p-sec{font-size:9.5pt;font-weight:700;background:#eee;padding:1.2mm 2mm;margin:3.5mm 0 1.5mm;}
+    .p-sub{font-size:8.5pt;color:#555;margin:0.5mm 0 2mm;}
+    .p-sec{font-size:9.5pt;font-weight:700;background:#eee;padding:0.8mm 2mm;margin:2mm 0 1mm;}
     /* ★分野名と指示文のあいだを空ける（「書き取り次の…」と続けて読めてしまった。claude-e0 の指摘） */
     .p-ask{font-weight:400;font-size:8.5pt;margin-left:3mm;}
     .p-hint{font-size:8.5pt;color:#555;margin-left:1mm;}
     table.p-tbl{width:100%;border-collapse:collapse;}
-    table.p-tbl td{border:1px solid #999;padding:1.5mm 2mm;font-size:10pt;vertical-align:middle;}
+    table.p-tbl td{border:1px solid #999;padding:0.8mm 1.5mm;font-size:10pt;vertical-align:middle;}
     .p-no{width:7%;text-align:center;background:#f5f5f5;}
     .p-q{width:45%;}
     /* ★出典（ドリル p12 の 3）。問題文より小さく・薄く。p-tight の一律指定に負けないよう !important */
     /* ⚠️ 絶対配置（高さ0）。問題文の中に入れると行が伸びて、折り線を越える（実際に起きた） */
     .p-slots{position:relative;}
+    /* ○の中の漢字（送りがな）。丸は CSS の枠で描く */
+    .p-given{display:inline-block;width:1.7em;height:1.7em;line-height:1.7em;text-align:center;
+             border:1px solid #333;border-radius:50%;font-size:9.5pt;margin-left:1.5mm;vertical-align:middle;}
+    /* ★紙の余白・見出し・セルの余白は詰めてある（2026-09-11）。
+       分野を混ぜると見出しが4〜5個になり、20問が1枚に収まらなかったため（本物の紙で実測 190px はみ出し）。
+       ⚠️ 書くマスの大きさは変えていない（小さいマスは書きにくい。司令塔判断） */
     .p-cite{position:absolute;right:0.8mm;bottom:0.4mm;font-size:5.5pt;color:#999;
             white-space:nowrap;line-height:1;pointer-events:none;}
     .p-ans{width:48%;height:11mm;}
@@ -922,7 +930,8 @@ function renderApp(){
   var html='<div class="ky-prog"><span>'+(s.pos+1)+' / '+s.ids.length+'</span>'
     +'<span class="muted" style="font-size:.75rem">'+(fd?fd.name:"")+'　'+bookCite(x)+'</span></div>'
     +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(bookNote(x.g.instruction)||"")+'</div>'
-    +'<div class="ap-q">'+withRuby(bookQuestionText(it), it.ruby)+'</div>';
+    // 漢字1〜2字だけの問題（音訓・画数）は大きく出す
+    +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'">'+withRuby(bookQuestionText(it), it.ruby)+'</div>';
   var ans=it.answers||[];
 
   if(f==="yomi"){
@@ -1031,18 +1040,18 @@ function appRecord(id, f, kanji, perKanji, allOk, ord){
   save(K_ITEMS,ITEMS); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET);
 }
 
-/* BOX_SHRINK … 1枚に収めるために、書くマスを何mm小さくするか（printSessionPractice が実測して決める）。
-   ⚠️ 8mm より小さくはしない（漢字1字が書けなくなる） */
-var BOX_SHRINK = 0;
+/* BOX_OVERRIDE … 毎日の紙で、書くマスの高さを固定するとき（mm）。
+   ⚠️ 問数を減らして1枚に収めるとき、行数で高さを決めると「減らす→マスが大きくなる→また溢れる」になる。
+      そこで**減らす前の問数で決まる高さ**に固定する（小さくはしない）。SESSION.boxMM に残す。 */
+var BOX_OVERRIDE = null;
 function boxHeightFor(rowsPerCol){
-  var h;
-  if(rowsPerCol<= 8) h=18;
-  else if(rowsPerCol<=10) h=15;
-  else if(rowsPerCol<=12) h=13;
-  else if(rowsPerCol<=15) h=11;
-  else if(rowsPerCol<=18) h=9;
-  else h=8;
-  return Math.max(8, h-BOX_SHRINK);
+  if(BOX_OVERRIDE) return BOX_OVERRIDE;
+  if(rowsPerCol<= 8) return 18;
+  if(rowsPerCol<=10) return 15;
+  if(rowsPerCol<=12) return 13;
+  if(rowsPerCol<=15) return 11;
+  if(rowsPerCol<=18) return 9;
+  return 8;
 }
 
 /* ★問題を2段組みにする。1問1マスにしたので、20問でも1枚に収まる。
@@ -1233,13 +1242,14 @@ function composeSheet(){
    SESSION = { v:3, date, ids:[問題id], results:{ "問題id|字": "x" }, saved }
    ⚠️ 旧形式は、同じ日付でも作り直す。
       v2 は読みが紙に乗っていた（紙とアプリの分離前）ので、v3 に上げて作り直させている。 */
-var SHEET_VERSION = 3;
+var SHEET_VERSION = 4;   // 4: 1枚に収まる数に絞る（fitTodayIds）
 function todaySheet(){
   if(!bookLoaded()) return null;
-  if(SESSION && SESSION.v===SHEET_VERSION && SESSION.date===todayStr()) return SESSION;
-  var ids=composeSheet().map(function(x){ return x.it.id; });
+  if(SESSION && SESSION.date===todayStr()
+     && (SESSION.v===SHEET_VERSION || (SESSION.v===3 && SESSION.saved))) return SESSION;   // 記録ずみの紙は作り直さない
+  var ids=fitTodayIds(composeSheet()).map(function(x){ return x.it.id; });
   if(!ids.length) return null;
-  SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false };
+  SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false, boxMM:FIT_BOX };
   save(K_SESSION,SESSION);
   return SESSION;
 }
@@ -1256,7 +1266,10 @@ function todaySheetItems(){
 function bookCite(x){
   var m=matOf(x.u.mat), p=x.u.srcPages||[];
   var pg=p.length ? ("p"+(p.length>1 ? p[0]+"-"+p[p.length-1] : p[0])) : "";
-  return (m?m.short:(x.u.mat||""))+(pg?" "+pg:"")+" の "+x.it.no;
+  // ★1つの単元に組が2つ以上あり、問番号が組ごとに1から振られている（dr_21 の (1)(2)、実力完成テストの (一)〜(十一)）。
+  //   組の見出しを入れないと、どの問題か本で特定できない（claude-91・claude-e0 の指摘）
+  var blk=((x.u.groups||[]).length>1 && x.g.blockLabel) ? " "+x.g.blockLabel : "";
+  return (m?m.short:(x.u.mat||""))+(pg?" "+pg:"")+blk+" の "+x.it.no;
 }
 
 /* 答えページの「注意」。書式v1.5 で {text, ruby[]} になった。
@@ -1277,7 +1290,7 @@ function bookNote(n){
       **本番に無い聞かれ方**（部首を4択で"選ぶ"／画数を4択）を練習させることになるため。
       ⚠️ **音訓だけは本番と形式が一致していたが、それも出さない。**例外を作るとまた戻る。
       ★生成器はコードとしては残してあるが、**出題経路から外してある**（C-1・C-3）。 */
-function buildPaperBlocks(){
+function buildPaperBlocks(list){   // list を渡すと、その問題で組む（1枚に収まるかを測るとき）
   // ★ブロックは「本の単元の中の、問題のまとまり（group）」ごと。
   //   ⚠️ 分野ごとにまとめてはいけない。×の問題は別の単元から来るので、
   //      指示文・語群（pool）が**別の単元のもの**になり、紙で解けなくなる。
@@ -1285,7 +1298,7 @@ function buildPaperBlocks(){
   //     （ドリルの書き取りは単元ごとに同じ指示文。見出しが並ぶと1枚に収まらなくなる。本物の紙で実測）。
   //     どの単元の問題かは、1問ごとの出典で分かる。
   var blocks=[], byGroup={}, order=[];
-  todaySheetItems().forEach(function(x){
+  (list||todaySheetItems()).forEach(function(x){
     var ins=x.g.instruction, insText=(ins&&typeof ins==="object")?JSON.stringify(ins):String(ins||"");
     var key=itemFieldOf(x.it,x.g)+"|"+insText+"|"+JSON.stringify(x.g.pool||null)+"|"+(!!x.g.poolUseOnce);
     if(!byGroup[key]){ byGroup[key]={g:x.g, u:x.u, rows:[]}; order.push(key); }
@@ -1306,6 +1319,8 @@ function buildPaperBlocks(){
         return {
           cite: bookCite(x),
           q: bookQuestionText(it),
+          // ★○の中の漢字（送りがな）。**出さないと「○の中の漢字を使え」が成立しない**（dr_23 で15問すべて解答不能だった。claude-e0 が配信前に発見）
+          given: (typeof it.givenKanji==="string") ? it.givenKanji : "",
           choices: (it.choices||[]).slice(),
           note: bookNote(it.note),
           slots: ans.map(function(a,i){
@@ -1361,18 +1376,64 @@ function printSessionPractice(){
   // ★★そのうえで、**組んだ紙を実際に測って、はみ出していたら1枚の問数を減らして組み直す。**
   //   ⚠️ 問数だけで決めると、問題文が長い日・見出しが多い日に折り線を越える
   //      （2026-09-11 に本物の紙で起きた。行の高さは中身で変わるので、数では守れない）。
-  //   ★先に「書くマスを少し小さくする（最大3mm）」を試し、それでもだめなときだけ枚数を増やす。
-  //     20問が 16問＋4問 の2枚に割れると、紙の半分以上が空く（本物の紙で実測: 1枚だと46pxはみ出した）。
-  var region=document.getElementById("print-region"), fit=false;
-  for(var max=SHEET_MAX; max>=4 && !fit; max-=2){
-    var sheets=splitSheets(blocks, max);
-    for(BOX_SHRINK=0; BOX_SHRINK<=3; BOX_SHRINK++){
-      region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
-      if(sheetsFit(region)){ fit=true; break; }
-    }
+  //   ★枚数を1枚ずつ増やし、**各枚の問数をそろえて**割る（18問＋2問ではなく10問＋10問）。
+  //   ⚠️ 書くマスを縮めて詰め込むことはしない（司令塔判断。小さいマスは書きにくい）。
+  //   ★毎日の紙は、組んだ時点（todaySheet）で「1枚に収まる数」に絞ってある（fitTodayIds）。
+  //     ここで2枚以上になるのは、本当に多い日（1単元40問を出す道具など）だけ。
+  var region=document.getElementById("print-region");
+  // 毎日の紙は、組んだときに測ったマスの高さで刷る（組んだときと同じ紙になる）
+  BOX_OVERRIDE=(SESSION && SESSION.boxMM && !SESSION._tool) ? SESSION.boxMM : null;
+  for(var N=1; N<=total; N++){
+    var sheets=splitSheets(blocks, Math.min(SHEET_MAX, Math.ceil(total/N)));
+    region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
+    if(sheetsFit(region)) break;
+    // 2枚以上に分けるときは、マスの高さを枚ごとの行数で決め直す
+    BOX_OVERRIDE=null;
   }
-  BOX_SHRINK=0;
+  BOX_OVERRIDE=null;
   window.print();
+}
+
+/* ★毎日の紙を「1枚に収まる数」に絞る（2026-09-11 司令塔判断）。
+     「20問は目安。1枚に収まることを優先。あふれた2〜3問は翌日に回す」
+     「2枚目が5問以下なら1枚に収める。本当に2枚要るときは2枚でよい」
+   ・減らすのは**書き取りの、新しい問題**から（配点が最大で、問数も多い分野。
+     ほかの分野を削ると、その分野が毎日削られて永久に出なくなるおそれがある）。✕の問題は削らない
+   ・削った問題は記録されないので、翌日「次の問題」としてそのまま出る（やる量は変わらない）
+   ・実際に紙を組んで測る（sheetsFit）。問数では決めない */
+function fitTodayIds(items){
+  var region=document.getElementById("print-region");
+  FIT_BOX=null;
+  if(!region || !items.length) return items;
+  // 減らす前の問数で決まるマスの高さに固定してから減らす（BOX_OVERRIDE の説明）
+  var full=buildPaperBlocks(items);
+  BOX_OVERRIDE=boxHeightFor(full.reduce(function(a,b){return a+Math.ceil(b.rows.length/2);},0));
+  FIT_BOX=BOX_OVERRIDE;
+  try{ return fitTodayIdsInner(items, region); } finally { BOX_OVERRIDE=null; }
+}
+var FIT_BOX=null;   // fitTodayIds が固定したマスの高さ（todaySheet が SESSION.boxMM に入れる）
+function fitTodayIdsInner(items, region){
+  function fits(list){
+    var sheets=splitSheets(buildPaperBlocks(list), SHEET_MAX);
+    if(sheets.length>1) return false;
+    region.innerHTML=renderSheet(sheets[0],1,1);
+    return sheetsFit(region);
+  }
+  var list=items.slice(), dropped=0;
+  while(list.length && !fits(list)){
+    // 書き取りの新しい問題を、うしろから1つ減らす（無ければ、うしろから）
+    var i=-1;
+    for(var j=list.length-1;j>=0;j--){
+      var y=list[j];
+      if(itemFieldOf(y.it,y.g)==="kaki" && !ITEMS[y.it.id]){ i=j; break; }
+    }
+    if(i<0) i=list.length-1;
+    list.splice(i,1); dropped++;
+  }
+  region.innerHTML="";
+  // 減らしても1枚に収まらない／6問以上あふれる日は、2枚にする（本当に多い日）
+  if(!list.length || dropped>5) return items;
+  return list;
 }
 
 /* ★紙が1枚の中に収まっているかを、実際に組んだもので測る。
@@ -1487,6 +1548,8 @@ function renderSheet(blocks, page, pages){
         var cite=row.cite?"<span class='p-cite'>（"+row.cite+"）</span>":"";
         return "<tr><td class='p-no'>"+no+"</td>"
           +"<td class='p-q' style='width:"+qW+"'>"+(q?"<span style='font-size:9.5pt'>"+q+"</span>":"")
+          // ○囲みは CSS で作る（丸囲み文字は Unicode に無い字があり、出た瞬間に壊れる）
+          +(row.given?"<span class='p-given'>"+row.given+"</span>":"")
           +(q?hint:"<span style='font-size:9pt'>（"+row.hint+"）</span>")+"</td>"
           // ★padding を 0 に。td の既定 padding(1.5mm) が上下に付くと、
           //   1行あたり3mm 高くなり、30問で紙をはみ出す（実際に溢れて分かった）

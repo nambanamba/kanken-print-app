@@ -350,6 +350,54 @@ await measurePaper("✕の問題が5単元から来た日（見出しが多い�
   window.__day = "2099-06-02";
 });
 
+console.log("\n=== 紙で解けるか（○の中の漢字・組の番号） ===");
+const gv = await page.evaluate(() => {
+  const u = { unitId: "dr_23", mat: "dr", srcPages: [23], groups: [
+    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "okuri", instruction: "ダミー（○の中の漢字）", items: [1, 2, 3].map(i => ({
+      id: "q_gv_" + i, no: i, text: "ダミーの文 " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[i].k], givenKanji: KANJI_MASTER[i].k })) },
+    { gno: 0, blockNo: 2, blockLabel: "(2)", field: "okuri", instruction: "ダミー（○の中の漢字）", items: [1, 2].map(i => ({
+      id: "q_gv2_" + i, no: i, text: "ダミーの文B " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[10 + i].k], givenKanji: KANJI_MASTER[10 + i].k })) }
+  ] };
+  BOOK_UNITS = [u]; window.isVerifiedUnit = () => true; ITEMS = {}; SESSION = null; window.__day = "2099-06-10";
+  printSessionPractice();
+  const r = document.getElementById("print-region");
+  return { given: [...r.querySelectorAll(".p-given")].map(e => e.textContent),
+           want: u.groups.flatMap(g => g.items.map(i => i.givenKanji)),
+           cites: [...r.querySelectorAll(".p-cite")].map(e => e.textContent) };
+});
+ok("★○の中の漢字（givenKanji）が、全部の問題で紙に出ている", gv.given.join("") === gv.want.join(""), gv.given.join("") + " / " + gv.want.join(""));
+ok("★組が2つある単元は、出典に組の番号が入る（(1)の1 と (2)の1 を区別できる）",
+   gv.cites.includes("（ドリル p23 (1) の 1）") && gv.cites.includes("（ドリル p23 (2) の 1）"), gv.cites.join(" "));
+
+console.log("\n=== 1枚に収める（2枚目がスカスカにならない） ===");
+// 司令塔のきまり: 「2枚目が5問以下なら1枚に収める（あふれた分は翌日）。本当に多いときは2枚でよい」
+// 「注意」の付く問題の割合を変えて、1枚に入らない日を何通りか作る
+const scen = [];
+for (const every of [1, 2, 3, 4]) {
+  scen.push(await page.evaluate((every) => {
+    BOOK_UNITS = JSON.parse(JSON.stringify(window.__longUnits));
+    BOOK_UNITS.forEach(u => u.groups.forEach(g => g.items.forEach((it, i) => { it.note = (i % every === 0) ? "ながいちゅういのダミー".repeat(4) : null; })));
+    window.isVerifiedUnit = () => true;
+    RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; window.__day = "2099-06-1" + every;
+    const composed = composeSheet().length;
+    printSessionPractice();
+    const r = document.getElementById("print-region");
+    const perSheet = [...r.querySelectorAll(".p-sheet")].map(s => s.querySelectorAll(".p-body tr").length);
+    return { every, composed, ids: SESSION.ids.length, perSheet, rows: perSheet.reduce((a, b) => a + b, 0),
+             boxMM: SESSION.boxMM, slotH: r.querySelector(".p-slot").style.height };
+  }, every));
+}
+const desc = scen.map(s => `注意${s.every}問に1つ: ${s.perSheet.join("+")}問/組んだ${s.composed}`).join(" ／ ");
+ok("検査の前提: 削って1枚にする日が、少なくとも1つある", scen.some(s => s.perSheet.length === 1 && s.rows < s.composed), desc);
+ok("★2枚目以降が5問以下の紙を出していない", scen.every(s => s.perSheet.length === 1 || s.perSheet.slice(1).every(n => n > 5)), desc);
+ok("★1枚にしたときに削ったのは5問まで", scen.every(s => s.perSheet.length > 1 || s.composed - s.rows <= 5), desc);
+ok("2枚に分けるときは、枚ごとの問数がそろっている（18＋2 のようにしない）",
+   scen.every(s => s.perSheet.length === 1 || Math.max(...s.perSheet) - Math.min(...s.perSheet) <= 1), desc);
+ok("紙と「きろく」の問題数が一致（削った問題は、その日の記録に入らない）", scen.every(s => s.ids === s.rows), desc);
+const trimmed = scen.filter(s => s.perSheet.length === 1 && s.rows < s.composed);
+ok("★削って1枚にした日も、書くマスは減らす前の問数で決まる高さのまま（小さくして詰め込んでいない）",
+   trimmed.every(s => s.slotH === s.boxMM + "mm"), trimmed.map(s => `${s.slotH}/${s.boxMM}`).join(" "));
+
 console.log("\n=== アプリでやる問題（読み・記号・画数） ===");
 // ダミー: 読み15・漢字えらび10・じゅく語作り10・音訓10・画数10（すべて本の形式どおりの形）
 await page.evaluate(() => {
