@@ -120,6 +120,11 @@
         background:#dcfce7;color:#15803d;font-weight:800;cursor:pointer;font-size:.85rem;}
   .mark .no{display:block;font-size:.68rem;font-weight:700;opacity:.8;}
   .mark.x{background:#fee2e2;border-color:#fca5a5;color:#b91c1c;}
+  /* ★採点は紙と同じ並び。1問＝1行、その中に答えの数だけ〇✕が並ぶ。
+     既定は全部〇なので、**タップの数は「まちがえた数」であって「字の数」ではない** */
+  .mark-head{font-weight:700;font-size:.85rem;margin:10px 0 4px;color:#334155;}
+  .mark-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  .mark-no{min-width:1.6em;text-align:right;color:#64748b;font-size:.8rem;}
 
   #print-region{display:none;}
   @media print{
@@ -1209,17 +1214,53 @@ function isAudit(k){ return !!(SESSION && SESSION.audit && SESSION.audit.indexOf
 function sheetFieldOf(k){
   return (SESSION && SESSION.sheetField && SESSION.sheetField[k]) || "kaki";
 }
+/* ★きょうの紙に出ているものを、そのまま採点の対象にする。
+   ⚠️ もとは practiceList()（＝自動生成の字）だけを並べていた。
+      本の問題を紙に刷るようにした時点で、**紙に33字出ているのに採点できるのが0字**
+      という状態になっていた（実測して分かった）。
+      採点できないと KSTATS[字][形式] に入らないので、
+      **「できた字は出さない」も「できなかったら次の日も書く」も動かない。**
+   ⚠️ このとき「本の問題にも kanji が付いている」というテストは通っていた。
+      **データに kanji があることと、採点がそれを使うことは別の話。**
+      テストが「付いている」しか見ていなかったので、穴に気づけなかった。
+
+   ★並び順は紙と完全に一致させる（照らし合わせが目で追えるように）。 */
+function todayPaperRows(){
+  if(!SESSION) return [];
+  var out=[];
+  buildPaperBlocks().forEach(function(b){
+    b.rows.forEach(function(r,i){
+      out.push({ no:i+1, block:String(b.keyTitle||b.title).replace(/^■\s*/,""),
+                 src:b.src, field:r.field, kanji:(r.kanji||[]).slice(), a:r.a });
+    });
+  });
+  return out;
+}
+
 function renderMarks(){
-  var box=document.getElementById("mark-box"), list=practiceList();
-  if(!list.length){
-    box.innerHTML='<span class="muted">「きょう」で練習する字を出すと、ここに並びます。</span>'; return;
+  var box=document.getElementById("mark-box"), rows=todayPaperRows();
+  if(!rows.length){
+    box.innerHTML='<span class="muted">「きょう」で練習する字を出すと、ここに並びます。</span>';
+    return;
   }
   SESSION.results=SESSION.results||{};
-  box.innerHTML=list.map(function(k,i){
-    var x=SESSION.results[k]==="x";
-    return '<div class="mark'+(x?" x":"")+'" onclick="toggleMark(\''+k+'\')">'
-      +'<span class="no">'+(i+1)+'</span>'+k+(x?" ✕":" 〇")+'</div>';
-  }).join("");
+  // ★1問に答えが複数ある問題（同じ部首など）は、**字ごとに**〇✕を持つ。
+  //   まとめて1タップにすると、3字のうち1字だけ間違えたときに3字とも✕になり、
+  //   記録の粒度が落ちる（＝できている字まで翌日また出る）。
+  //   ★ただし既定は全部〇なので、**タップの数は「まちがえた数」であって「字の数」ではない。**
+  var html="", lastBlock=null;
+  rows.forEach(function(r){
+    if(r.block!==lastBlock){ html+='<div class="mark-head">'+r.block+'</div>'; lastBlock=r.block; }
+    html+='<div class="mark-row"><span class="mark-no">'+r.no+'</span>'
+      +r.kanji.map(function(k){
+        var x=SESSION.results[k]==="x";
+        // ★引用符の入れ子を避けるため、字は data 属性で渡す（' のエスケープはミスのもと）
+        return '<div class="mark'+(x?" x":"")+'" data-k="'+k+'"'
+          +' onclick="toggleMark(this.dataset.k)">'
+          +k+(x?" ✕":" ○")+'</div>';
+      }).join("")+'</div>';
+  });
+  box.innerHTML=html;
 }
 function toggleMark(k){
   SESSION.results=SESSION.results||{};
@@ -1227,37 +1268,45 @@ function toggleMark(k){
   save(K_SESSION,SESSION); renderMarks();
 }
 function saveSheetResult(){
-  var list=practiceList();
-  if(!list.length){ alert("採点する字がありません。"); return; }
-  list.forEach(function(k){
-    var wrong=!!(SESSION.results&&SESSION.results[k]==="x");
-    if(!KSTATS[k]) KSTATS[k]={};
-    // ★紙のどちらのブロックだったかで、記録する分野を分ける。
-    //   まとめて kaki に入れると、読みの結果が書き取りの点として計上される
-    var fld=sheetFieldOf(k);
-    var s=KSTATS[k][fld]||(KSTATS[k][fld]={o:0,x:0});
-    var audit=isAudit(k);
-    // ★検証字は「書ける」と申告した字。当たったか外したかをここで記録する（12-3b）
-    var self=audit ? (KSTATS[k].self||(KSTATS[k].self={say:0,hit:0,miss:0})) : null;
-    if(wrong){
-      s.x++;
-      if(self) self.miss++;   // ★申告が外れた。以後この字は「書ける？」と聞かず、練習に回る（12-3b ③）
-      if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
-      WEAK[k].wrong++; WEAK[k].got=false; WEAK[k].lastAt=Date.now();
-    }else{
-      s.o++;
-      if(self){
-        // ★「書ける」と言って実際に書けた字は、**実測なのでいちばん強い証拠**。
-        //   1回で「できる」確定でよい（12-3b ②）
-        self.hit++;
+  var rows=todayPaperRows();
+  if(!rows.length){ alert("採点する字がありません。"); return; }
+  // ★紙の行から回す。本の問題も自動生成も、同じように記録される。
+  //   （もとは practiceList() だけを回していて、本の問題が一切記録されなかった）
+  var seen={};
+  rows.forEach(function(r){
+    r.kanji.forEach(function(k){
+      if(seen[k]) return; seen[k]=1;
+      var wrong=!!(SESSION.results&&SESSION.results[k]==="x");
+      if(!KSTATS[k]) KSTATS[k]={};
+      // ★本の問題は、その問題の分野で記録する（部首は部首として）。
+      //   自動生成は、紙のどちらのブロックだったかで分ける。
+      //   まとめて kaki に入れると、読みの結果が書き取りの点として計上される
+      var fld=(r.src==="book") ? (r.field||sheetFieldOf(k)) : sheetFieldOf(k);
+      var st=KSTATS[k][fld]||(KSTATS[k][fld]={o:0,x:0});
+      // ★自己申告の当たり外れ（12-3b）は、自動生成の字にだけある概念。
+      //   本の問題は「書ける？」と聞いていないので、検証字にはならない
+      var audit=(r.src!=="book") && isAudit(k);
+      var self=audit ? (KSTATS[k].self||(KSTATS[k].self={say:0,hit:0,miss:0})) : null;
+      if(wrong){
+        st.x++;
+        if(self) self.miss++;   // ★申告が外れた。以後この字は「書ける？」と聞かず、練習に回る（12-3b ③）
         if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
-        WEAK[k].got=true; WEAK[k].gotAt=Date.now();
+        WEAK[k].wrong++; WEAK[k].got=false; WEAK[k].lastAt=Date.now();
       }else{
-        // ★自分で「あやしい」と言った字なので、1回書けただけでは卒業させない。
-        //   2回書けてから「できるようになった字」に出す（引き継ぎ.md 12-3の5番）
-        if(WEAK[k] && !WEAK[k].got && (s.o||0)>=2){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); }
+        st.o++;
+        if(self){
+          // ★「書ける」と言って実際に書けた字は、**実測なのでいちばん強い証拠**。
+          //   1回で「できる」確定でよい（12-3b ②）
+          self.hit++;
+          if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
+          WEAK[k].got=true; WEAK[k].gotAt=Date.now();
+        }else{
+          // ★自分で「あやしい」と言った字なので、1回書けただけでは卒業させない。
+          //   2回書けてから「できるようになった字」に出す（引き継ぎ.md 12-3の5番）
+          if(WEAK[k] && !WEAK[k].got && (st.o||0)>=2){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); }
+        }
       }
-    }
+    });
   });
   SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
   save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET); save(K_SESSION,SESSION);

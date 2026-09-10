@@ -268,14 +268,18 @@ ok("最初はぜんぶ〇", await page.evaluate(() =>
 //   12-3b ②③ の検査が「空配列に every」で**素通りしてしまう**（引き継ぎ.md 8章の教訓）。
 const xIdx = await page.evaluate(() => {
   const sh = SESSION.sheet, a = SESSION.audit || [];
-  const ai = sh.findIndex(k => a.indexOf(k) >= 0);        // 検証字（✕にする）
-  const ui = sh.findIndex(k => a.indexOf(k) < 0);         // あやしい字（✕にする）
-  return { ai, ui, nAudit: a.length };
+  // ★添字ではなく「字」で選ぶ。
+  //   採点画面の並びは **紙と同じ順** になった（本の問題と自動生成が混ざるため）。
+  //   `SESSION.sheet` の添字と DOM の並びは、もう一致しない。
+  //   添字で押すと**別の字を押してしまい、しかもテストは通ってしまう**ことがある。
+  const ak = sh.find(k => a.indexOf(k) >= 0) || null;     // 検証字（✕にする）
+  const uk = sh.find(k => a.indexOf(k) < 0) || null;      // あやしい字（✕にする）
+  return { ak, uk, nAudit: a.length };
 });
 ok("検証字が1字以上まざっている（検査が素通りしないこと）", xIdx.nAudit > 0, String(xIdx.nAudit));
-ok("✕にする検証字と、あやしい字を選べた", xIdx.ai >= 0 && xIdx.ui >= 0, JSON.stringify(xIdx));
-await page.locator(".mark").nth(xIdx.ai).click();
-await page.locator(".mark").nth(xIdx.ui).click();
+ok("✕にする検証字と、あやしい字を選べた", !!xIdx.ak && !!xIdx.uk, JSON.stringify(xIdx));
+await page.locator('.mark[data-k="' + xIdx.ak + '"]').first().click();
+await page.locator('.mark[data-k="' + xIdx.uk + '"]').first().click();
 ok("タップした2つだけ✕になる", (await page.locator(".mark.x").count()) === 2);
 
 await page.click('button:has-text("この字を記録する")');
@@ -285,7 +289,8 @@ const after = await page.evaluate(() => {
   const sh = SESSION.sheet;
   const isA = k => (SESSION.audit || []).indexOf(k) >= 0;
   // ✕にした字は DOM の .mark.x から読む（並び順の決め打ちをしない）
-  const xs = [...document.querySelectorAll(".mark.x")].map(e => e.textContent.replace(/[0-9\s〇✕]/g, ""));
+  // ★data 属性から読む。textContent を削り取る方法は、表示を変えた瞬間に壊れる
+  const xs = [...document.querySelectorAll(".mark.x")].map(e => e.dataset.k);
   const x = xs, o = sh.filter(k => xs.indexOf(k) < 0);
   // 「あやしい」と言った字だけ（＝検証字を除く）で見る項目
   const oUnsure = o.filter(k => !isA(k));
@@ -793,6 +798,50 @@ ok("★本のデータが無い単元は、いままでどおり自動生成で�
 ok("★本と自動生成が混ざっても成立する（両方出る日がある）", mix.verifiedHasGen);
 ok("★同じ字が本と自動生成で二重に出ない（A-1）", mix.dup.length === 0, mix.dup.join(""));
 ok("★本の問題にも記録先の漢字が付いている", mix.bookAllHaveKanji);
+
+// ★★ここが今日いちばん危なかった穴。
+//   「本の問題にも kanji が付いている」は**通っていたのに**、
+//   採点画面が practiceList()（＝自動生成の字）しか並べていなかったため、
+//   **紙に33字出ているのに採点できるのが0字**だった。
+//   採点できなければ KSTATS に入らず、「できた字は出さない」も
+//   「できなかったら次の日も書く」も動かない。**機能そのものが空回りしていた。**
+//   → **データに記録先があることと、採点がそれを使うことは別の話。**両方見る。
+const gradable = await page.evaluate(() => {
+  const verified = {
+    unitId: "dr_25", groups: [{ field: "bushu", instruction: "…", items: [
+      { id:"q_g1", no:1, field:"bushu", text:"刂　□用・以□",
+        answers:[{ansNo:1,text:"利"},{ansNo:1,text:"前"}], kanji:["利","前"], ruby:[] }
+    ]}]
+  };
+  BOOK_UNITS = [verified];
+  const keep = window.planToday;
+  window.planToday = () => ({ unit:"dr_25", from:1, to:10, n:10, day:1, parts:1, part:1,
+                              mat:"dr", label:"同じ部首①", pages:"25" });
+  const paperK = [];
+  buildPaperBlocks().forEach(b => b.rows.forEach(r => paperK.push(...(r.kanji||[]))));
+  const rows = todayPaperRows();
+  const gradableK = [];
+  rows.forEach(r => gradableK.push(...r.kanji));
+  renderMarks();
+  const domK = [...document.querySelectorAll("#mark-box .mark")].map(e => e.dataset.k);
+  const out = {
+    paper: paperK.length,
+    gradable: gradableK.length,
+    ungradable: paperK.filter(k => gradableK.indexOf(k) < 0),
+    // ★画面に実際に並んでいるか（関数が返すだけでは意味がない）
+    inDom: paperK.filter(k => domK.indexOf(k) < 0),
+    // ★並び順が紙と同じか（照らし合わせが目で追えること）
+    sameOrder: JSON.stringify(domK) === JSON.stringify(gradableK)
+  };
+  window.planToday = keep; BOOK_UNITS = null;
+  return out;
+});
+ok("★★紙に出た字が、すべて採点できる", gradable.ungradable.length === 0,
+   "採点できない字: " + gradable.ungradable.join(""));
+ok("★★採点画面に、実際にその字が並んでいる", gradable.inDom.length === 0,
+   "画面に無い字: " + gradable.inDom.join(""));
+ok("★採点画面の並び順が、紙と同じ", gradable.sameOrder);
+ok("本の問題も採点の対象に入っている", gradable.gradable > 0, String(gradable.gradable));
 ok("本の問題の答えも、折り線の下に出る", mix.keyHasBushu);
 ok("問題側に答えが混じっていない", !mix.bodyHasAnswer);
 ok("本の問題が混ざっても、答えが折り線をまたがない", mix.keyOverflow <= 0, String(mix.keyOverflow));
