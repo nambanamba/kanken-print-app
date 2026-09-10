@@ -122,8 +122,10 @@
   .mark.x{background:#fee2e2;border-color:#fca5a5;color:#b91c1c;}
   /* ★採点は紙と同じ並び。1問＝1行、その中に答えの数だけ〇✕が並ぶ。
      既定は全部〇なので、**タップの数は「まちがえた数」であって「字の数」ではない** */
-  .mark-head{font-weight:700;font-size:.85rem;margin:10px 0 4px;color:#334155;}
-  .mark-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  /* ★見出しと1問ぶんの行は、それぞれ1行を占める（.marks が flex-wrap なので、
+     指定しないと見出しが前の行の横に回り込む。撮って見て分かった） */
+  .mark-head{flex-basis:100%;font-weight:700;font-size:.85rem;margin:10px 0 4px;color:#334155;}
+  .mark-row{flex-basis:100%;display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
   .mark-no{min-width:1.6em;text-align:right;color:#64748b;font-size:.8rem;}
 
   #print-region{display:none;}
@@ -200,6 +202,8 @@
     table.p-tbl td{border:1px solid #999;padding:1.5mm 2mm;font-size:10pt;vertical-align:middle;}
     .p-no{width:7%;text-align:center;background:#f5f5f5;}
     .p-q{width:45%;}
+    /* ★出典（ドリル p12 の 3）。問題文より小さく・薄く。p-tight の一律指定に負けないよう !important */
+    .p-q .p-cite, .p-tight .p-q .p-cite{font-size:6.5pt !important;color:#888;margin-right:1mm;white-space:nowrap;}
     .p-ans{width:48%;height:11mm;}
     .p-key{padding-top:2mm;font-size:8.5pt;line-height:1.75;}
     .p-key b{font-size:9pt;}
@@ -265,92 +269,42 @@
   <!-- ================= きょう（1日ぶんのセッション） ================= -->
   <!-- ※ 本の問題の合言葉は「せってい」の中（親御さんが1回だけ入れる）。ここには置かない -->
   <div class="page" id="page-kyou">
-    <!-- 開始前 -->
-    <div id="ky-start">
-      <div class="card">
-        <h2>▶️ きょうのぶん</h2>
-        <div class="muted" style="margin-bottom:12px">
-          <b>まえはん</b>は、えらぶ問題です。おしたらすぐ〇✕が出ます。<br>
-          <b>こうはん</b>は、紙に書く分をえらびます。<br>
-          ぜんぶで <b>10分ぐらい</b>です。
-        </div>
-        <button class="btn" onclick="startSession()">はじめる</button>
-        <div class="muted" style="margin-top:10px" id="ky-info"></div>
-      </div>
-    </div>
+    <!-- ★2026-09-11、ユーザーの指示で作り直した。
+         「もう一度言います。本から忠実に出してください。」
+         「漢字は20文字書く→〇×をつける→×のもんだい＋次の問題を20問やるですよね？」
 
-    <!-- 出題中 -->
-    <div id="ky-run" style="display:none">
-      <div class="card">
-        <div class="ky-prog">
-          <span id="ky-count">あやしい 0 / 10</span>
-          <span class="ky-dots" id="ky-dots"></span>
-        </div>
-        <div class="ky-q" id="ky-q"></div>
-        <div class="ky-ask muted" id="ky-ask"></div>
-        <div id="ky-choices"></div>
-        <div class="ky-fb" id="ky-fb"></div>
-      </div>
-    </div>
-
-    <!-- 前半→後半の切りかえ。★頭の使い方が変わるので、一拍おく -->
-    <div id="ky-switch" style="display:none">
-      <div class="card" style="text-align:center">
-        <div style="font-size:1.3rem;font-weight:800;color:var(--good)">まえはん おわり！</div>
-        <div class="muted" id="ky-swsub" style="margin-top:6px"></div>
-      </div>
-      <div class="card">
-        <h2>✏️ ここからは 紙に書く分をえらぶよ</h2>
-        <div class="muted" style="margin-bottom:12px">
-          漢字が1つずつ出ます。<br>
-          <b>書けそうなら「書ける」、あやしければ「あやしい」</b>をおしてください。<br>
-          <b>「あやしい」が10こ たまったら、きょうはおしまいです。</b>
-        </div>
-        <button class="btn" onclick="startWritePhase()">すすむ</button>
-      </div>
-    </div>
-
-    <!-- 終了 -->
-    <div id="ky-end" style="display:none">
-      <div class="card" style="text-align:center">
-        <div style="font-size:1.5rem;font-weight:800;color:var(--good)" id="ky-endmsg">きょうはここまで！</div>
-        <div class="muted" id="ky-endsub" style="margin-top:6px"></div>
-      </div>
-      <div class="card">
-        <h2>📝 きょう れんしゅうする字</h2>
-        <div class="chips" id="ky-list"></div>
-        <button class="btn sec" style="margin-top:12px" onclick="printSessionPractice()">
-          この字の練習プリントを印刷（A4）
-        </button>
-        <div class="muted" style="margin-top:8px">
-          印刷したら、紙に書いてもらってください。<br>
-          書けたかどうかは「きろく」で入れられます。
-        </div>
-      </div>
-      <div class="card">
-        <h2>✅ きょうやったこと</h2>
-        <div id="ky-summary"></div>
-        <button class="btn ghost" style="margin-top:10px" onclick="resetSession()">もう一度やる</button>
+         ⚠️ **アプリが自分で作った問題は、紙にも画面にも1問も出さない。**
+            以前は「まえはん＝えらぶ問題」「こうはん＝書ける／あやしいの申告」があったが、
+            **本番にその聞かれ方は無い**（例: 本番(八)は部首を与えて□に漢字を"書く"。選ぶのではない）。
+            **音訓だけは本番と形式が一致していたが、それも出さない。**
+            例外を作ると、また同じことになる。
+         ⚠️ **お子さんの言った流れに、自己申告は入っていない。**書いて、父親が〇×をつけるだけ。
+         ★画面でやることは「記録」だけ。ここは紙を出すためのページ。 -->
+    <div class="card">
+      <h2>▶️ きょうのぶん</h2>
+      <div class="muted" style="margin-bottom:12px" id="ky-info"></div>
+      <button class="btn" onclick="printToday()">きょうの紙を印刷（A4）</button>
+      <div class="muted" style="margin-top:10px">
+        紙に書いてもらったら、<b>「きろく」で〇×を入れてください。</b><br>
+        <b>×にした字は、次の日の紙にまた出ます。</b>
       </div>
     </div>
 
     <div class="card">
-      <div class="note">
-        <b>未完成:</b> <b>漢字えらび・対義語・じゅく語作り・同じ読み（66点分）</b>は、まだ出せません。
-        いま順に足しているところです（問題集は読み終えていて、待ち状態ではありません）。
-      </div>
+      <h2>📝 きょう出る問題</h2>
+      <div id="ky-list"></div>
     </div>
   </div>
 
   <!-- ================= きろく ================= -->
   <div class="page" id="page-kiroku">
     <div class="card">
-      <h2>✏️ 練習した字を採点する</h2>
+      <h2>✏️ きょうの紙を採点する</h2>
       <div class="muted" style="margin-bottom:10px">
-        <b>ぜんぶ〇になっています。書けなかった字だけタップして✕にしてください。</b><br>✕にした字は、次の日の練習にまた出ます。
+        <b>ぜんぶ〇になっています。まちがえた字だけタップして✕にしてください。</b><br>✕の問題は、次の日の紙にまた出ます。
       </div>
       <div class="marks" id="mark-box"></div>
-      <button class="btn" style="margin-top:12px" onclick="saveSheetResult()">この字を記録する</button>
+      <button class="btn" style="margin-top:12px" onclick="saveSheetResult()">記録する</button>
     </div>
 
     <!-- ★進み具合（短く）。父親が毎日いるのは「きろく」。詳しくは「せってい」に同じ数字がある -->
@@ -429,13 +383,9 @@
       <div class="field"><input type="date" id="m-date"></div>
       <button class="btn ghost" onclick="saveExamDate()">受検日を保存</button>
     </div>
-    <div class="card">
-      <h2>🖨️ もうすこしの字の練習プリント</h2>
-      <div class="muted" style="margin-bottom:10px">
-        その日に書く字を、A4に出します。答えは紙の下（おうちの方へ）に印刷されます。
-      </div>
-      <button class="btn sec" onclick="printPractice()">練習プリントを印刷</button>
-    </div>
+    <!-- ★「もうすこしの字の練習プリント」（printPractice）は画面から外した（2026-09-11）。
+         字とお手本をアプリが並べる紙＝**アプリが自分で作った問題**なので出さない。
+         関数は残してある（C-1・C-3）。 -->
     <div class="card">
       <div class="note">
         本が届いたら、各回の分野・ページ・問題数をここで入れてください。
@@ -770,251 +720,42 @@ function currentItem(){
 }
 
 function renderKyou(){
-  var start=document.getElementById("ky-start"), run=document.getElementById("ky-run"),
-      end=document.getElementById("ky-end"), sw=document.getElementById("ky-switch");
-  var live=SESSION && SESSION.date===todayStr();
-  function only(el){
-    [start,run,end,sw].forEach(function(e){ e.style.display=(e===el?"":"none"); });
-  }
-
-  if(!live){
-    only(start);
-    var left=KANJI_MASTER.filter(function(r){return !isOK(r.k);}).length;
-    // ★「きょうは本のどこをやるか」を出す。**終わりが見えるようにする**（司令塔の条件）。
-    //   ⚠️ 「遅れ」は出さない。日割りが残り日数を超えていても、それは画面に出さない
-    //      （責めない設計。残り日数との突き合わせは「せってい」で親御さんが見る）
-    var t=planToday(), book="";
-    if(t){
-      book='<div class="note" style="margin-top:10px;text-align:left">'
-        +'<b>きょうの 本</b><br>'
-        +chunkLabel(t)+'<br>'
-        +'<b>'+chunkRange(t)+'　'+t.n+'問</b>'
-        +(t.parts>1&&t.part>1?'<br><span class="muted">きのうの つづきです</span>':'')
-        +'<br><span class="muted">'+t.day+'日目 ／ 全'+PLAN.length+'日</span>'
-        +'</div>';
-    }else{
-      book='<div class="note" style="margin-top:10px">本のもんだいは ぜんぶ おわりました。</div>';
-    }
-    document.getElementById("ky-info").innerHTML=
-      "受検日まで <b>あと "+daysLeft()+" 日</b>。まだ確かめていない字が <b>"+left+" 字</b>あります。"+book;
+  var info=document.getElementById("ky-info"), list=document.getElementById("ky-list");
+  if(!info) return;
+  if(!bookLoaded()){
+    info.innerHTML='本の問題がまだ読みこまれていません。<br>'
+      +'<b>「せってい」で合言葉を入れてください。</b>（1回だけです）';
+    if(list) list.innerHTML="";
     return;
   }
-  if(SESSION.done){ only(end); renderKyouEnd(); return; }
-  if(SESSION.phase==="switch"){ only(sw); renderKyouSwitch(); return; }
-  only(run);
+  var items=todaySheetItems();
+  // まえに ✕ だった問題（＝紙で記録したことがある問題）
+  var retryN=items.filter(function(x){ return !!ITEMS[x.it.id]; }).length;
+  info.innerHTML='受検日まで <b>あと '+daysLeft()+' 日</b>。<br>'
+    +'きょうの紙は <b>'+items.length+' 問</b>'
+    +(retryN? '（うち <b>'+retryN+' 問</b>は、まえに ✕ だった問題）' : '')+'。'
+    +(items.length && items.length<SHEET_TARGET
+      ? '<br><span class="muted">いま出せる本の問題は、これで全部です（照合が済んだ単元だけ出しています）。</span>' : '');
 
-  var q=currentItem();
-  if(!q){ finishSession(true); return; }
-
-  // 進み具合。
-  // ★前半は「といた数」を出す。**「まちがえた N/10」とは出さない。**
-  //   まちがいを集める表示になり、責める画面になる（応援が要件）。
-  //   まちがいが10個で切り上がるのは、**早く終わるという形でだけ**表に出る。
-  // ★後半は「たまった数」。「あと何個」とは出さない（同じ理由）
-  var isSel=(SESSION.phase==="select"), s=SESSION.sel||{o:0,x:0};
-  var now  = isSel ? (s.o+s.x)              : SESSION.unsure.length;
-  var goal = isSel ? SESSION.selectLimit    : SESSION.unsureTarget;
-  document.getElementById("ky-count").textContent=
-    (isSel ? "といた " : "あやしい ")+now+" / "+goal;
-  var dots="";
-  for(var i=0;i<goal;i++) dots+='<i class="'+(i<now?"on":"")+'"></i>';
-  document.getElementById("ky-dots").innerHTML=dots;
-
-  document.getElementById("ky-fb").textContent="";
-  document.getElementById("ky-fb").className="ky-fb";
-
-  if(isWriteField(q.field)){
-    // 書き取り・読みは自己申告。★正誤はここでは決まらない（紙で書いてから）
-    var yomi=(q.field==="yomi");
-    document.getElementById("ky-q").innerHTML=
-      q.q+(q.hint?'<span class="sub">（'+q.hint+'）</span>':"");
-    document.getElementById("ky-ask").textContent=yomi?"これ、読める？":"この字、書ける？";
-    document.getElementById("ky-choices").innerHTML=
-      '<button class="ky-btn know" onclick="answerWrite(true)">'+(yomi?"読める":"書ける")+'</button>'
-      +'<button class="ky-btn unsure" onclick="answerWrite(false)">あやしい</button>';
-  }else{
-    // 選択式はその場で自動判定
-    // ★hint（部首名など）は分かっている字にだけ付いている。
-    //   ⚠️ 無いときは括弧ごと出さないこと。「部首（）」のような空の括弧になる
-    document.getElementById("ky-q").innerHTML=
-      q.q+(q.hint?'<span class="sub">（'+q.hint+'）</span>':"");
-    document.getElementById("ky-ask").textContent=q.ask;
-    var ch=document.getElementById("ky-choices");
-    if(q.choices){
-      ch.innerHTML=q.choices.map(function(c,i){
-        return '<button class="ky-btn" onclick="answerSelect('+i+')">'
-          +"アイウエ"[i]+"　"+c+'</button>';
-      }).join("");
-    }else if(q.field==="onkun"){
-      ch.innerHTML='<button class="ky-btn" onclick="answerSelectVal(\'ア\')">ア　音読み</button>'
-        +'<button class="ky-btn" onclick="answerSelectVal(\'イ\')">イ　訓読み</button>';
-    }else{
-      // 画数は数字。選びやすいように候補を並べる
-      var n=parseInt(q.a,10), opts=[n];
-      [-2,-1,1,2].forEach(function(d){ if(n+d>0) opts.push(n+d); });
-      opts=opts.slice(0,5).sort(function(a,b){return a-b;});
-      ch.innerHTML=opts.map(function(v){
-        return '<button class="ky-btn" onclick="answerSelectVal(\''+v+'\')">'+v+' 画</button>';
-      }).join("");
-    }
+  if(!list) return;
+  if(!items.length){
+    list.innerHTML='<span class="muted">きょう出せる問題がありません。'
+      +'（照合が済んだ単元だけを出しています）</span>';
+    return;
   }
+  // ★答えは出さない。問題文と出典だけ見せる（本と突き合わせられるように）
+  list.innerHTML='<table>'+items.map(function(x,i){
+    var q=String(x.it.text||"").slice(0,26);
+    return "<tr><td style='width:2em;color:#64748b'>"+(i+1)+"</td>"
+      +"<td style='color:#64748b;white-space:nowrap;font-size:.8rem'>"+bookCite(x)+"</td>"
+      +"<td>"+q+"</td>"
+      +"<td style='color:#64748b;white-space:nowrap'>"+(ITEMS[x.it.id]?"まえに ✕":"")+"</td></tr>";
+  }).join("")+'</table>';
 }
 
-/* 書き取りの自己申告 */
-function answerWrite(canWrite){
-  var q=currentItem(); if(!q) return;
-  if(!KSTATS[q.kanji]) KSTATS[q.kanji]={};
-  var s=KSTATS[q.kanji].self||(KSTATS[q.kanji].self={say:0,hit:0,miss:0});
-  s.f=q.field;                     // ★書きの申告か、読みの申告か（紙の作り分けに要る）
-  if(canWrite){
-    s.say++;                       // 「書ける／読める」と言った回数
-    s.lastSayAt=Date.now();        // 古い申告から先に抜き取る（12-3）
-    SESSION.know.push(q.kanji);
-  }else{
-    if(SESSION.unsure.indexOf(q.kanji)<0) SESSION.unsure.push(q.kanji);
-    // ★どちらの形式で「あやしい」と言われたかを覚えておく。
-    //   紙は形式ごとにブロックを分ける（読みを「なぞらせて」も意味がない）
-    SESSION.unsureField=SESSION.unsureField||{};
-    SESSION.unsureField[q.kanji]=q.field;
-    if(!WEAK[q.kanji]) WEAK[q.kanji]={wrong:0,got:false};
-    WEAK[q.kanji].got=false; WEAK[q.kanji].lastAt=Date.now();
-  }
-  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK);
-  nextItem(SESSION.unsure.length>=SESSION.unsureTarget);
-}
+/* ★きょうの紙を印刷する。画面でやることはこれだけ */
+function printToday(){ printSessionPractice(); }
 
-/* 選択式の自動判定 */
-function answerSelect(i){
-  var q=currentItem(); if(!q) return;
-  answerSelectVal(q.choices[i]);
-}
-function answerSelectVal(val){
-  var q=currentItem(); if(!q) return;
-  var ok=(String(val)===String(q.a));
-  if(!KSTATS[q.kanji]) KSTATS[q.kanji]={};
-  var s=KSTATS[q.kanji][q.field]||(KSTATS[q.kanji][q.field]={o:0,x:0});
-  // ★run＝いま何回続けて正解しているか。4択は25%で当たるので、
-  //   2回続くまで「できた」にしない（引き継ぎ.md 12-1 の ⚠）
-  if(ok){ s.o++; s.run=(s.run||0)+1; SESSION.sel.o++; }
-  else{
-    s.x++; s.run=0; SESSION.sel.x++;
-    if(!WEAK[q.kanji]) WEAK[q.kanji]={wrong:0,got:false};
-    WEAK[q.kanji].wrong++; WEAK[q.kanji].got=false; WEAK[q.kanji].lastAt=Date.now();
-  }
-  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK);
-  var fb=document.getElementById("ky-fb");
-  fb.textContent=ok?"◯ せいかい！":"✕ こたえは "+q.a;
-  fb.className="ky-fb "+(ok?"ok":"ng");
-  Array.prototype.forEach.call(document.querySelectorAll("#ky-choices .ky-btn"),
-    function(b){ b.disabled=true; });
-  setTimeout(function(){ nextItem(false); }, ok?550:1500);
-}
-
-/* ★前半（選択式）の終わり。
-   「まちがえた字が10個」か「20問」か、**早いほう**（kanken-gen.js の SELECT_LIMIT / SELECT_MISS_TARGET）。 */
-function selectPhaseOver(){
-  var s=SESSION.sel||{o:0,x:0};
-  return (s.o+s.x)>=SESSION.selectLimit || s.x>=SESSION.selectMissTarget;
-}
-function toSwitch(){
-  SESSION.phase="switch";
-  SESSION.pos=SESSION.firstWrite;      // 前半を切り上げて、後半の先頭へ飛ぶ
-  save(K_SESSION,SESSION);
-  if(SESSION.pos>=SESSION.items.length){ finishSession(true); return; }
-  renderKyou();
-}
-function startWritePhase(){
-  SESSION.phase="write"; save(K_SESSION,SESSION); renderKyou();
-}
-function nextItem(finish){
-  SESSION.pos++;
-  if(finish || SESSION.pos>=SESSION.items.length){ finishSession(!finish); return; }
-  // 前半が終わったら、後半に入る前に一拍おく（頭の使い方が変わるため）
-  if(SESSION.phase==="select" && (selectPhaseOver() || SESSION.pos>=SESSION.firstWrite)){
-    toSwitch(); return;
-  }
-  save(K_SESSION,SESSION);
-  renderKyou();
-}
-function finishSession(ranOut){
-  SESSION.done=true;
-  SESSION.ranOut=!!ranOut;      // 出す問題が尽きた（＝ぜんぶ書けた）
-
-  // ★抜き取り検証（12-3・12-3b）。「書ける」と申告した字を、黙って紙に混ぜる。
-  //   紙は1回きりのものなので、ここで確定させて SESSION に持たせる
-  //   （印刷のたびに引き直すと、印刷した紙と採点画面がずれる）。
-  var rnd=seededRandom(SESSION.date+"|audit");
-  SESSION.audit=pickAudit(KSTATS, WEAK, (SESSION.unsure||[]).length, rnd);
-  // ★どれが検証用かは紙に書かない。並び順でも分からないように混ぜる
-  SESSION.sheet=shuffle((SESSION.unsure||[]).concat(SESSION.audit), rnd);
-
-  // ★紙に出す字が、書きの分か読みの分か。ブロックを分けるのに使う
-  SESSION.sheetField={};
-  SESSION.sheet.forEach(function(k){
-    SESSION.sheetField[k]=(SESSION.unsureField&&SESSION.unsureField[k])
-      || ((KSTATS[k]&&KSTATS[k].self&&KSTATS[k].self.f) || "kaki");
-  });
-  // ★「あやしい10個」の内訳（読み何個・書き何個）。
-  //   読みが枠を奪っていないかを、推測ではなく実測で見るための記録。
-  //   ⚠️ 画面には出さない（self:{say,hit,miss} と同じ理由）
-  SESSION.mix={kaki:0,yomi:0};
-  (SESSION.unsure||[]).forEach(function(k){
-    var f=(SESSION.unsureField&&SESSION.unsureField[k])||"kaki";
-    if(SESSION.mix[f]!==undefined) SESSION.mix[f]++;
-  });
-
-  SET.doneDays=(SET.doneDays||[]).concat([todayStr()])
-    .filter(function(v,i,a){return a.indexOf(v)===i;});
-  save(K_SESSION,SESSION); save(K_SET,SET);
-  renderAll();
-}
-
-/* 前半→後半の切りかえ画面。
-   ★ここで「まちがえた字は、あしたもう一回出るよ」と予告する。
-     わざと間違えれば前半を10問で終われてしまうが、**まちがえた字は翌日また出る**ので
-     損得が釣り合う（12-3 の抜け道対策と同じ形）。既に pickKanji が拾う実装は入っていて、
-     **見えていなかっただけ**なので、ここで見えるようにする。
-     責める文ではなく**予告**として書くこと。 */
-function renderKyouSwitch(){
-  var s=SESSION.sel||{o:0,x:0};
-  // ★正解数は出さない（ユーザー判断・C案）。
-  //   前半は本人の言葉で「ウォームアップ」なので、**ここで点数を出すと出鼻をくじく。**
-  //   「できている字は出さない」「あと◯点で言う」「連続日数を使わない」と同じ、
-  //   やる気を削がない設計の一貫。**正解数を戻さないこと。**
-  // ★予告の一文は残す。わざと間違えれば前半を早く終われてしまうので、
-  //   **翌日また出る**ことが見えていないと損得が釣り合わない（12-3 の抜け道対策）。
-  //   ただし「まちがえた字」とは言わない。**アプリ全体で「もうすこし」を使う**
-  //   （「にがて」と呼ばないのと同じ理由。責める語感にしない）。
-  document.getElementById("ky-swsub").innerHTML=
-    "えらぶ問題を <b>"+(s.o+s.x)+" 問</b>やったよ。よくがんばったね。"
-    +(s.x ? "<br>きょう もうすこしだった字は、あした もう一回出るよ。" : "");
-}
-
-function renderKyouEnd(){
-  var u=SESSION.unsure||[];
-  // ★画面も紙と同じ sheet を見せる。ここで「あやしい」だけ見せると、
-  //   紙に増えている字が検証字だと分かってしまう（12-3「どれが検証用かは書かない」）
-  var sheet=practiceList();
-  document.getElementById("ky-endmsg").textContent=
-    SESSION.ranOut && !u.length ? "ぜんぶ書けた！すごい！" : "きょうはここまで！";
-  document.getElementById("ky-endsub").textContent=
-    sheet.length ? "れんしゅうする字は "+sheet.length+" 字です。" : "れんしゅうする字はありません。";
-  document.getElementById("ky-list").innerHTML=
-    sheet.length ? sheet.map(function(k){return '<span class="chip soft">'+k+'</span>';}).join("")
-                 : '<span class="muted">ありません。</span>';
-  var s=SESSION.sel||{o:0,x:0};
-  document.getElementById("ky-summary").innerHTML=
-    "<table><tr><th>やったこと</th><th class='num'>かず</th></tr>"
-    +"<tr><td>出た問題</td><td class='num'>"+SESSION.pos+"</td></tr>"
-    +"<tr><td>えらぶ問題の正解</td><td class='num done'>"+s.o+" / "+(s.o+s.x)+"</td></tr>"
-    +"<tr><td>「書ける」と答えた字</td><td class='num'>"+(SESSION.know||[]).length+"</td></tr>"
-    +"<tr><td>「あやしい」と答えた字</td><td class='num'>"+u.length+"</td></tr></table>";
-}
-
-/* ★書くマスの高さを、段あたりの行数から決める。
-   行が少ない日は大きく、多い日は小さく。**紙は1枚のまま、折り線の位置も動かさない。**
-   ⚠️ 値を変えたら 5/13/20/30/40問のテストを通すこと（30問・14mmで実際に溢れた。
-      40問で1px溢れて下限をもう1段足した経緯がある）。 */
 function boxHeightFor(rowsPerCol){
   if(rowsPerCol<= 8) return 18;
   if(rowsPerCol<=10) return 15;
@@ -1054,111 +795,142 @@ function twoCols(list, rowFn){
       いま入っているのは102設問だけなので、**混在した状態で成立すること**が要件。
    ========================================================================= */
 
-/* その日の単元に対応する、本の問題（照合ずみ・紙に出せるものだけ） */
-function bookItemsForToday(){
-  var t=planToday();
-  if(!t || !BOOK_UNITS) return [];
-  if(!isVerifiedUnit(t.unit)) return [];        // ★照合が通っていない単元は紙に出さない
-  var u=BOOK_UNITS.filter(function(x){ return x.unitId===t.unit; })[0];
-  if(!u) return [];
+/* =========================================================================
+   きょうの紙（★本の問題だけ。20問）
+   ユーザーの指示（2026-09-11）:
+     「もう一度言います。**本から忠実に出してください。**」
+     「漢字は20文字書く→〇×をつける→**×のもんだい＋次の問題を20問**やるですよね？」
+
+   ★きょうの紙 ＝ **前日に×だった字の問題** ＋ **今日の単元の問題** ＝ 20問
+   ⚠️ **足りなくても、アプリが作った問題で埋めない。**その単元ぶんだけで構わない。
+   ⚠️ **×の字が多い日は、新しい問題が減る。**それでよい（できていない字を優先）。
+   ⚠️ **照合が通っていない単元は紙に出さない**（`kanken-verified.js`）。
+   ========================================================================= */
+var SHEET_TARGET = 20;   // 1日の問数。本人の希望「毎日20問書く」
+
+/* 照合が通った単元の、紙に出せる問題を全部集める（字から引けるように索引も作る） */
+function bookAllItems(){
   var out=[];
-  (u.groups||[]).forEach(function(g){
-    (g.items||[]).forEach(function(it){
-      if(!printable(it)) return;
-      // ★その日の範囲だけ（日割りが単元を分けている日がある）
-      if(typeof it.no==="number" && (it.no<t.from || it.no>t.to)) return;
-      out.push({ g:g, it:it });
+  if(!BOOK_UNITS) return out;
+  BOOK_UNITS.forEach(function(u){
+    if(!isVerifiedUnit(u.unitId)) return;
+    (u.groups||[]).forEach(function(g){
+      (g.items||[]).forEach(function(it){
+        if(printable(it)) out.push({ u:u, g:g, it:it });
+      });
     });
   });
   return out;
 }
 
-/* 紙を「ブロックの配列」に組む。
-   ブロック = { title, ask, rows:[{q, hint, a}] }
-   ★こう分けておくと、本の問題と自動生成が混ざっても、印刷側は同じ扱いで済む。 */
-function buildPaperBlocks(){
-  var blocks=[], usedKanji={};
+/* ★問題ごとの記録。{ 問題id: {o, x, last:"o"|"x", date} }
+   「×のもんだい」は**そのとき解けなかった問題そのもの**なので、字ではなく問題idで持つ。
+   ⚠️ 字で持つと、同じ字を使う別の問題（本の中に何問もある）がまとめて紙に出てくる。
+   ⚠️ 問題id は書き起こしの `id`（q_dr01_00_00_001 など）。**動かさない**（C-5）。 */
+var K_ITEMS="kanken7_items_v1";
+var ITEMS=load(K_ITEMS,{});
 
-  // ① 本の問題（あれば）。分野ごとにまとめる
-  var book=bookItemsForToday();
-  var byField={};
-  book.forEach(function(x){
-    var f=x.it.field||x.g.field||"";
-    (byField[f]=byField[f]||{g:x.g, rows:[]}).rows.push(x.it);
-  });
-  Object.keys(byField).forEach(function(f){
-    var b=byField[f], fd=fieldOf(f);
-    blocks.push({
-      // ★ブロック共通の語群。**選択肢と同じで、紙に出さないと解けない。**
-      //   ⚠️ `dr_54` は「記号で書きなさい」なのに選択肢を出しておらず、紙で解けなかった。
-      //      **`pool` は「この語群から選ぶ」形なので、出さなければ同じことが起きる。**
-      //      **まだ pool を持つ単元は届いていないが、届いてから直すと同じ失敗を繰り返す。**
-      pool:(b.g.pool||[]).slice(),
-      poolUseOnce:!!b.g.poolUseOnce,
-      title:"■ "+(fd?fd.name:"本のもんだい")+"（本のもんだい）",
-      // ★答えの見出しは短く固定する。紙の指示文をそのまま使うと長くて照らしにくい
-      keyTitle:(fd?fd.name:"本のもんだい")+"の答え",
-      ask:b.g.instruction||FIELD_ASK[f]||"",
-      src:"book",
-      rows:b.rows.map(function(it){
-        (it.kanji||[]).forEach(function(k){ usedKanji[k]=1; });
-        var ans=it.answers||[], ruby=it.ruby||[];
-        return {
-          q: bookQuestionText(it),
-          // ★選択肢。**「記号で書きなさい」なのに紙に選択肢が無いと、絶対に解けない。**
-          //   実際にそうなっていた（dr_54。データは正しく、紙にしたときだけ解けなくなっていた）。
-          //   「出題できる」と「この紙で解ける」は別（確認ポイント B-1／B-2）。
-          choices: (it.choices || []).slice(),
-          // ★答えページの「注意」。ルビ付きで持っている（小4が読めるように）
-          note: bookNote(it.note),
-          // ★空らんごとの読み。**まとめて「□＝り・□＝ぜん」と書くと、どの□の読みか分からない。**
-          //   空らんの順＝answers の順＝ruby の順（書式5-6で並び順が固定されている）なので、
-          //   **書くマスの1つ1つに、その空らんの読みを添える。**
-          slots: ans.map(function(a,i){
-            return { yomi:(ruby[i]||{}).yomi||"", around:a.around||"" };
-          }),
-          a: ans.map(function(a){return a.text;}).join("・"),
-          kanji: it.kanji||[], field: f, id: it.id
-        };
-      })
-    });
-  });
-
-  // ② 自動生成で埋める。★本ですでに出した字は出さない（同じ紙に2回・A-1）
-  var list=practiceList().filter(function(k){ return !usedKanji[k]; });
-  var kaki=list.filter(function(k){ return sheetFieldOf(k)!=="yomi"; });
-  var yomi=list.filter(function(k){ return sheetFieldOf(k)==="yomi"; });
-  if(kaki.length){
-    blocks.push({ title:"■ 読みかたに合う漢字を書きましょう。", keyTitle:"書きの答え",
-      ask:"（　）は読みです。", src:"gen",
-      rows:kaki.map(function(k){
-        var r=MASTER_BY_K[k]||{on:[],kun:[]};
-        return { q:"", hint:readingHint(r), a:k, kanji:[k], field:"kaki" };
-      })});
-  }
-  if(yomi.length){
-    blocks.push({ title:"■ 読みかたを、ひらがなで書きましょう。", keyTitle:"読みの答え",
-      ask:"", src:"gen",
-      rows:yomi.map(function(k){
-        var q=genYomi(k, seededRandom(SESSION.date+"|y|"+k));
-        return { q:q?q.q:k, hint:q&&q.hint?q.hint:"", a:q?q.a:"", kanji:[k], field:"yomi" };
-      })});
-  }
-  return blocks;
+/* 問題id から本の問題を引く（照合ずみ・紙に出せるものだけ） */
+function bookIndex(){
+  var m={}; bookAllItems().forEach(function(x){ m[x.it.id]=x; }); return m;
 }
 
-/* 読みの手がかり（音・訓を3つまで）。
-   ⚠️ **同じ読みを2回出さない。**常用漢字表には、同じ音が例語つきと例語なしで
-      2回並ぶ字がある（実測10字。場・夏・歌・開・深・整・指・意・好・清）。
-      そのまま出すと **「セイ・ショウ・セイ」** のようになり、
-      **手がかりが1つぶん無駄になる**（3つ出すつもりが実質2つ）。
-   ★読みそのものは消さない（マスタは常用漢字表どおりに保つ）。**出すときだけ重複を省く。** */
-function readingHint(r){
-  var seen={}, out=[];
-  [].concat(r.on||[], r.kun||[]).forEach(function(rd){
-    if(seen[rd]) return; seen[rd]=1; if(out.length<3) out.push(rd);
+/* 1日のかたまり（日割り）の問題（範囲の中だけ） */
+function bookItemsOfChunk(c){
+  if(!c || !BOOK_UNITS) return [];
+  if(!isVerifiedUnit(c.unit)) return [];
+  var u=BOOK_UNITS.filter(function(x){ return x.unitId===c.unit; })[0];
+  if(!u) return [];
+  var out=[];
+  (u.groups||[]).forEach(function(g){
+    (g.items||[]).forEach(function(it){
+      if(!printable(it)) return;
+      if(typeof it.no==="number" && (it.no<c.from || it.no>c.to)) return;
+      out.push({ u:u, g:g, it:it });
+    });
   });
-  return out.join("・");
+  return out;
+}
+/* その日の単元の問題（残っているテスト・画面の互換のため残す） */
+function bookItemsForToday(){ return bookItemsOfChunk(planToday()); }
+
+/* ★前日に×だった問題。**本の問題そのもの**（アプリが作らない）。
+   ① 紙で×にした問題（ITEMS[id].last==="x"）
+   ②「きょうは本でやった」で**できなかった字**として入れた字（WEAK[k].must）。
+      こちらは問題idが分からないので、その字を使う本の問題を**1つだけ**出す。 */
+function bookItemsForRetry(){
+  var all=bookAllItems(), out=[], seen={};
+  all.forEach(function(x){
+    var r=ITEMS[x.it.id];
+    if(r && r.last==="x"){ out.push(x); seen[x.it.id]=1; }
+  });
+  var must={};
+  Object.keys(WEAK).forEach(function(k){ if(WEAK[k] && WEAK[k].must && !WEAK[k].got) must[k]=1; });
+  out.forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ delete must[k]; }); });
+  all.forEach(function(x){
+    if(seen[x.it.id]) return;
+    if(ITEMS[x.it.id] && ITEMS[x.it.id].last==="o") return;   // もう〇の問題は出さない
+    var hit=(x.it.kanji||[]).some(function(k){ return must[k]; });
+    if(!hit) return;
+    out.push(x); seen[x.it.id]=1;
+    (x.it.kanji||[]).forEach(function(k){ delete must[k]; });
+  });
+  return out;
+}
+
+/* ★次の問題。日割りの順に、**まだ一度も紙で記録していない問題**を拾う。
+   ⚠️ 照合が通っていないかたまりは飛ばす（紙に出さない）。通ったら、そのとき戻ってくる。 */
+function bookItemsNew(exclude, limit){
+  var out=[];
+  for(var i=0;i<PLAN.length && out.length<limit;i++){
+    var c=PLAN[i];
+    if(RECORDS[c.id]) continue;
+    bookItemsOfChunk(c).forEach(function(x){
+      if(out.length>=limit) return;
+      if(exclude[x.it.id] || ITEMS[x.it.id]) return;
+      out.push(x);
+    });
+  }
+  return out;
+}
+
+/* きょう紙に出す問題を組む（×の問題が先。合計20問まで）。
+   ★×の問題が多い日は、新しい問題が減る（できていない問題を優先）。
+   ⚠️ 20に満たなくても、アプリが作った問題で埋めない。 */
+function composeSheet(){
+  var retry=bookItemsForRetry().slice(0, SHEET_TARGET);
+  var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
+  return retry.concat(bookItemsNew(ex, SHEET_TARGET-retry.length));
+}
+
+/* ★きょうの紙は**その日のうちは固定**する。
+   ⚠️ 毎回組み直すと、採点を入れた瞬間に「×の問題」が変わり、
+      **印刷した紙と「きろく」の並びがずれる。**（紙は1回刷ったら変わらない）
+   SESSION = { v:2, date, ids:[問題id], results:{ "問題id|字": "x" }, saved }
+   ⚠️ 旧形式（前半・申告のころの SESSION）は、同じ日付でも作り直す。 */
+function todaySheet(){
+  if(!bookLoaded()) return null;
+  if(SESSION && SESSION.v===2 && SESSION.date===todayStr()) return SESSION;
+  var ids=composeSheet().map(function(x){ return x.it.id; });
+  if(!ids.length) return null;
+  SESSION={ v:2, date:todayStr(), ids:ids, results:{}, saved:false };
+  save(K_SESSION,SESSION);
+  return SESSION;
+}
+function todaySheetItems(){
+  var s=todaySheet(); if(!s) return [];
+  var idx=bookIndex();
+  // ★途中で照合が取り下げられた単元の問題は、ここで落ちる（索引が照合ずみしか持たない）
+  return s.ids.map(function(id){ return idx[id]; }).filter(Boolean);
+}
+
+/* ★出典。「（ドリル p12 の 3）」。**本を開いて突き合わせられること**が要件
+   （ユーザー「テキストだとどう聞いているのか目視したいです」）。
+   ページは単元の srcPages。2ページにまたがる回は「p2-3」と出す（問ごとのページは持っていない。推測しない）。 */
+function bookCite(x){
+  var m=matOf(x.u.mat), p=x.u.srcPages||[];
+  var pg=p.length ? ("p"+(p.length>1 ? p[0]+"-"+p[p.length-1] : p[0])) : "";
+  return (m?m.short:(x.u.mat||""))+(pg?" "+pg:"")+" の "+x.it.no;
 }
 
 /* 答えページの「注意」。書式v1.5 で {text, ruby[]} になった。
@@ -1171,6 +943,55 @@ function bookNote(n){
   var ruby=(typeof n==="object" && n.ruby) ? n.ruby : [];
   if(!ruby.length) return t;
   return t+"（"+ruby.map(function(r){return r.base+"＝"+r.yomi;}).join("・")+"）";
+}
+
+/* 紙を「ブロックの配列」に組む。
+   ⚠️⚠️ **アプリが自分で作った問題は、ここに1問も入れない**（2026-09-11、ユーザーの指示）。
+      以前は `practiceList()` から自動生成の書き取り・読みを足していたが、**全部やめた。**
+      **本番に無い聞かれ方**（部首を4択で"選ぶ"／画数を4択）を練習させることになるため。
+      ⚠️ **音訓だけは本番と形式が一致していたが、それも出さない。**例外を作るとまた戻る。
+      ★生成器はコードとしては残してあるが、**出題経路から外してある**（C-1・C-3）。 */
+function buildPaperBlocks(){
+  // ★ブロックは「本の単元の中の、問題のまとまり（group）」ごと。
+  //   ⚠️ 分野ごとにまとめてはいけない。×の問題は別の単元から来るので、
+  //      指示文・語群（pool）が**別の単元のもの**になり、紙で解けなくなる。
+  var blocks=[], byGroup={}, order=[];
+  todaySheetItems().forEach(function(x){
+    var key=x.u.unitId+"#"+(x.g.gno||0);
+    if(!byGroup[key]){ byGroup[key]={g:x.g, u:x.u, rows:[]}; order.push(key); }
+    byGroup[key].rows.push(x);
+  });
+  order.forEach(function(key){
+    var b=byGroup[key], f=b.g.field||(b.rows[0].it.field)||"", fd=fieldOf(f);
+    blocks.push({
+      pool:(b.g.pool||[]).slice(),
+      poolUseOnce:!!b.g.poolUseOnce,
+      title:"■ "+(fd?fd.name:"もんだい"),
+      keyTitle:(fd?fd.name:"もんだい")+"の答え",
+      // ★書式v1.6 で instruction が {text, ruby[]} になりうる。文字列でもオブジェクトでも読む（ルビも出す）
+      ask:bookNote(b.g.instruction)||FIELD_ASK[f]||"",
+      src:"book",
+      rows:b.rows.map(function(x){
+        var it=x.it, ans=it.answers||[], ruby=it.ruby||[];
+        return {
+          cite: bookCite(x),
+          q: bookQuestionText(it),
+          choices: (it.choices||[]).slice(),
+          note: bookNote(it.note),
+          slots: ans.map(function(a,i){
+            return { yomi:(ruby[i]||{}).yomi||"", around:a.around||"" };
+          }),
+          a: ans.map(function(a){return a.text;}).join("・"),
+          kanji: it.kanji||[], field: f, id: it.id
+        };
+      })
+    });
+  });
+  // ★番号は紙全体の通し番号（1〜20）。ブロックごとに1から振り直すと、
+  //   「きろく」で何番の話か分からなくなる
+  var base=0;
+  blocks.forEach(function(b){ b.noBase=base; base+=b.rows.length; });
+  return blocks;
 }
 
 /* 本の問題文を紙の形にする。
@@ -1232,7 +1053,7 @@ function splitSheets(blocks, max){
       part.title = b.title + (offset>0 ? "（つづき）" : "");
       part.ask   = (offset>0 ? "" : b.ask);
       part.rows  = b.rows.slice(offset, offset+take);
-      part.noBase= offset;
+      part.noBase= (b.noBase||0) + offset;   // ★通し番号（buildPaperBlocks が紙全体で振っている）
       cur.push(part);
       n+=take; offset+=take;
     }
@@ -1294,8 +1115,10 @@ function renderSheet(blocks, page, pages){
           return "<div class='p-slot' style='height:"+boxH+"'>"
             +(sl.yomi?"<span class='p-slotlab'>"+sl.yomi+"</span>":"")+"</div>";
         }).join("");
+        // ★出典は1問ごとに小さく添える。問題文より目立たせない（お子さんが読むのは問題文）
+        var cite=row.cite?"<span class='p-cite'>（"+row.cite+"）</span>":"";
         return "<tr><td class='p-no'>"+no+"</td>"
-          +"<td class='p-q'>"+(q?"<span style='font-size:9.5pt'>"+q+"</span>":"")
+          +"<td class='p-q'>"+cite+(q?"<span style='font-size:9.5pt'>"+q+"</span>":"")
           +(q?hint:"<span style='font-size:9pt'>（"+row.hint+"）</span>")+"</td>"
           // ★padding を 0 に。td の既定 padding(1.5mm) が上下に付くと、
           //   1行あたり3mm 高くなり、30問で紙をはみ出す（実際に溢れて分かった）
@@ -1348,21 +1171,23 @@ function sheetFieldOf(k){
 
    ★並び順は紙と完全に一致させる（照らし合わせが目で追えるように）。 */
 function todayPaperRows(){
-  if(!SESSION) return [];
   var out=[];
   buildPaperBlocks().forEach(function(b){
     b.rows.forEach(function(r,i){
-      out.push({ no:i+1, block:String(b.keyTitle||b.title).replace(/^■\s*/,""),
-                 src:b.src, field:r.field, kanji:(r.kanji||[]).slice(), a:r.a });
+      out.push({ no:(b.noBase||0)+i+1, block:String(b.keyTitle||b.title).replace(/^■\s*/,""),
+                 src:b.src, field:r.field, kanji:(r.kanji||[]).slice(), a:r.a,
+                 id:r.id, cite:r.cite });
     });
   });
   return out;
 }
+/* 採点のキー。★「問題id|字」。同じ字が2つの問題に出ても、別々に〇✕を持つ */
+function markKey(id,k){ return id+"|"+k; }
 
 function renderMarks(){
   var box=document.getElementById("mark-box"), rows=todayPaperRows();
-  if(!rows.length){
-    box.innerHTML='<span class="muted">「きょう」で練習する字を出すと、ここに並びます。</span>';
+  if(!rows.length || !SESSION){
+    box.innerHTML='<span class="muted">「きょう」の紙が出ると、ここに並びます。</span>';
     return;
   }
   SESSION.results=SESSION.results||{};
@@ -1370,70 +1195,74 @@ function renderMarks(){
   //   まとめて1タップにすると、3字のうち1字だけ間違えたときに3字とも✕になり、
   //   記録の粒度が落ちる（＝できている字まで翌日また出る）。
   //   ★ただし既定は全部〇なので、**タップの数は「まちがえた数」であって「字の数」ではない。**
-  var html="", lastBlock=null;
+  var html=SESSION.saved?'<div class="note" style="margin-bottom:8px">きょうの紙は <b>記録ずみ</b> です。</div>':"";
+  var lastBlock=null;
   rows.forEach(function(r){
     if(r.block!==lastBlock){ html+='<div class="mark-head">'+r.block+'</div>'; lastBlock=r.block; }
     html+='<div class="mark-row"><span class="mark-no">'+r.no+'</span>'
       +r.kanji.map(function(k){
-        var x=SESSION.results[k]==="x";
-        // ★引用符の入れ子を避けるため、字は data 属性で渡す（' のエスケープはミスのもと）
-        return '<div class="mark'+(x?" x":"")+'" data-k="'+k+'"'
-          +' onclick="toggleMark(this.dataset.k)">'
+        var key=markKey(r.id,k), x=SESSION.results[key]==="x";
+        // ★引用符の入れ子を避けるため、キーは data 属性で渡す（' のエスケープはミスのもと）
+        return '<div class="mark'+(x?" x":"")+'" data-k="'+k+'" data-key="'+key+'"'
+          +' onclick="toggleMark(this.dataset.key)">'
           +k+(x?" ✕":" ○")+'</div>';
-      }).join("")+'</div>';
+      }).join("")
+      +'<span class="muted" style="font-size:.75rem;margin-left:6px">'+(r.cite||"")+'</span></div>';
   });
   box.innerHTML=html;
 }
-function toggleMark(k){
+function toggleMark(key){
+  if(!SESSION || SESSION.saved) return;
   SESSION.results=SESSION.results||{};
-  SESSION.results[k]=SESSION.results[k]==="x"?"o":"x";
+  SESSION.results[key]=SESSION.results[key]==="x"?"o":"x";
   save(K_SESSION,SESSION); renderMarks();
 }
+/* ★紙の〇✕を記録する。
+   ・問題ごと（ITEMS）… 1字でも✕なら、その問題は✕。**✕の問題は次の日の紙にそのまま出る**
+   ・字ごと（KSTATS）… 予想得点・分野べつの%に使う（その問題の分野で記録）
+   ・日割り … かたまりの問題が全部記録されたら、そのかたまりは「おわり」 */
 function saveSheetResult(){
   var rows=todayPaperRows();
-  if(!rows.length){ alert("採点する字がありません。"); return; }
-  // ★紙の行から回す。本の問題も自動生成も、同じように記録される。
-  //   （もとは practiceList() だけを回していて、本の問題が一切記録されなかった）
-  var seen={};
+  if(!rows.length || !SESSION){ alert("採点する問題がありません。"); return; }
+  if(SESSION.saved){ alert("きょうの紙は、もう記録してあります。"); return; }
+  var res=SESSION.results||{};
   rows.forEach(function(r){
+    var anyX=false;
     r.kanji.forEach(function(k){
-      if(seen[k]) return; seen[k]=1;
-      var wrong=!!(SESSION.results&&SESSION.results[k]==="x");
+      var wrong=(res[markKey(r.id,k)]==="x");
+      if(wrong) anyX=true;
       if(!KSTATS[k]) KSTATS[k]={};
-      // ★本の問題は、その問題の分野で記録する（部首は部首として）。
-      //   自動生成は、紙のどちらのブロックだったかで分ける。
-      //   まとめて kaki に入れると、読みの結果が書き取りの点として計上される
-      var fld=(r.src==="book") ? (r.field||sheetFieldOf(k)) : sheetFieldOf(k);
+      var fld=r.field||"kaki";
       var st=KSTATS[k][fld]||(KSTATS[k][fld]={o:0,x:0});
-      // ★自己申告の当たり外れ（12-3b）は、自動生成の字にだけある概念。
-      //   本の問題は「書ける？」と聞いていないので、検証字にはならない
-      var audit=(r.src!=="book") && isAudit(k);
-      var self=audit ? (KSTATS[k].self||(KSTATS[k].self={say:0,hit:0,miss:0})) : null;
       if(wrong){
-        st.x++;
-        if(self) self.miss++;   // ★申告が外れた。以後この字は「書ける？」と聞かず、練習に回る（12-3b ③）
+        st.x++; st.run=0;
         if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
         WEAK[k].wrong++; WEAK[k].got=false; WEAK[k].lastAt=Date.now();
       }else{
-        st.o++;
-        if(self){
-          // ★「書ける」と言って実際に書けた字は、**実測なのでいちばん強い証拠**。
-          //   1回で「できる」確定でよい（12-3b ②）
-          self.hit++;
-          if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
-          WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false;
-        }else{
-          // ★自分で「あやしい」と言った字なので、1回書けただけでは卒業させない。
-          //   2回書けてから「できるようになった字」に出す（引き継ぎ.md 12-3の5番）
-          if(WEAK[k] && !WEAK[k].got && (st.o||0)>=2){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false; }
-        }
+        st.o++; st.run=(st.run||0)+1;
+        // ★まえに✕だった字が〇になったら「できるようになった字」（おうえん画面で名指し）
+        if(WEAK[k] && !WEAK[k].got){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false; }
       }
     });
+    var it=ITEMS[r.id]||(ITEMS[r.id]={o:0,x:0});
+    if(anyX) it.x++; else it.o++;
+    it.last=anyX?"x":"o"; it.date=todayStr();
   });
+  // ★日割りを進める。かたまりの（照合ずみ・紙に出せる）問題が全部記録されたら「おわり」。
+  //   ⚠️ 点は KSTATS 側で数えているので、ここでは total:0（予想得点に二重に入れない）
+  PLAN.forEach(function(c){
+    if(RECORDS[c.id]) return;
+    var its=bookItemsOfChunk(c);
+    if(its.length && its.every(function(x){ return !!ITEMS[x.it.id]; })){
+      RECORDS[c.id]={correct:0,total:0,field:(unitOf(c.unit)||{}).field||"",date:todayStr(),via:"sheet"};
+    }
+  });
+  SESSION.saved=true;
   SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  save(K_ITEMS,ITEMS); save(K_REC,RECORDS);
   save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET); save(K_SESSION,SESSION);
   renderAll();
-  alert("記録しました。おうえん画面を見せてあげてください！");
+  alert("記録しました。✕の問題は、あしたの紙にまた出ます。おうえん画面を見せてあげてください！");
 }
 
 function renderKiroku(){

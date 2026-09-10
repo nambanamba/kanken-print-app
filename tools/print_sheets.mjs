@@ -78,18 +78,19 @@ try {
 const stats = await p.evaluate(() => bookStats());
 console.log(`取り込み: ${stats.units}単元 / ${stats.items}問`);
 
+// ★2026-09-11 「はじめる」（前半・申告の流れ）は撤去した。紙は「きょう」を開いた時点で決まる。
 await p.click('.tab[data-page="kyou"]');
-await p.click('button:has-text("はじめる")');
 
 if (!want.length) {
   want = await p.evaluate(() => BOOK_UNITS.map(u => u.unitId).filter(isVerifiedUnit));
   want.push("today");
 }
 
-// ★本来の planToday を控えておく。**単元を指定したあと必ず戻す。**
+// ★その日の紙（SESSION）を控えておく。**単元を指定したあと必ず戻す。**
 //   戻さないと "today"（＝その日ぶんの通常の1枚）が、直前に指定した単元のまま出る。
-//   実際にそうなって、today と dr_54 が同じ紙になった。
-await p.evaluate(() => { window.__planTodayOrig = window.planToday; });
+//   実際にそうなって、today と dr_54 が同じ紙になった（当時は planToday の差し替えだった）。
+//   ⚠️ いまの紙は SESSION.ids（問題idの並び）で日ごとに固定されるので、差し替えるのはそちら。
+await p.evaluate(() => { window.__sessionOrig = window.SESSION; });
 
 for (const u of want) {
   // ★測る前に印刷用のCSSを当てる。
@@ -99,15 +100,20 @@ for (const u of want) {
   await p.setViewportSize({ width: 794, height: 1123 });
 
   const info = await p.evaluate((u) => {
-    window.planToday = (u === "today")
-      ? window.__planTodayOrig
-      : () => ({ unit: u, from: 1, to: 999, n: 999, day: 1, parts: 1, part: 1,
-                 mat: u.startsWith("tn") ? "tn" : "dr", label: u, pages: "?" });
+    if (u === "today") {
+      window.SESSION = window.__sessionOrig;
+    } else {
+      // その単元の（照合ずみ・紙に出せる）問題だけで1日ぶんの紙を作る。**localStorage には保存しない**
+      const ids = bookAllItems().filter(x => x.u.unitId === u).map(x => x.it.id);
+      window.SESSION = { v: 2, date: todayStr(), ids, results: {}, saved: false, _tool: true };
+    }
     printSessionPractice();
+    window.SESSION = window.__sessionOrig;
     const region = document.getElementById("print-region");
     const sheets = [...region.querySelectorAll(".p-sheet")];
     const rows = [...region.querySelectorAll(".p-body tr")].map(tr => ({
       no: tr.querySelector(".p-no") ? tr.querySelector(".p-no").textContent.trim() : null,
+      cite: tr.querySelector(".p-cite") ? tr.querySelector(".p-cite").textContent.trim() : null,   // （ドリル p1 の 3）
       q: tr.querySelector(".p-q") ? tr.querySelector(".p-q").textContent.trim() : null,
       slots: tr.querySelectorAll(".p-slot").length,
       slotLabels: [...tr.querySelectorAll(".p-slotlab")].map(e => e.textContent)
