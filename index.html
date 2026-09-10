@@ -347,6 +347,23 @@
       <div id="k-progress"></div>
     </div>
 
+    <!-- ★アプリの紙を使わず、本で直接やった日。単元を選ぶ手間もいらない（きょうの分で記録する） -->
+    <div class="card">
+      <h2>📕 きょうは本でやった</h2>
+      <div class="muted" style="margin-bottom:10px">
+        アプリの紙を使わず、<b>本に直接書いた日</b>はこちら。<br>
+        <span id="b-today" class="muted"></span>
+      </div>
+      <div class="field">
+        <label>できなかった字（あれば。続けて書いてOK）</label>
+        <input type="text" id="b-wrong" placeholder="例）愛潟械">
+      </div>
+      <button class="btn sec" onclick="saveDidInBook()">きょうは本でやった</button>
+      <div class="muted" style="margin-top:8px;font-size:.8rem">
+        入れた字は、<b>次の紙に必ず出ます。</b>問題ごとの〇✕は要りません（本に書いてあるので）。
+      </div>
+    </div>
+
     <div class="card">
       <h2>📘 本でやった分を入れる</h2>
       <div class="muted" style="margin-bottom:10px">
@@ -691,11 +708,22 @@ function renderOuen(){
    待ち行列は持たない。**2回書けるまでは、この式が勝手に返し続ける**ので、
    「次に印刷する紙に必ず入れる」（12-3b ①）が、取りこぼしなく成り立つ。
    （待ち行列にすると、消し忘れ・消しすぎのどちらでも壊れる） */
+/* ★次の紙に必ず入れる字。
+   ①「書ける」と言って書けなかった字（12-3b ③）… self.miss
+   ②**本でやった日に「できなかった」と入れた字**… WEAK[k].must
+      ⚠️ WEAK[k].wrong>0 を条件にしてはいけない。**選択式を1回まちがえただけの字も入ってしまい、
+         紙が「まちがえた字」で埋まる。**明示的に申告されたものだけを印にする。
+   どちらも**卒業したら外れる**（got）。 */
 function mustWriteList(){
   return Object.keys(KSTATS).filter(function(k){
+    if(WEAK[k] && WEAK[k].got) return false;      // もう卒業した字
     var s=KSTATS[k].self;
-    return s && (s.miss||0)>0 && !(WEAK[k] && WEAK[k].got);
-  });
+    if(s && (s.miss||0)>0) return true;
+    return !!(WEAK[k] && WEAK[k].must);
+  }).concat(Object.keys(WEAK).filter(function(k){
+    // ★KSTATS にまだ無い字（本でやった日に初めて出てきた字）も拾う
+    return WEAK[k] && WEAK[k].must && !WEAK[k].got && !KSTATS[k];
+  }));
 }
 function startSession(force){
   if(!SESSION || SESSION.date!==todayStr() || SESSION.done || force){
@@ -1304,11 +1332,11 @@ function saveSheetResult(){
           //   1回で「できる」確定でよい（12-3b ②）
           self.hit++;
           if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
-          WEAK[k].got=true; WEAK[k].gotAt=Date.now();
+          WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false;
         }else{
           // ★自分で「あやしい」と言った字なので、1回書けただけでは卒業させない。
           //   2回書けてから「できるようになった字」に出す（引き継ぎ.md 12-3の5番）
-          if(WEAK[k] && !WEAK[k].got && (st.o||0)>=2){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); }
+          if(WEAK[k] && !WEAK[k].got && (st.o||0)>=2){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false; }
         }
       }
     });
@@ -1364,19 +1392,56 @@ function saveUnitRecord(){
   if(total<=0){ alert("問題数を入れてください。"); return; }
   if(correct>total){ alert("正解の数が、ぜんぶの数より多くなっています。"); return; }
   var field=document.getElementById("k-field").value;
-  RECORDS[id]={correct:correct,total:total,field:field,date:todayStr()};
+  RECORDS[id]={correct:correct,total:total,field:field,date:todayStr(),via:"book"};
   if(field&&u.field!==field){ u.field=field; save(K_UNITS,UNITS); }
   save(K_REC,RECORDS);
-  var raw=document.getElementById("k-wrong").value||"";
-  for(var i=0;i<raw.length;i++){
-    var ch=raw.charAt(i);
+  markWrongChars(document.getElementById("k-wrong").value||"", field);
+  document.getElementById("k-wrong").value="";
+  renderAll(); alert("記録しました。");
+}
+
+/* ★「できなかった字」を入れる。**字を並べて書くだけ**（父親が毎日やるので軽くする）。
+   ⚠️ KSTATS の粒度は落とさない。**字ごとに ✕ を1つ立てる。**
+      本でやった日は「合っていた字」が分からないので、**〇は付けない。**推測で埋めない（A-6）。 */
+function markWrongChars(raw, field){
+  var n=0;
+  for(var i=0;i<String(raw).length;i++){
+    var ch=String(raw).charAt(i);
     if(!MASTER_BY_K[ch]) continue;              // 範囲外の字は無視
     if(!WEAK[ch]) WEAK[ch]={wrong:0,got:false};
     WEAK[ch].wrong++; WEAK[ch].got=false; WEAK[ch].lastAt=Date.now();
+    // ★これが「次の紙に必ず入れる」印。卒業したら外れる
+    WEAK[ch].must=true;
+    // ★字ごとの記録も残す（分野が分かっているならその分野に）
+    if(!KSTATS[ch]) KSTATS[ch]={};
+    var f=field||"kaki";
+    var st=KSTATS[ch][f]||(KSTATS[ch][f]={o:0,x:0});
+    st.x++; st.run=0;
+    n++;
   }
-  save(K_WEAK,WEAK);
-  document.getElementById("k-wrong").value="";
-  renderAll(); alert("記録しました。");
+  save(K_WEAK,WEAK); save(K_KSTAT,KSTATS);
+  return n;
+}
+
+/* ★「きょうは本でやった」。**単元を選ぶだけ**で1日ぶん進む。
+   問題ごとの〇✕は取らない（本に書いてあるので、アプリが持つ意味が薄い）。
+   ⚠️ ただし「できなかった字」だけは入れられる。
+      **「できなかったら次の日も書く」は本人の希望**なので、そこが動かないと意味が半分になる。 */
+function saveDidInBook(){
+  var t=planToday();
+  if(!t){ alert("本の日割りは、ぜんぶ おわっています。"); return; }
+  var u=unitOf(t.unit)||{};
+  var wrong=document.getElementById("b-wrong").value||"";
+  var n=markWrongChars(wrong, u.field);
+  // ★合っていた数は分からない。**「答えの数 − できなかった字の数」を目安として入れる。**
+  //   ⚠️ 正確な点ではない。正確に入れたいときは下の「本でやった分を入れる」を使う
+  var total=t.qs||t.n||0;
+  RECORDS[t.id]={correct:Math.max(0,total-n), total:total,
+                 field:u.field||"", date:todayStr(), via:"book", rough:true};
+  save(K_REC,RECORDS);
+  document.getElementById("b-wrong").value="";
+  renderAll();
+  alert("「本でやった」で記録しました。"+(n?("できなかった字 "+n+" 字は、次の紙に出ます。"):""));
 }
 
 /* ---------- せってい ---------- */
@@ -1443,6 +1508,11 @@ function renderKirokuProgress(){
   var p=progressInfo();
   box.innerHTML='<span class="muted">きょうは <b>'+p.todayText+'</b>'
     +'　／　'+p.short+'（受検日まで '+p.days+' 日）</span>';
+  // 「きょうは本でやった」に、どこを記録するかを出す（選ぶ手間をなくす）
+  var bt=document.getElementById("b-today");
+  if(bt) bt.innerHTML=p.today
+    ? ('記録するところ: <b>'+p.todayText+'</b>')
+    : 'ぜんぶ おわっています。';
 }
 
 function saveUnits(){

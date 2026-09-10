@@ -876,6 +876,75 @@ ok("★2か所が同じ「のこり日数」を言っている（計算が1か�
    `のこり ${prog.left}`);
 ok("★お子さんの画面に、日割りが足りないことを出していない", !prog.kidHasOver);
 ok("★お子さんの画面に「遅れ」を出していない", !prog.kidHasOkure);
+
+console.log("");
+console.log("=== 「きょうは本でやった」の登録 ===");
+// ユーザー:「今日はしかたがないのでテキストでやらせました」
+// 書き起こしが追いつかない間も、旅行・体調・気分でも「本でやった日」は起きる。
+// ★司令塔が示した**失敗の形**を、そのまま検査にする:
+//   ・本でやったと登録した単元が、翌日また出てきたら失敗
+//   ・できなかった字を入れたのに、翌日の紙に出てこなかったら失敗
+//   ・進み具合の表示が、登録した日数だけ進まなかったら失敗
+const didBook = await page.evaluate(() => {
+  // まっさらな状態から始める（前の検査の記録を持ち越さない）
+  localStorage.removeItem("kanken7_records_v1");
+  localStorage.removeItem("kanken7_weak_v1");
+  RECORDS = {}; WEAK = {}; KSTATS = KSTATS || {};
+  const before = progressInfo();
+  const unitBefore = before.today ? before.today.id : null;
+
+  // ★実在する字を使う（642字マスタの外だと無視されるのが正しい挙動）
+  const wrongs = KANJI_MASTER.slice(0, 3).map(r => r.k);
+  document.getElementById("b-wrong").value = wrongs.join("");
+  saveDidInBook();
+
+  const after = progressInfo();
+  const unitAfter = after.today ? after.today.id : null;
+
+  // 翌日の紙に出るか（mustWriteList が「必ず入れる字」を返す）
+  const must = mustWriteList();
+
+  // 範囲外の字は無視されること
+  RECORDS = {}; WEAK = {};
+  document.getElementById("b-wrong").value = "陳陳";   // 陛陛（642字の外）
+  const n2 = markWrongChars("陳陳", "kaki");
+
+  return {
+    unitBefore, unitAfter,
+    doneBefore: before.done, doneAfter: after.done,
+    leftBefore: before.left, leftAfter: after.left,
+    wrongs, must,
+    mustHasAll: wrongs.every(k => must.indexOf(k) >= 0),
+    outOfRangeIgnored: n2 === 0
+  };
+});
+ok("★★本でやったと登録した単元は、翌日もう出てこない",
+   !!didBook.unitBefore && didBook.unitAfter !== didBook.unitBefore,
+   `${didBook.unitBefore} → ${didBook.unitAfter}`);
+ok("★★できなかった字が、次の紙に必ず入る字に入っている",
+   didBook.mustHasAll, `入れた ${didBook.wrongs.join("")} / 必ず出す ${didBook.must.join("")}`);
+ok("★★進み具合が1日ぶん進む（おわった）",
+   didBook.doneAfter === didBook.doneBefore + 1,
+   `${didBook.doneBefore} → ${didBook.doneAfter}`);
+ok("★★進み具合が1日ぶん進む（のこり）",
+   didBook.leftAfter === didBook.leftBefore - 1,
+   `${didBook.leftBefore} → ${didBook.leftAfter}`);
+ok("642字の外の字は無視される（推測で足さない）", didBook.outOfRangeIgnored);
+
+// ★卒業したら「必ず出す」印が外れること（外れないと永久に出続ける）
+const graduated = await page.evaluate(() => {
+  RECORDS = {}; WEAK = {}; KSTATS = {};
+  const k = KANJI_MASTER[0].k;
+  markWrongChars(k, "kaki");
+  const before = mustWriteList().indexOf(k) >= 0;
+  // 卒業させる
+  WEAK[k].got = true; WEAK[k].must = false;
+  const after = mustWriteList().indexOf(k) >= 0;
+  RECORDS = {}; WEAK = {}; KSTATS = {};
+  return { before, after };
+});
+ok("できなかった字は、卒業するまで出続ける", graduated.before);
+ok("★卒業したら「必ず出す」印が外れる（永久に出続けない）", !graduated.after);
 ok("本の問題の答えも、折り線の下に出る", mix.keyHasBushu);
 ok("問題側に答えが混じっていない", !mix.bodyHasAnswer);
 ok("本の問題が混ざっても、答えが折り線をまたがない", mix.keyOverflow <= 0, String(mix.keyOverflow));
