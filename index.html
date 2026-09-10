@@ -113,6 +113,15 @@
   .ky-btn.unsure{background:#fef3c7;border-color:#fcd34d;color:#92400e;}
   .ky-fb{text-align:center;font-size:1.05rem;font-weight:800;min-height:1.9em;margin-top:12px;}
   .ky-fb.ok{color:var(--good);} .ky-fb.ng{color:#b91c1c;}
+  /* アプリでやる問題 */
+  .ap-q{font-size:1.25rem;line-height:2.1;margin:8px 0 6px;}
+  .ap-q ruby rt{font-size:.6em;}
+  .ap-ans{font-size:1.1rem;margin:8px 0;padding:10px;background:#f1f5f9;border-radius:10px;text-align:center;}
+  .ap-slots{display:flex;gap:10px;justify-content:center;margin:6px 0;font-size:1.3rem;}
+  .ap-slot{padding:4px 10px;border:1px solid #cbd5e1;border-radius:8px;}
+  .ap-slot.on{border-color:#2563eb;box-shadow:0 0 0 2px #bfdbfe;}
+  .ap-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .ap-row .ky-btn{flex:1 1 30%;font-size:1.2rem;}
 
   /* 採点：既定は〇。まちがえた番号だけタップして✕にする */
   .marks{display:flex;flex-wrap:wrap;gap:7px;}
@@ -201,7 +210,8 @@
     .p-title{font-size:13pt;font-weight:700;}
     .p-sub{font-size:8.5pt;color:#555;margin:1mm 0 4mm;}
     .p-sec{font-size:9.5pt;font-weight:700;background:#eee;padding:1.2mm 2mm;margin:3.5mm 0 1.5mm;}
-    .p-ask{font-weight:400;font-size:8.5pt;}
+    /* ★分野名と指示文のあいだを空ける（「書き取り次の…」と続けて読めてしまった。claude-e0 の指摘） */
+    .p-ask{font-weight:400;font-size:8.5pt;margin-left:3mm;}
     .p-hint{font-size:8.5pt;color:#555;margin-left:1mm;}
     table.p-tbl{width:100%;border-collapse:collapse;}
     table.p-tbl td{border:1px solid #999;padding:1.5mm 2mm;font-size:10pt;vertical-align:middle;}
@@ -292,7 +302,7 @@
       <div class="muted" style="margin-bottom:12px" id="ky-info"></div>
       <div class="muted" style="margin-bottom:10px;font-size:.8rem">
         紙は<b>手で書く問題だけ</b>です（書き取り・部首・同じ読み・送りがな・対義語）。<br>
-        <b>読み・記号で答える問題・画数は、アプリの画面でやります</b>（いま作っています）。
+        <b>読み・記号で答える問題・画数は、下の「アプリでやる問題」でやります。</b>
       </div>
       <button class="btn" onclick="printToday()">きょうの紙を印刷（A4）</button>
       <div class="muted" style="margin-top:10px">
@@ -301,8 +311,17 @@
       </div>
     </div>
 
+    <!-- ★アプリでやる問題（読み・漢字えらび・じゅく語作り・音訓・画数）。**全部、本の問題。**
+         ・読み … 文を出す →「こたえを見る」→ 答えを出してから「読めた／読めなかった」（ユーザー指示）
+         ・記号 … タップでその場〇✕（選択肢の並びは毎回変える。音訓だけは並べ替えない）
+         ・画数 … 数字を入れて〇✕ -->
+    <div class="card" id="ap-card">
+      <h2>📱 アプリでやる問題</h2>
+      <div id="ap-box"></div>
+    </div>
+
     <div class="card">
-      <h2>📝 きょう出る問題</h2>
+      <h2>📝 きょうの紙の問題</h2>
       <div id="ky-list"></div>
     </div>
   </div>
@@ -764,8 +783,253 @@ function renderKyou(){
   }).join("")+'</table>';
 }
 
-/* ★きょうの紙を印刷する。画面でやることはこれだけ */
+/* ★きょうの紙を印刷する */
 function printToday(){ printSessionPractice(); }
+
+/* =========================================================================
+   アプリでやる問題（2026-09-11 ユーザー確定）
+     「読み、記号、画数はアプリでやる」
+     読み30・漢字えらび20・じゅく語作り20・音訓20・画数10（＝100点分）。**全部、本の問題。**
+   ・1日の組み立ては紙と同じ: 前日に✕だった問題 → 残りを配点比で、各分野から本の順に。
+     出せない分野の枠は、ほかのアプリの分野（本の問題）で埋める。自動生成では絶対に埋めない
+   ・その日の問題は固定（APP_S）。**出題順は並べ替える**（並びで覚えるのは知識ではない）
+   ・★選択肢の並べ替え（司令塔の表）:
+       漢字えらび・じゅく語作り … **並べ替える**。前回と同じ並びにはしない。**判定は記号ではなく中身**
+       音訓（ア＝音／イ＝訓）   … **並べ替えない**（意味が壊れる）。出題順だけ変える
+       読み・画数（選択肢なし）  … 出題順だけ
+   ========================================================================= */
+var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu"];
+var SHUFFLE_CHOICE_FIELDS = ["erabi","jukugo"];
+var APP_TARGET = 20;
+var K_APP="kanken7_app_v1";
+var APP_S=load(K_APP,null);
+
+function isAppField(f){ return APP_FIELDS.indexOf(f)>=0; }
+function appAllItems(){
+  var out=[];
+  if(!BOOK_UNITS) return out;
+  BOOK_UNITS.forEach(function(u){
+    if(!isVerifiedUnit(u.unitId)) return;
+    (u.groups||[]).forEach(function(g){
+      (g.items||[]).forEach(function(it){
+        if(askable(it) && isAppField(itemFieldOf(it,g))) out.push({ u:u, g:g, it:it });
+      });
+    });
+  });
+  return out;
+}
+function appIndex(){ var m={}; appAllItems().forEach(function(x){ m[x.it.id]=x; }); return m; }
+
+/* 配点比で割り振る（最大剰余法）。20問なら 読み6・漢字えらび4・じゅく語作り4・音訓4・画数2 */
+function appQuota(n){
+  var fs=FIELDS.filter(function(f){ return isAppField(f.key); });
+  var tot=fs.reduce(function(a,f){ return a+f.points; },0), q={}, used=0;
+  var rem=fs.map(function(f){
+    var raw=n*f.points/tot; q[f.key]=Math.floor(raw); used+=q[f.key];
+    return { k:f.key, r:raw-Math.floor(raw), p:f.points };
+  }).sort(function(a,b){ return (b.r-a.r)||(b.p-a.p); });
+  for(var i=0; used<n; i++, used++) q[rem[i%rem.length].k]++;
+  return q;
+}
+
+function composeApp(){
+  var all=appAllItems();
+  var retry=all.filter(function(x){ var r=ITEMS[x.it.id]; return r && r.last==="x"; }).slice(0,APP_TARGET);
+  var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
+  var left=APP_TARGET-retry.length, cand={};
+  APP_FIELDS.forEach(function(f){ cand[f]=[]; });
+  all.forEach(function(x){ if(!ex[x.it.id] && !ITEMS[x.it.id]) cand[itemFieldOf(x.it,x.g)].push(x); });
+  var q=appQuota(left), take={}, n=0;
+  APP_FIELDS.forEach(function(f){ take[f]=Math.min(q[f]||0, cand[f].length); n+=take[f]; });
+  APP_FIELDS.forEach(function(f){
+    var more=Math.min(left-n, cand[f].length-take[f]);
+    if(more>0){ take[f]+=more; n+=more; }
+  });
+  var out=retry.slice();
+  APP_FIELDS.forEach(function(f){ out=out.concat(cand[f].slice(0,take[f])); });
+  return out;
+}
+
+/* 並べ替え（Math.random）。★前回と同じ並びを避けたいときは avoid を渡す */
+function randPerm(n, avoid){
+  var base=[]; for(var i=0;i<n;i++) base.push(i);
+  for(var t=0;t<20;t++){
+    var a=shuffle(base, Math.random);
+    if(n<2 || !avoid || avoid.join()!==a.join()) return a;
+  }
+  return base.slice(1).concat([0]);   // 20回とも同じだった場合（n>=2 なら必ず違う並び）
+}
+
+/* きょうのアプリの問題（その日のうちは固定） */
+function todayApp(){
+  if(!bookLoaded()) return null;
+  if(APP_S && APP_S.v===1 && APP_S.date===todayStr()) return APP_S;
+  var xs=composeApp();
+  if(!xs.length) return null;
+  var ids=shuffle(xs.map(function(x){ return x.it.id; }), Math.random);   // ★出題順を並べ替える
+  var ord={};
+  xs.forEach(function(x){
+    var f=itemFieldOf(x.it,x.g), ch=x.it.choices||[];
+    if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0 && ch.length>1){
+      ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);   // ★前回と同じ並びにしない
+    }
+  });
+  APP_S={ v:1, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{} };
+  save(K_APP,APP_S);
+  return APP_S;
+}
+
+/* 選択肢「イ 標」の中身（「標」）。**判定は中身で行う**（並べ替えると記号がずれるため） */
+function choiceBody(c){ return String(c).replace(/^[ア-ンァ-ヶ]\s+/,""); }
+/* 音訓の選択肢に、指示文にある意味を添える（「ア」だけでは何のことか分からない）。
+   ⚠️ 指示文に「音読み（ア）」「訓読み（イ）」と書いてあるときだけ。無ければ記号のまま */
+function onkunLabel(c, g){
+  var t=bookNote(g.instruction)||"";
+  if(c==="ア" && t.indexOf("音読み（ア）")>=0) return "ア　音読み";
+  if(c==="イ" && t.indexOf("訓読み（イ）")>=0) return "イ　訓読み";
+  return c;
+}
+/* 問題文にルビを付ける（音訓の「好（こう）」など。読みが分からないと答えられない） */
+function withRuby(html, ruby){
+  (ruby||[]).forEach(function(r){
+    if(!r || !r.base || !r.yomi) return;
+    var nth=r.nth||1, idx=-1;
+    for(var i=0;i<nth;i++){ idx=html.indexOf(r.base, idx+1); if(idx<0) break; }
+    if(idx>=0) html=html.slice(0,idx)+"<ruby>"+r.base+"<rt>"+r.yomi+"</rt></ruby>"+html.slice(idx+r.base.length);
+  });
+  return html;
+}
+
+function renderApp(){
+  var box=document.getElementById("ap-box"); if(!box) return;
+  if(!bookLoaded()){ box.innerHTML='<span class="muted">本の問題を読みこむと出ます。</span>'; return; }
+  var s=todayApp();
+  if(!s){ box.innerHTML='<span class="muted">きょうアプリでやる問題はありません（照合が済んだ単元だけ出しています）。</span>'; return; }
+  var idx=appIndex();
+  // 途中で照合が取り下げられた問題は飛ばす
+  while(s.pos<s.ids.length && !idx[s.ids[s.pos]]) s.pos++;
+  if(s.pos>=s.ids.length){
+    var n=0, o=0;
+    s.ids.forEach(function(id){ if(s.res[id]){ n++; if(s.res[id].ok) o++; } });
+    box.innerHTML='<div style="text-align:center;padding:10px 0">'
+      +'<div style="font-size:1.3rem;font-weight:800;color:var(--good)">きょうの アプリの問題 おわり！</div>'
+      +'<div class="muted" style="margin-top:6px">'+n+' 問やって、'+o+' 問 できたよ。'
+      +(n-o? '<br>できなかった問題は、あした もう一回出るよ。' : '')+'</div></div>';
+    return;
+  }
+  var id=s.ids[s.pos], x=idx[id], it=x.it, f=itemFieldOf(it,x.g), fd=fieldOf(f);
+  var st=s.step[id]||{}, res=s.res[id];
+  var html='<div class="ky-prog"><span>'+(s.pos+1)+' / '+s.ids.length+'</span>'
+    +'<span class="muted" style="font-size:.75rem">'+(fd?fd.name:"")+'　'+bookCite(x)+'</span></div>'
+    +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(bookNote(x.g.instruction)||"")+'</div>'
+    +'<div class="ap-q">'+withRuby(bookQuestionText(it), it.ruby)+'</div>';
+  var ans=it.answers||[];
+
+  if(f==="yomi"){
+    // ★答えを見せてから申告させる（先に押させると、違っていても「読めた」で通る）
+    if(!st.shown && !res){
+      html+='<button class="btn" data-act="show">こたえを見る</button>';
+    }else{
+      html+='<div class="ap-ans">こたえ：<b>'+ans.map(function(a){return a.text;}).join("・")+'</b></div>';
+      if(!res){
+        html+='<div class="ap-row"><button class="ky-btn know" data-act="yomi-o">読めた</button>'
+          +'<button class="ky-btn unsure" data-act="yomi-x">読めなかった</button></div>';
+      }
+    }
+  }else if(f==="kakusu"){
+    if(!res){
+      html+='<div class="ap-row"><input type="text" id="ap-num" inputmode="numeric" pattern="[0-9]*" '
+        +'style="font-size:1.4rem;width:5em;padding:8px;text-align:center" placeholder="すうじ">'
+        +'<button class="btn" style="width:auto;padding:10px 20px" data-act="num">こたえる</button></div>';
+    }
+  }else{
+    // 記号で答える問題（漢字えらび・じゅく語作り・音訓）
+    var ch=it.choices||[], ord=s.ord[id]||ch.map(function(_,i){return i;});
+    var slotN=ans.length, picked=st.picked||[];
+    var cur=picked.length;   // いま何番目の空らんを選んでいるか（じゅく語作りは2つ）
+    if(slotN>1){
+      html+='<div class="ap-slots">'+ans.map(function(a,i){
+        return '<span class="ap-slot'+(i===cur&&!res?" on":"")+'">'+String(a.around||"").replace("□",
+          '<b>'+(picked[i]!==undefined?choiceBody(ch[picked[i]]):"□")+'</b>')+'</span>';
+      }).join("")+'</div>';
+    }
+    if(!res){
+      html+='<div class="ap-row">'+ord.map(function(ci){
+        var c=ch[ci], lab=(f==="onkun")?onkunLabel(c,x.g):(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0?choiceBody(c):c);
+        return '<button class="ky-btn" data-act="pick" data-ci="'+ci+'">'+lab+'</button>';
+      }).join("")+'</div>';
+    }
+  }
+  if(res){
+    var right=ans.map(function(a){ return (f==="onkun")?onkunLabel(a.text,x.g):choiceBody(a.text); }).join("・");
+    html+='<div class="ky-fb '+(res.ok?"ok":"ng")+'">'+(res.ok?"◯ せいかい！":"✕ こたえは "+right)+'</div>'
+      +'<button class="btn" data-act="next">つぎへ</button>';
+  }
+  box.innerHTML=html;
+  Array.prototype.forEach.call(box.querySelectorAll("[data-act]"), function(b){
+    b.onclick=function(){ appAct(b.dataset.act, b.dataset.ci); };
+  });
+  var num=document.getElementById("ap-num");
+  if(num) num.onkeydown=function(e){ if(e.key==="Enter") appAct("num"); };
+}
+
+function appAct(act, ci){
+  var s=APP_S; if(!s) return;
+  var idx=appIndex(), id=s.ids[s.pos], x=idx[id]; if(!x) return;
+  var it=x.it, f=itemFieldOf(it,x.g), ans=it.answers||[];
+  var st=s.step[id]||(s.step[id]={});
+  if(act==="next"){ s.pos++; save(K_APP,s); renderApp(); return; }
+  if(s.res[id]) return;   // 1問に1回だけ
+  var perKanji=null;      // 字ごとの正誤（じゅく語作りは空らんごと）
+  if(act==="show"){ st.shown=true; save(K_APP,s); renderApp(); return; }
+  if(act==="yomi-o"||act==="yomi-x"){
+    if(!st.shown) return;   // ★答えを見る前には押せない
+    perKanji=(it.kanji||[]).map(function(){ return act==="yomi-o"; });
+  }else if(act==="num"){
+    var v=(document.getElementById("ap-num")||{}).value||"";
+    v=v.replace(/[０-９]/g,function(d){ return String.fromCharCode(d.charCodeAt(0)-0xFEE0); }).trim();
+    if(!/^\d+$/.test(v)) return;
+    var ok=(String(parseInt(v,10))===String(parseInt(ans[0].text,10)));
+    st.given=v;
+    perKanji=(it.kanji||[]).map(function(){ return ok; });
+  }else if(act==="pick"){
+    st.picked=(st.picked||[]).concat([parseInt(ci,10)]);
+    if(st.picked.length<ans.length){ save(K_APP,s); renderApp(); return; }
+    var ch=it.choices||[];
+    // ★判定は中身で。記号（ア・イ）では比べない（並べ替えると記号がずれる）
+    var slotOk=ans.map(function(a,i){ return choiceBody(ch[st.picked[i]])===choiceBody(a.text); });
+    perKanji=(it.kanji||[]).map(function(k,i){ return ans.length>1 ? !!slotOk[i] : slotOk[0]; });
+  }
+  if(!perKanji) return;
+  var allOk=perKanji.every(function(v){return v;}) && perKanji.length>0;
+  s.res[id]={ ok:allOk };
+  appRecord(id, f, it.kanji||[], perKanji, allOk, s.ord[id]);
+  save(K_APP,s);
+  renderApp();
+}
+
+/* 記録（紙の saveSheetResult と同じ置き場所）。✕の問題は次の日また出る */
+function appRecord(id, f, kanji, perKanji, allOk, ord){
+  kanji.forEach(function(k,i){
+    var ok=perKanji[i];
+    if(!KSTATS[k]) KSTATS[k]={};
+    var st=KSTATS[k][f]||(KSTATS[k][f]={o:0,x:0});
+    if(ok){
+      st.o++; st.run=(st.run||0)+1;
+      if(WEAK[k] && !WEAK[k].got){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false; }
+    }else{
+      st.x++; st.run=0;
+      if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
+      WEAK[k].wrong++; WEAK[k].got=false; WEAK[k].lastAt=Date.now();
+    }
+  });
+  var r=ITEMS[id]||(ITEMS[id]={o:0,x:0});
+  if(allOk) r.o++; else r.x++;
+  r.last=allOk?"o":"x"; r.date=todayStr();
+  if(ord) r.ord=ord.slice();   // ★次に出すとき、同じ並びにしないため
+  SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  save(K_ITEMS,ITEMS); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET);
+}
 
 /* BOX_SHRINK … 1枚に収めるために、書くマスを何mm小さくするか（printSessionPractice が実測して決める）。
    ⚠️ 8mm より小さくはしない（漢字1字が書けなくなる） */
@@ -1204,7 +1468,8 @@ function renderSheet(blocks, page, pages){
               }).join("")+"</span>";
         }
         if(row.note){
-          hint+="<br><span style='font-size:7.5pt;color:#666'>※"+row.note+"</span>";
+          // ★「注意」は解くときの手がかりになる（dr_25 の問20 など）ので、読める濃さにする（claude-e0 の指摘）
+          hint+="<br><span style='font-size:8pt;color:#444'>※"+row.note+"</span>";
         }
         // ★空らんが複数ある問題は、**書くマスもその数だけ**出す。
         //   1つしか出さないと、3つ答える問題なのに書く場所が1つしかない
@@ -1687,7 +1952,7 @@ function printPractice(){
   window.print();
 }
 
-function renderAll(){ renderOuen(); renderKyou(); renderKiroku(); renderSetei();
+function renderAll(){ renderOuen(); renderKyou(); renderApp(); renderKiroku(); renderSetei();
                       renderQuizBox(); renderProgress(); renderKirokuProgress(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */

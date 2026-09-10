@@ -90,7 +90,7 @@ const setup = await page.evaluate(() => {
     for (let i = 1; i <= n; i++) {
       const k = pool[ki++ % pool.length];
       items.push({ id: "q_test_" + uid + "_" + i, no: i, text: "ダミー問題 " + uid + "-" + i,
-                   answers: [{ text: "ダミー答え" + i }], kanji: [k], field });
+                   answers: [{ text: "ダミー答え" + i }], kanji: [k] });   // ★本物と同じく field は group にだけ持たせる
     }
     return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3)) || 1],
              groups: [{ gno: 0, field, instruction: "ダミーの指示文（" + uid + "）", items }] };
@@ -166,7 +166,7 @@ const mix = await page.evaluate(() => {
                              window.__mk("dr_19", 10, "kakusu")]);
   window.isVerifiedUnit = () => true;
   ITEMS = {};
-  const c = {}; composeSheet().forEach(x => { const f = x.it.field; c[f] = (c[f] || 0) + 1; });
+  const c = {}; composeSheet().forEach(x => { const f = itemFieldOf(x.it, x.g); c[f] = (c[f] || 0) + 1; });
   const q = paperQuota(20);
   BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; SESSION = keepS; ITEMS = keepI;
   return { c, q };
@@ -324,7 +324,7 @@ await page.evaluate(() => {
       items.push({ id: "q_long_" + uid + "_" + i, no: i, text: long(len - (i % 3)),
                    answers: ks.map((k, j) => ({ text: "こたえ" + j, around: nAns > 1 ? "□" : null })),
                    ruby: nAns > 1 ? ks.map(() => ({ yomi: "よみ" })) : [],
-                   kanji: ks, field, note: (noteLen && i % 5 === 0) ? long(noteLen) : null });
+                   kanji: ks, note: (noteLen && i % 5 === 0) ? long(noteLen) : null });
     }
     return { unitId: uid, mat, srcPages: pages, groups: [{ gno: 0, field,
              instruction: { text: long(40), ruby: [] }, items }] };
@@ -349,6 +349,134 @@ await measurePaper("✕の問題が5単元から来た日（見出しが多い�
   ["dr_08", "dr_09", "dr_10", "dr_25", "tn_08"].forEach(u => [1, 2, 3, 4].forEach(i => { ITEMS["q_long_" + u + "_" + i] = { o: 0, x: 1, last: "x" }; }));
   window.__day = "2099-06-02";
 });
+
+console.log("\n=== アプリでやる問題（読み・記号・画数） ===");
+// ダミー: 読み15・漢字えらび10・じゅく語作り10・音訓10・画数10（すべて本の形式どおりの形）
+await page.evaluate(() => {
+  const pool = KANJI_MASTER.map(r => r.k); let ki = 0;
+  const KANA = ["ア", "イ", "ウ", "エ", "オ"];
+  function mkA(uid, n, field) {
+    const items = [];
+    for (let i = 1; i <= n; i++) {
+      const it = { id: "q_app_" + uid + "_" + i, no: i, ruby: [], text: "アプリのダミー " + uid + "-" + i };
+      if (field === "yomi") { it.answers = [{ text: "よみ" + i }]; it.kanji = [pool[ki++ % pool.length]]; }
+      if (field === "kakusu") { it.text = pool[ki % pool.length]; it.answers = [{ text: String(3 + (i % 9)) }]; it.kanji = [pool[ki++ % pool.length]]; }
+      if (field === "erabi") {
+        const cs = [0, 1, 2].map(j => pool[ki + j]); ki += 3;
+        it.choices = cs.map((c, j) => KANA[j] + " " + c); it.answers = [{ text: it.choices[i % 3] }]; it.kanji = [cs[i % 3]];
+      }
+      if (field === "jukugo") {
+        const cs = [0, 1, 2, 3, 4].map(j => pool[ki + j]); ki += 5;
+        it.text = "□" + pool[ki] + "・" + pool[ki] + "□";
+        it.choices = cs.map((c, j) => KANA[j] + " " + c);
+        it.answers = [{ text: it.choices[4], around: "□" + pool[ki] }, { text: it.choices[1], around: pool[ki] + "□" }];
+        it.kanji = [cs[4], cs[1]];
+      }
+      if (field === "onkun") {
+        it.text = pool[ki % pool.length]; it.ruby = [{ base: it.text, yomi: "よみ", nth: 1 }];
+        it.choices = ["ア", "イ"]; it.answers = [{ text: i % 2 ? "ア" : "イ" }]; it.kanji = [pool[ki++ % pool.length]];
+      }
+      items.push(it);
+    }
+    const ins = field === "onkun" ? "次の漢字の読みは、音読み（ア）ですか、訓読み（イ）ですか。記号で答えなさい。" : "ダミーの指示文（" + uid + "）";
+    return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3))], groups: [{ gno: 0, field, instruction: { text: ins, ruby: [] }, items }] };
+  }
+  window.__appUnits = [mkA("dr_01", 15, "yomi"), mkA("dr_17", 10, "erabi"), mkA("dr_19", 10, "kakusu"),
+                       mkA("dr_20", 10, "onkun"), mkA("dr_54", 10, "jukugo")];
+  BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; APP_S = null;
+  window.__day = "2099-07-01"; window.__genCalls = [];
+  renderAll();
+});
+await page.click('.tab[data-page="kyou"]');
+
+// いま出ている問題に答える（ok=true なら正解を、false ならまちがいを選ぶ）。画面のボタンを押す
+async function answerCurrent(okWanted) {
+  return await page.evaluate((okWanted) => {
+    const s = APP_S, id = s.ids[s.pos], x = appIndex()[id], it = x.it, f = itemFieldOf(it, x.g);
+    const box = document.getElementById("ap-box");
+    const btn = (sel) => box.querySelector(sel);
+    const info = { id, f, before: box.innerText };
+    if (f === "yomi") {
+      info.hadSelfBeforeShow = !!btn('[data-act="yomi-o"]');
+      btn('[data-act="show"]').click();
+      info.answerShown = document.getElementById("ap-box").innerText.includes(it.answers[0].text);
+      document.getElementById("ap-box").querySelector(okWanted ? '[data-act="yomi-o"]' : '[data-act="yomi-x"]').click();
+    } else if (f === "kakusu") {
+      const want = parseInt(it.answers[0].text, 10);
+      // ★全角で入れても読めること
+      document.getElementById("ap-num").value = String(okWanted ? want : want + 1).replace(/\d/g, d => String.fromCharCode(d.charCodeAt(0) + 0xFEE0));
+      btn('[data-act="num"]').click();
+    } else {
+      info.labels = [...box.querySelectorAll('[data-act="pick"]')].map(b => b.textContent);
+      it.answers.forEach((a, i) => {
+        const b2 = document.getElementById("ap-box");
+        const btns = [...b2.querySelectorAll('[data-act="pick"]')];
+        const body = choiceBody(a.text);
+        const target = okWanted ? btns.find(b => choiceBody(it.choices[+b.dataset.ci]) === body)
+                                : btns.find(b => choiceBody(it.choices[+b.dataset.ci]) !== body);
+        target.click();
+      });
+    }
+    info.res = APP_S.res[id];
+    info.fb = document.getElementById("ap-box").innerText;
+    document.getElementById("ap-box").querySelector('[data-act="next"]').click();
+    return info;
+  }, okWanted);
+}
+const a1 = await page.evaluate(() => {
+  const s = todayApp(); const c = {};
+  s.ids.forEach(id => { const y = appIndex()[id]; const f = itemFieldOf(y.it, y.g); c[f] = (c[f] || 0) + 1; });
+  return { n: s.ids.length, c, allBook: s.ids.every(id => /^q_app_/.test(id)), q: appQuota(20),
+           ordErabi: s.ids.filter(id => /dr_17/.test(id)).map(id => (s.ord[id] || []).join("")),
+           ordOnkun: s.ids.filter(id => /dr_20/.test(id)).map(id => s.ord[id]) };
+});
+ok("アプリの問題は20問", a1.n === 20, String(a1.n));
+ok("★アプリの問題は全部、本の問題", a1.allBook);
+ok("★配点比 読み6・漢字えらび4・じゅく語作り4・音訓4・画数2",
+   a1.c.yomi === 6 && a1.c.erabi === 4 && a1.c.jukugo === 4 && a1.c.onkun === 4 && a1.c.kakusu === 2, JSON.stringify(a1.c));
+ok("★音訓は選択肢を並べ替えない", a1.ordOnkun.every(o => o === undefined), JSON.stringify(a1.ordOnkun));
+
+const log = [];
+for (let i = 0; i < 20; i++) log.push(await answerCurrent(i % 3 !== 0));   // 3問に1問はまちがえる
+const yomiLog = log.filter(l => l.f === "yomi");
+ok("★読み: 答えを見る前に「読めた／読めなかった」は押せない（ボタンが無い）", yomiLog.length > 0 && yomiLog.every(l => !l.hadSelfBeforeShow));
+ok("★読み: 「こたえを見る」で答えが出る", yomiLog.every(l => l.answerShown));
+ok("読み: 押したとおりに記録される", yomiLog.every((l, i) => l.res && typeof l.res.ok === "boolean"));
+const pickLog = log.filter(l => l.f === "erabi" || l.f === "jukugo");
+ok("★記号: 正解の中身を選べば〇・ちがう中身なら✕（記号ではなく中身で判定）",
+   log.every((l, i) => l.res && l.res.ok === (i % 3 !== 0)), log.map(l => l.f + ":" + (l.res && l.res.ok)).join(" "));
+ok("記号（漢字えらび・じゅく語作り）: ボタンに記号（ア・イ）を出していない（並べ替えると記号がずれるため中身だけ）",
+   pickLog.every(l => l.labels.every(t => !/^[ア-オ]\s/.test(t))), pickLog.map(l => l.labels.join("/")).slice(0, 2).join(" | "));
+const onLog = log.filter(l => l.f === "onkun");
+ok("★音訓: 選択肢はア（音読み）→イ（訓読み）の順のまま", onLog.every(l => l.labels.join("/") === "ア　音読み/イ　訓読み"), onLog.map(l => l.labels.join("/")).join(" | "));
+ok("★音訓: 問題の字にルビ（読み）が出ている", onLog.every(l => /よみ/.test(l.before)));
+ok("画数: 数字（全角でも）で答えられる", log.filter(l => l.f === "kakusu").every(l => l.res));
+const end1 = await page.evaluate(() => document.getElementById("ap-box").innerText);
+ok("20問おわると「おわり」になる", /おわり/.test(end1), end1.slice(0, 40));
+ok("★「書ける」「あやしい」は出ていない", !log.some(l => /書ける|あやしい/.test(l.before + l.fb)));
+
+// 2日目
+const xIds = log.filter(l => l.res && !l.res.ok).map(l => l.id), oIds = log.filter(l => l.res && l.res.ok).map(l => l.id);
+const a2 = await page.evaluate((xIds) => {
+  const before = {}; xIds.forEach(id => { before[id] = (APP_S.ord[id] || []).join(""); });
+  window.__day = "2099-07-02"; renderAll();
+  const s = todayApp();
+  return { ids: s.ids, sameOrd: xIds.filter(id => before[id] && s.ord[id] && s.ord[id].join("") === before[id]) };
+}, xIds);
+ok("★前日に✕だった問題が、翌日また出る", xIds.every(id => a2.ids.includes(id)), `${xIds.length}問`);
+ok("★前日に〇だった問題は、翌日出ない", !oIds.some(id => a2.ids.includes(id)));
+ok("★記号: 同じ問題を2回目に出したとき、選択肢の並びが前回と同じではない", a2.sameOrd.length === 0, a2.sameOrd.join(","));
+const gen3 = await page.evaluate(() => window.__genCalls.slice());
+ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
+
+if (SHOT) {
+  const out = path.join(os.tmpdir(), "kanken_shot");
+  await page.setViewportSize({ width: 420, height: 900 });
+  await page.evaluate(() => { APP_S = null; ITEMS = {}; window.__day = "2099-08-01"; renderAll();
+    document.getElementById("ap-card").scrollIntoView(); });
+  await page.screenshot({ path: path.join(out, "app_q.png"), fullPage: true });
+}
 
 ok("最後までJSエラーが無い", errors.length === 0, errors.join(" | "));
 
