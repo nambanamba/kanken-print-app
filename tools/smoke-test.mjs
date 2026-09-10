@@ -426,6 +426,8 @@ await page.evaluate(() => {
       }
       items.push(it);
     }
+    // 画数は、本と同じく「図が要る問題（何画目）」を1問まぜる（アプリには出ない）
+    if (field === "kakusu") items.push({ id: "q_app_" + uid + "_fig", no: 99, ruby: [], text: pool[0], needsFigure: true, answers: [{ text: "3" }], kanji: [pool[0]] });
     const ins = field === "onkun" ? "次の漢字の読みは、音読み（ア）ですか、訓読み（イ）ですか。記号で答えなさい。" : "ダミーの指示文（" + uid + "）";
     return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3))], groups: [{ gno: 0, field, instruction: { text: ins, ruby: [] }, items }] };
   }
@@ -494,8 +496,13 @@ ok("読み: 押したとおりに記録される", yomiLog.every((l, i) => l.res
 const pickLog = log.filter(l => l.f === "erabi" || l.f === "jukugo");
 ok("★記号: 正解の中身を選べば〇・ちがう中身なら✕（記号ではなく中身で判定）",
    log.every((l, i) => l.res && l.res.ok === (i % 3 !== 0)), log.map(l => l.f + ":" + (l.res && l.res.ok)).join(" "));
-ok("記号（漢字えらび・じゅく語作り）: ボタンに記号（ア・イ）を出していない（並べ替えると記号がずれるため中身だけ）",
-   pickLog.every(l => l.labels.every(t => !/^[ア-オ]\s/.test(t))), pickLog.map(l => l.labels.join("/")).slice(0, 2).join(" | "));
+ok("★記号（漢字えらび・じゅく語作り）: ボタンの記号は、画面の並び順に ア・イ・ウ… と振り直してある（本の記号を持ち回らない）",
+   pickLog.length > 0 && pickLog.every(l => l.labels.every((t, i) => t.startsWith("アイウエオ"[i] + "　"))),
+   pickLog.map(l => l.labels.join("/")).slice(0, 2).join(" | "));
+const kkLog = log.filter(l => l.f === "kakusu");
+ok("★図が要る問題を外した組では「図が要る問題はアプリでは出ません」と出す（指示文が出ていない問を指すため）",
+   kkLog.length > 0 && kkLog.every(l => /図が要る問題は、アプリでは出ません/.test(l.before)));
+ok("図が要る問題の無い組では、その一言を出さない", log.filter(l => l.f !== "kakusu").every(l => !/図が要る問題/.test(l.before)));
 const onLog = log.filter(l => l.f === "onkun");
 ok("★音訓: 選択肢はア（音読み）→イ（訓読み）の順のまま", onLog.every(l => l.labels.join("/") === "ア　音読み/イ　訓読み"), onLog.map(l => l.labels.join("/")).join(" | "));
 ok("★音訓: 問題の字にルビ（読み）が出ている", onLog.every(l => /よみ/.test(l.before)));

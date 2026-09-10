@@ -897,6 +897,17 @@ function onkunLabel(c, g){
   if(c==="イ" && t.indexOf("訓読み（イ）")>=0) return "イ　訓読み";
   return c;
 }
+/* ★記号で答える問題のボタンの文字。
+   ・並べ替える型（漢字えらび・じゅく語作り）… **並べた順に ア・イ・ウ… を振り直す**（「ア 票」「イ 標」…）。
+     ⚠️ 本の記号をそのまま付けると、並びが変わっても「標＝イ」が付いて回り、**記号の丸暗記で当たる**。
+        指示文が「記号で書きなさい」なので記号は出すが、その記号は**画面の並び**を指す。**判定は中身**（choiceBody）
+   ・音訓 … 並べ替えないので、本の記号のまま（onkunLabel） */
+var KANA_LABELS=["ア","イ","ウ","エ","オ","カ","キ","ク"];
+function appChoiceLabel(f, ch, ord, ci, g){
+  if(f==="onkun") return onkunLabel(ch[ci], g);
+  if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0) return (KANA_LABELS[ord.indexOf(ci)]||"")+"　"+choiceBody(ch[ci]);
+  return ch[ci];
+}
 /* 問題文にルビを付ける（音訓の「好（こう）」など。読みが分からないと答えられない） */
 function withRuby(html, ruby){
   (ruby||[]).forEach(function(r){
@@ -929,7 +940,11 @@ function renderApp(){
   var st=s.step[id]||{}, res=s.res[id];
   var html='<div class="ky-prog"><span>'+(s.pos+1)+' / '+s.ids.length+'</span>'
     +'<span class="muted" style="font-size:.75rem">'+(fd?fd.name:"")+'　'+bookCite(x)+'</span></div>'
-    +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(bookNote(x.g.instruction)||"")+'</div>'
+    +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(bookNote(x.g.instruction)||"")
+    // ★指示文が、アプリに出していない問（図が要る問）を指していることがある（dr_19 の「1〜13」。claude-e0 の指摘）
+    +((x.g.items||[]).some(function(i){ return i.needsFigure; })
+      ? '<br><b>※ 図が要る問題は、アプリでは出ません（本でやってね）。</b>' : '')
+    +'</div>'
     // 漢字1〜2字だけの問題（音訓・画数）は大きく出す
     +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'">'+withRuby(bookQuestionText(it), it.ruby)+'</div>';
   var ans=it.answers||[];
@@ -963,14 +978,18 @@ function renderApp(){
       }).join("")+'</div>';
     }
     if(!res){
-      html+='<div class="ap-row">'+ord.map(function(ci){
-        var c=ch[ci], lab=(f==="onkun")?onkunLabel(c,x.g):(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0?choiceBody(c):c);
-        return '<button class="ky-btn" data-act="pick" data-ci="'+ci+'">'+lab+'</button>';
+      html+='<div class="ap-row">'+ord.map(function(ci,pos){
+        return '<button class="ky-btn" data-act="pick" data-ci="'+ci+'">'+appChoiceLabel(f,ch,ord,ci,x.g)+'</button>';
       }).join("")+'</div>';
     }
   }
   if(res){
-    var right=ans.map(function(a){ return (f==="onkun")?onkunLabel(a.text,x.g):choiceBody(a.text); }).join("・");
+    var right=ans.map(function(a){
+      if(f==="onkun") return onkunLabel(a.text,x.g);
+      var ch2=it.choices||[], ord2=s.ord[id]||ch2.map(function(_,i){return i;});
+      var ci=ch2.map(choiceBody).indexOf(choiceBody(a.text));
+      return ci>=0 ? appChoiceLabel(f,ch2,ord2,ci,x.g) : choiceBody(a.text);
+    }).join("・");
     html+='<div class="ky-fb '+(res.ok?"ok":"ng")+'">'+(res.ok?"◯ せいかい！":"✕ こたえは "+right)+'</div>'
       +'<button class="btn" data-act="next">つぎへ</button>';
   }
