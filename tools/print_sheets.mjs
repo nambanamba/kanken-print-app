@@ -105,7 +105,8 @@ for (const u of want) {
     } else {
       // その単元の（照合ずみ・紙に出せる）問題だけで1日ぶんの紙を作る。**localStorage には保存しない**
       const ids = bookAllItems().filter(x => x.u.unitId === u).map(x => x.it.id);
-      window.SESSION = { v: 2, date: todayStr(), ids, results: {}, saved: false, _tool: true };
+      // ⚠️ 紙に出るのは「手で書く分野」だけ（読み・記号・画数はアプリ側）。読みの単元は0枚になるのが正しい
+      window.SESSION = { v: SHEET_VERSION, date: todayStr(), ids, results: {}, saved: false, _tool: true };
     }
     printSessionPractice();
     window.SESSION = window.__sessionOrig;

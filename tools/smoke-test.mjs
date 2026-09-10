@@ -83,7 +83,6 @@ const setup = await page.evaluate(() => {
     });
   window.print = () => { window.__printed = (window.__printed || 0) + 1; };
 
-  const units = [...new Set(PLAN.map(c => c.unit))].slice(0, 3);
   const pool = KANJI_MASTER.map(r => r.k);
   let ki = 0;
   function mk(uid, n, field) {
@@ -96,13 +95,13 @@ const setup = await page.evaluate(() => {
     return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3)) || 1],
              groups: [{ gno: 0, field, instruction: "ダミーの指示文（" + uid + "）", items }] };
   }
-  // かたまりの範囲に合わせて問数を取る（範囲外の問は出ないので）
-  const n0 = PLAN.filter(c => c.unit === units[0]).reduce((a, c) => Math.max(a, c.to), 0);
-  const n1 = PLAN.filter(c => c.unit === units[1]).reduce((a, c) => Math.max(a, c.to), 0);
-  const n2 = PLAN.filter(c => c.unit === units[2]).reduce((a, c) => Math.max(a, c.to), 0);
-  BOOK_UNITS = [mk(units[0], n0, "kaki"), mk(units[1], n1, "yomi"), mk(units[2], n2, "kaki")];
-  window.__unverified = units[2];
-  window.isVerifiedUnit = (id) => id !== units[2];
+  // 照合ずみ: 書き取り15・部首10（紙の分野）＋読み15（★アプリ側。紙に出たら失敗）
+  // 未照合  : 書き取り15（紙に出たら失敗）
+  const units = ["dr_08", "dr_25", "dr_09"], n0 = 15, n1 = 10, n2 = 15;
+  window.__mk = mk;
+  BOOK_UNITS = [mk("dr_01", 15, "yomi"), mk("dr_08", n0, "kaki"), mk("dr_09", n2, "kaki"), mk("dr_25", n1, "bushu")];
+  window.__unverified = "dr_09";
+  window.isVerifiedUnit = (id) => id !== "dr_09";
   // 状態をまっさらに
   RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
   window.__day = "2099-01-01";
@@ -140,6 +139,8 @@ const d1 = await page.evaluate(() => {
     nos: trs.map(tr => tr.querySelector(".p-no").textContent.trim()),
     allBook: blocks.every(b => b.src === "book") && rows.every(r => /^q_test_/.test(r.id)),
     fromUnverified: rows.filter(r => r.id.indexOf("q_test_" + window.__unverified + "_") === 0).length,
+    yomiOnPaper: rows.filter(r => r.field === "yomi" || r.id.indexOf("q_test_dr_01_") === 0).length,
+    fields: rows.map(r => r.field),
     gen: window.__genCalls.slice(),
     printed: window.__printed || 0,
     kyouList: document.querySelectorAll("#ky-list tr").length
@@ -150,6 +151,33 @@ ok("★1日の紙は20問", d1.n === 20, String(d1.n));
 ok("★紙の問題は全部、本の問題（アプリが作った問題が無い）", d1.allBook);
 ok("★アプリの問題生成が1回も呼ばれていない", d1.gen.length === 0, d1.gen.join(","));
 ok("★照合の通っていない単元の問題が出ていない", d1.fromUnverified === 0, String(d1.fromUnverified));
+ok("★読みの問題が紙に1問も出ていない（読みはアプリ側）", d1.yomiOnPaper === 0, String(d1.yomiOnPaper));
+ok("★紙は手で書く分野だけ（書き取り・部首・同じ読み・送りがな・対義語）",
+   d1.fields.every(f => ["kaki", "bushu", "onaji", "okuri", "taigi"].includes(f)), [...new Set(d1.fields)].join(","));
+ok("出せない分野の枠は、ほかの紙の分野で埋まっている（書き取り15＋部首5）",
+   d1.fields.filter(f => f === "kaki").length === 15 && d1.fields.filter(f => f === "bushu").length === 5,
+   `kaki ${d1.fields.filter(f => f === "kaki").length} / bushu ${d1.fields.filter(f => f === "bushu").length}`);
+
+console.log("\n=== 配点比で混ぜる ===");
+const mix = await page.evaluate(() => {
+  const keepU = BOOK_UNITS, keepV = window.isVerifiedUnit, keepS = SESSION, keepI = ITEMS;
+  BOOK_UNITS = keepU.concat([window.__mk("dr_26", 10, "onaji"), window.__mk("dr_23", 10, "okuri"),
+                             window.__mk("dr_21", 10, "taigi"), window.__mk("dr_17", 10, "erabi"),
+                             window.__mk("dr_19", 10, "kakusu")]);
+  window.isVerifiedUnit = () => true;
+  ITEMS = {};
+  const c = {}; composeSheet().forEach(x => { const f = x.it.field; c[f] = (c[f] || 0) + 1; });
+  const q = paperQuota(20);
+  BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; SESSION = keepS; ITEMS = keepI;
+  return { c, q };
+});
+ok("★配点比の割り振りは 書き取り8・部首4・同じ読み3・送りがな3・対義語2",
+   mix.q.kaki === 8 && mix.q.bushu === 4 && mix.q.onaji === 3 && mix.q.okuri === 3 && mix.q.taigi === 2 &&
+   Object.keys(mix.q).length === 5, JSON.stringify(mix.q));
+ok("★全分野がそろえば、紙はその割り振りどおりに混ざる",
+   mix.c.kaki === 8 && mix.c.bushu === 4 && mix.c.onaji === 3 && mix.c.okuri === 3 && mix.c.taigi === 2,
+   JSON.stringify(mix.c));
+ok("★漢字えらび・画数（アプリ側）は紙に出ない", !mix.c.erabi && !mix.c.kakusu && !mix.c.yomi, JSON.stringify(mix.c));
 ok("★1問ごとに出典が出ている（本の名前・ページ・問番号）",
    d1.cites.length === d1.n && d1.cites.every(c => /^（ドリル p\d+(-\d+)? の \d+）$/.test(c)),
    d1.cites.slice(0, 3).join(" "));
@@ -230,7 +258,7 @@ const bk = await page.evaluate(() => {
   RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
   window.__day = "2099-03-01";
   // 日割りの先頭で使っている字を1つ、「できなかった字」として入れる
-  const x = bookItemsOfChunk(PLAN[0])[3];
+  const x = bookAllItems()[3];
   const k = x.it.kanji[0];
   document.getElementById("b-wrong").value = k;
   saveDidInBook();

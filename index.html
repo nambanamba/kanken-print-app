@@ -283,6 +283,10 @@
     <div class="card">
       <h2>▶️ きょうのぶん</h2>
       <div class="muted" style="margin-bottom:12px" id="ky-info"></div>
+      <div class="muted" style="margin-bottom:10px;font-size:.8rem">
+        紙は<b>手で書く問題だけ</b>です（書き取り・部首・同じ読み・送りがな・対義語）。<br>
+        <b>読み・記号で答える問題・画数は、アプリの画面でやります</b>（いま作っています）。
+      </div>
       <button class="btn" onclick="printToday()">きょうの紙を印刷（A4）</button>
       <div class="muted" style="margin-top:10px">
         紙に書いてもらったら、<b>「きろく」で〇×を入れてください。</b><br>
@@ -808,7 +812,16 @@ function twoCols(list, rowFn){
    ========================================================================= */
 var SHEET_TARGET = 20;   // 1日の問数。本人の希望「毎日20問書く」
 
-/* 照合が通った単元の、紙に出せる問題を全部集める（字から引けるように索引も作る） */
+/* ★紙に出す分野（手で書くもの）。2026-09-11 ユーザー確定:
+     「読み、記号、画数はアプリでやるってしましたよね？それ以外の書きだけで、20問です」
+     紙   … 書き取り40・部首20・同じ読み16・送りがな14・対義語10（＝100点分）
+     アプリ… 読み30・漢字えらび20・じゅく語作り20・音訓20・画数10（紙には1問も出さない）
+   ⚠️ 読みを紙に戻さないこと（「ひらがなで書く」形式だが、ユーザーはアプリ側と決めた）。 */
+var PAPER_FIELDS = ["kaki","bushu","onaji","okuri","taigi"];
+function itemFieldOf(it,g){ return it.field||(g&&g.field)||""; }
+function isPaperField(f){ return PAPER_FIELDS.indexOf(f)>=0; }
+
+/* 照合が通った単元の、紙に出せる問題を全部集める（本の順＝単元の並び順） */
 function bookAllItems(){
   var out=[];
   if(!BOOK_UNITS) return out;
@@ -816,11 +829,24 @@ function bookAllItems(){
     if(!isVerifiedUnit(u.unitId)) return;
     (u.groups||[]).forEach(function(g){
       (g.items||[]).forEach(function(it){
-        if(printable(it)) out.push({ u:u, g:g, it:it });
+        if(printable(it) && isPaperField(itemFieldOf(it,g))) out.push({ u:u, g:g, it:it });
       });
     });
   });
   return out;
+}
+
+/* ★紙の問題数を、分野の配点の比で割り振る（最大剰余法）。
+   20問なら 書き取り8・部首4・同じ読み3・送りがな3・対義語2。 */
+function paperQuota(n){
+  var fs=FIELDS.filter(function(f){ return isPaperField(f.key); });
+  var tot=fs.reduce(function(a,f){ return a+f.points; },0), q={}, used=0;
+  var rem=fs.map(function(f){
+    var raw=n*f.points/tot; q[f.key]=Math.floor(raw); used+=q[f.key];
+    return { k:f.key, r:raw-Math.floor(raw), p:f.points };
+  }).sort(function(a,b){ return (b.r-a.r)||(b.p-a.p); });
+  for(var i=0; used<n; i++, used++) q[rem[i%rem.length].k]++;
+  return q;
 }
 
 /* ★問題ごとの記録。{ 問題id: {o, x, last:"o"|"x", date} }
@@ -844,7 +870,7 @@ function bookItemsOfChunk(c){
   var out=[];
   (u.groups||[]).forEach(function(g){
     (g.items||[]).forEach(function(it){
-      if(!printable(it)) return;
+      if(!printable(it) || !isPaperField(itemFieldOf(it,g))) return;
       if(typeof it.no==="number" && (it.no<c.from || it.no>c.to)) return;
       out.push({ u:u, g:g, it:it });
     });
@@ -897,23 +923,47 @@ function bookItemsNew(exclude, limit){
 /* きょう紙に出す問題を組む（×の問題が先。合計20問まで）。
    ★×の問題が多い日は、新しい問題が減る（できていない問題を優先）。
    ⚠️ 20に満たなくても、アプリが作った問題で埋めない。 */
+/* ★紙の組み立て（2026-09-11 司令塔決定「混ぜてください」）
+   1. 前日に✕だった問題を、まず入れる
+   2. 残りを、紙の分野の配点比（paperQuota）で、各分野から**本の順に**取る
+   3. 照合が通っていない分野は、その日は出ない。**その枠は、ほかの紙の分野（本の問題）で埋める。**
+      それでも足りなければ20問に満たなくてよい。
+      ⚠️ 読み・アプリの分野・自動生成では**絶対に埋めない**（叱責の中心）。
+      ★ほかの紙の分野で埋めるのは、ユーザーの「毎日20文字書きます」に合わせるため（私の判断。司令塔に報告ずみ） */
 function composeSheet(){
   var retry=bookItemsForRetry().slice(0, SHEET_TARGET);
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
-  return retry.concat(bookItemsNew(ex, SHEET_TARGET-retry.length));
+  var left=SHEET_TARGET-retry.length, cand={};
+  PAPER_FIELDS.forEach(function(f){ cand[f]=[]; });
+  bookAllItems().forEach(function(x){
+    if(ex[x.it.id] || ITEMS[x.it.id]) return;
+    cand[itemFieldOf(x.it,x.g)].push(x);
+  });
+  var q=paperQuota(left), take={}, n=0;
+  PAPER_FIELDS.forEach(function(f){ take[f]=Math.min(q[f]||0, cand[f].length); n+=take[f]; });
+  // 出せない分野の枠を、ほかの紙の分野で埋める（配点の大きい順）
+  PAPER_FIELDS.forEach(function(f){
+    var more=Math.min(left-n, cand[f].length-take[f]);
+    if(more>0){ take[f]+=more; n+=more; }
+  });
+  var out=retry.slice();
+  PAPER_FIELDS.forEach(function(f){ out=out.concat(cand[f].slice(0,take[f])); });
+  return out;
 }
 
 /* ★きょうの紙は**その日のうちは固定**する。
    ⚠️ 毎回組み直すと、採点を入れた瞬間に「×の問題」が変わり、
       **印刷した紙と「きろく」の並びがずれる。**（紙は1回刷ったら変わらない）
-   SESSION = { v:2, date, ids:[問題id], results:{ "問題id|字": "x" }, saved }
-   ⚠️ 旧形式（前半・申告のころの SESSION）は、同じ日付でも作り直す。 */
+   SESSION = { v:3, date, ids:[問題id], results:{ "問題id|字": "x" }, saved }
+   ⚠️ 旧形式は、同じ日付でも作り直す。
+      v2 は読みが紙に乗っていた（紙とアプリの分離前）ので、v3 に上げて作り直させている。 */
+var SHEET_VERSION = 3;
 function todaySheet(){
   if(!bookLoaded()) return null;
-  if(SESSION && SESSION.v===2 && SESSION.date===todayStr()) return SESSION;
+  if(SESSION && SESSION.v===SHEET_VERSION && SESSION.date===todayStr()) return SESSION;
   var ids=composeSheet().map(function(x){ return x.it.id; });
   if(!ids.length) return null;
-  SESSION={ v:2, date:todayStr(), ids:ids, results:{}, saved:false };
+  SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false };
   save(K_SESSION,SESSION);
   return SESSION;
 }
