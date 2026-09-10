@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漢検7級 いっしょにがんばろう</title>
 <script src="kanken-crypto.js"></script>
+<!-- ★照合が通った単元の一覧。紙に刷ってよいかの判断に使う -->
+<script src="kanken-verified.js"></script>
 <!-- ★本の問題（暗号化ずみ）。**まだ無くてよい。**無ければ本の問題が出ないだけで、
      642字マスタから作る出題・日割り・記録・応援はそのまま動く。 -->
 <script src="kanken-quiz.enc.js"></script>
@@ -132,8 +134,17 @@
        ⚠️ 答えが増えて p-key から溢れると、**折っても答えが見える。**
           そこが唯一の失敗のしかたなので、はみ出しはテストで固定してある
           （p-key の scrollHeight が clientHeight を超えないこと）。 */
-    #print-region{display:flex !important;flex-direction:column;
-                  box-sizing:border-box;height:297mm;padding:14mm 16mm;}
+    /* ★1枚＝1つの .p-sheet。**問題が多い日は複数枚に分ける。**
+       ⚠️ 1枚に詰め込む方向で粘らないこと。実測で、40問は文字を詰めても107px はみ出した。
+          1行あたり約10mmが物理的な下限（書くマス8mm＋読みの手がかり1行）で、
+          折り線の下に答えの欄を62mm取っているため、ここが限界。
+       ★1枚ごとに「問題／折り線／答え」がそろうので、**折り方は毎回同じ。**
+          そのページの答えは、そのページの下にある。 */
+    #print-region{display:block !important;}
+    .p-sheet{display:flex;flex-direction:column;
+             box-sizing:border-box;height:297mm;padding:14mm 16mm;
+             page-break-after:always;break-after:page;}
+    .p-sheet:last-child{page-break-after:auto;break-after:auto;}
     /* ⚠️ ここは overflow:hidden にしない。**隠すと「入りきらない」ことに気づけない。**
        入りきらないなら、それはレイアウトの不具合として見えるべき。
        テストは p-body の scrollHeight が clientHeight を超えないことを見ている */
@@ -149,6 +160,17 @@
           → **段あたりの行数から JS で決める**（boxHeightFor）。CSSの既定は控えめな値にしておく。
           上げ下げしたら **必ず 5/13/20/30/40問でテストし直すこと。** */
     .p-ansbox{height:11mm;}
+    /* ★1問に空らんが複数ある問題（同じ部首・じゅく語作り）は、書くマスを空らんの数だけ並べる */
+    /* ★行が多い日は詰める。**書くマスの高さを下げるだけでは足りない。**
+       実測: 40字（段あたり20行）だと、読みの手がかり（セイ・ショウ・ただしい など）が
+       2行に折り返して 1行 55px になり、マスを8mmにしても 137px はみ出した。
+       → 行が多い日は**文字も詰める**。少ない日はゆったりのまま（読みやすさを優先）。 */
+    .p-tight table.p-tbl td{padding:0.6mm 1.2mm;font-size:9pt;}
+    .p-tight .p-q span{font-size:8.5pt !important;}
+    .p-tight .p-sec{margin:2mm 0 1mm;padding:0.8mm 2mm;}
+    .p-slots{display:flex;gap:1mm;}
+    .p-slot{flex:1 1 0;border:1px solid #999;position:relative;min-width:8mm;}
+    .p-slotlab{position:absolute;top:0.3mm;left:0.6mm;font-size:6.5pt;color:#888;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
     .p-key{flex:0 0 auto;height:42mm;overflow:hidden;box-sizing:border-box;}
@@ -937,20 +959,21 @@ function renderKyouEnd(){
     +"<tr><td>「あやしい」と答えた字</td><td class='num'>"+u.length+"</td></tr></table>";
 }
 
-/* ★問題を2段組みにする。1問1マスにしたので、20問でも1枚に収まる。
-   前半・後半で分けて左右に置く（左が1〜n/2、右が続き）。読む順が上から下で自然になる。 */
 /* ★書くマスの高さを、段あたりの行数から決める。
    行が少ない日は大きく、多い日は小さく。**紙は1枚のまま、折り線の位置も動かさない。**
-   ⚠️ 値を変えたら 5/13/20/30/40問のテストを通すこと（30問・14mmで実際に溢れた）。 */
+   ⚠️ 値を変えたら 5/13/20/30/40問のテストを通すこと（30問・14mmで実際に溢れた。
+      40問で1px溢れて下限をもう1段足した経緯がある）。 */
 function boxHeightFor(rowsPerCol){
   if(rowsPerCol<= 8) return 18;
   if(rowsPerCol<=10) return 15;
   if(rowsPerCol<=12) return 13;
   if(rowsPerCol<=15) return 11;
   if(rowsPerCol<=18) return 9;
-  return 8;   // ★40問(20行/段)で1px溢れたので、下限をもう1段下げた
+  return 8;
 }
 
+/* ★問題を2段組みにする。1問1マスにしたので、20問でも1枚に収まる。
+   前半・後半で分けて左右に置く（左が1〜n/2、右が続き）。読む順が上から下で自然になる。 */
 function twoCols(list, rowFn){
   if(!list.length) return "";
   var half=Math.ceil(list.length/2);
@@ -963,59 +986,196 @@ function twoCols(list, rowFn){
   return '<div class="p-cols">'+tbl(left,0)+tbl(right,half)+'</div>';
 }
 
-/* きょう書く字のプリント（なぞり廃止。1問1マスの2段組み＋折り線の下に答え） */
-function printSessionPractice(){
-  // ★sheet を使う（「あやしい」＋黙って混ぜた検証字）。
-  //   紙の上では両者を区別しない。区別すると、検証字だけ身構えて実力が測れない（12-3）
-  var list=practiceList();
-  if(!list.length){ alert("れんしゅうする字がありません。"); return; }
+/* =========================================================================
+   その日の紙に刷るもの
+   ★ユーザーの指示は「テキストの問題はもれなく入れてください」。
+     紙に刷るものも、本の問題に置き換わっていく。
+   ★「本に直接書けばいい」は成り立たない。本人の希望が
+     「できなかったら、次の日も書く」なので、**同じ問題をもう一度書ける紙**が要る。
+     本に書き込むと1回で消費されて2回目が書けない。
+     → **本は問題の出どころ、紙は書く場所。**
 
-  // ★形式ごとにブロックを分ける（前任が buildSheet に残してくれた考え方の流用）。
-  //   読みを「なぞらせて」も意味がない。**やることが違うので、紙の上でも分ける。**
+   ⚠️ **紙に刷るのは、照合が通った単元だけ**（`kanken-verified.js`）。
+      紙に出た瞬間にお子さんが解くので、読み違いがそのまま
+      「間違った答え」として父親の採点に乗る。
+   ⚠️ **本のデータが無い日は、いままでどおり自動生成で刷る。**
+      いま入っているのは102設問だけなので、**混在した状態で成立すること**が要件。
+   ========================================================================= */
+
+/* その日の単元に対応する、本の問題（照合ずみ・紙に出せるものだけ） */
+function bookItemsForToday(){
+  var t=planToday();
+  if(!t || !BOOK_UNITS) return [];
+  if(!isVerifiedUnit(t.unit)) return [];        // ★照合が通っていない単元は紙に出さない
+  var u=BOOK_UNITS.filter(function(x){ return x.unitId===t.unit; })[0];
+  if(!u) return [];
+  var out=[];
+  (u.groups||[]).forEach(function(g){
+    (g.items||[]).forEach(function(it){
+      if(!printable(it)) return;
+      // ★その日の範囲だけ（日割りが単元を分けている日がある）
+      if(typeof it.no==="number" && (it.no<t.from || it.no>t.to)) return;
+      out.push({ g:g, it:it });
+    });
+  });
+  return out;
+}
+
+/* 紙を「ブロックの配列」に組む。
+   ブロック = { title, ask, rows:[{q, hint, a}] }
+   ★こう分けておくと、本の問題と自動生成が混ざっても、印刷側は同じ扱いで済む。 */
+function buildPaperBlocks(){
+  var blocks=[], usedKanji={};
+
+  // ① 本の問題（あれば）。分野ごとにまとめる
+  var book=bookItemsForToday();
+  var byField={};
+  book.forEach(function(x){
+    var f=x.it.field||x.g.field||"";
+    (byField[f]=byField[f]||{g:x.g, rows:[]}).rows.push(x.it);
+  });
+  Object.keys(byField).forEach(function(f){
+    var b=byField[f], fd=fieldOf(f);
+    blocks.push({
+      title:"■ "+(fd?fd.name:"本のもんだい")+"（本のもんだい）",
+      // ★答えの見出しは短く固定する。紙の指示文をそのまま使うと長くて照らしにくい
+      keyTitle:(fd?fd.name:"本のもんだい")+"の答え",
+      ask:b.g.instruction||FIELD_ASK[f]||"",
+      src:"book",
+      rows:b.rows.map(function(it){
+        (it.kanji||[]).forEach(function(k){ usedKanji[k]=1; });
+        var ans=it.answers||[], ruby=it.ruby||[];
+        return {
+          q: bookQuestionText(it),
+          // ★空らんごとの読み。**まとめて「□＝り・□＝ぜん」と書くと、どの□の読みか分からない。**
+          //   空らんの順＝answers の順＝ruby の順（書式5-6で並び順が固定されている）なので、
+          //   **書くマスの1つ1つに、その空らんの読みを添える。**
+          slots: ans.map(function(a,i){
+            return { yomi:(ruby[i]||{}).yomi||"", around:a.around||"" };
+          }),
+          a: ans.map(function(a){return a.text;}).join("・"),
+          kanji: it.kanji||[], field: f, id: it.id
+        };
+      })
+    });
+  });
+
+  // ② 自動生成で埋める。★本ですでに出した字は出さない（同じ紙に2回・A-1）
+  var list=practiceList().filter(function(k){ return !usedKanji[k]; });
   var kaki=list.filter(function(k){ return sheetFieldOf(k)!=="yomi"; });
   var yomi=list.filter(function(k){ return sheetFieldOf(k)==="yomi"; });
-
-  // ★紙は「問題（p-body）／折り線（p-fold）／答え（p-key）」の3段。
-  //   折り線から下が答えなので、**折り返すと答えが裏側に来る。**
-  var html='<div class="p-body">'
-    +'<div class="p-title">漢検7級　きょう 書く字</div>'
-    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>';
-
-  // ★2026-09-10、**お子さん本人の希望でなぞり練習を廃止した。**
-  //   「練習はなし、毎日20問書く。できたら次の日はやらない。できなかったら、次の日も書く。」
-  //   → 引き継ぎ.md 12章の「できてもできなくても10字なぞって練習する」を撤回するもの。
-  //     **理由が本人の希望なので、次の担当は勝手に戻さないこと。**
-  //   ⚠️ なぞりを外すと、**紙の上から答えが消える。**
-  //      いままでは「なぞる字」が答えを兼ねていた。→ 折り線の下に答えを出す。
-  var kakiKey=[], yomiKey=[];
-  // 段あたりの行数（書き＋読みの合計）から、書くマスの高さを決める
-  var rowsPerCol=Math.ceil(kaki.length/2)+Math.ceil(yomi.length/2);
-  var boxH=boxHeightFor(rowsPerCol)+"mm";
   if(kaki.length){
-    html+='<div class="p-sec">■ 読みかたに合う漢字を書きましょう。'
-      +'<span class="p-ask">（　）は読みです。</span></div>'
-      +twoCols(kaki, function(k,i){
+    blocks.push({ title:"■ 読みかたに合う漢字を書きましょう。", keyTitle:"書きの答え",
+      ask:"（　）は読みです。", src:"gen",
+      rows:kaki.map(function(k){
         var r=MASTER_BY_K[k]||{on:[],kun:[]};
-        var cue=[].concat(r.on||[],r.kun||[]).slice(0,3).join("・");
-        // ★答えの番号は問題の番号と同じ。父親が上から順に照らすだけで済むように
-        kakiKey.push((i+1)+" "+k);
-        // ★書くマスは1問1つ。なぞり練習をやめたので、繰り返し書く枠は要らない
-        return "<tr><td class='p-no'>"+(i+1)+"</td>"
-          +"<td class='p-q'><span style='font-size:9pt'>（"+cue+"）</span></td>"
-          +"<td class='p-ansbox' style='height:"+boxH+"'></td></tr>";
-      });
+        return { q:"", hint:[].concat(r.on||[],r.kun||[]).slice(0,3).join("・"),
+                 a:k, kanji:[k], field:"kaki" };
+      })});
   }
   if(yomi.length){
-    html+='<div class="p-sec">■ 読みかたを、ひらがなで書きましょう。</div>'
-      +twoCols(yomi, function(k,i){
+    blocks.push({ title:"■ 読みかたを、ひらがなで書きましょう。", keyTitle:"読みの答え",
+      ask:"", src:"gen",
+      rows:yomi.map(function(k){
         var q=genYomi(k, seededRandom(SESSION.date+"|y|"+k));
-        if(q) yomiKey.push((i+1)+" "+q.a);
-        return "<tr><td class='p-no'>"+(i+1)+"</td>"
-          +"<td class='p-q'>"+(q?q.q:k)
-          +(q&&q.hint?"<br><span style='font-size:8pt;color:#666'>（"+q.hint+"）</span>":"")
-          +"</td><td class='p-ansbox' style='height:"+boxH+"'></td></tr>";
-      });
+        return { q:q?q.q:k, hint:q&&q.hint?q.hint:"", a:q?q.a:"", kanji:[k], field:"yomi" };
+      })});
   }
+  return blocks;
+}
+
+/* 本の問題文を紙の形にする。
+   ★——線は `target` / `targetNth` で持っている（`【】` のような囲み記号は使わない書式）。
+     紙では傍線を引いて示す。 */
+function bookQuestionText(it){
+  var t=String(it.text||"");
+  if(it.target){
+    var nth=it.targetNth||1, idx=-1;
+    for(var i=0;i<nth;i++) idx=t.indexOf(it.target, idx+1);
+    if(idx>=0) t=t.slice(0,idx)+"<u>"+it.target+"</u>"+t.slice(idx+it.target.length);
+  }
+  return t;
+}
+
+/* きょう書く字のプリント（なぞり廃止。1問1マスの2段組み＋折り線の下に答え） */
+/* ★1枚に載せる問題数の上限。
+   実測（詰めたとき）: 30問は収まる／40問は107pxはみ出す。
+   1行あたり約10mmが物理的な下限（書くマス8mm＋読みの手がかり1行）。
+   ⚠️ 上げるときは必ず 5/13/20/30/40問のテストを通し直すこと。 */
+var SHEET_MAX = 30;
+
+function printSessionPractice(){
+  var blocks=buildPaperBlocks();
+  var total=blocks.reduce(function(a,b){return a+b.rows.length;},0);
+  if(!total){ alert("きょうの紙に出すものがありません。"); return; }
+  // ★上限を超えたら、ブロックを保ったまま複数枚に分ける
+  var sheets=splitSheets(blocks, SHEET_MAX);
+  document.getElementById("print-region").innerHTML=
+    sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
+  window.print();
+}
+
+/* ブロックの列を、1枚ぶんずつに切る。**ブロックの途中でも切る**（1枚の上限が優先）。
+   切られたブロックには「（つづき）」を付け、番号は通しにする。 */
+function splitSheets(blocks, max){
+  var sheets=[], cur=[], n=0;
+  blocks.forEach(function(b){
+    var offset=0;
+    while(offset<b.rows.length){
+      if(n>=max){ sheets.push(cur); cur=[]; n=0; }
+      var take=Math.min(max-n, b.rows.length-offset);
+      cur.push({ title:b.title+(offset>0?"（つづき）":""), keyTitle:b.keyTitle,
+                 ask:(offset>0?"":b.ask), src:b.src,
+                 rows:b.rows.slice(offset, offset+take), noBase:offset });
+      n+=take; offset+=take;
+    }
+  });
+  if(cur.length) sheets.push(cur);
+  return sheets;
+}
+
+function renderSheet(blocks, page, pages){
+
+  // 段あたりの行数から、書くマスの高さを決める
+  var rowsPerCol=blocks.reduce(function(a,b){return a+Math.ceil(b.rows.length/2);},0);
+  var boxH=boxHeightFor(rowsPerCol)+"mm";
+  // ★行が多い日は文字も詰める（マスの高さだけでは足りない。上のCSSの説明を参照）
+  var tight=(rowsPerCol>15)?" p-tight":"";
+
+  var html='<div class="p-sheet"><div class="p-body'+tight+'">'
+    +'<div class="p-title">漢検7級　きょう 書く字'
+    +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
+    +'</div>'
+    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>';
+
+  var keys=[];
+  blocks.forEach(function(b){
+    var ansList=[];
+    html+='<div class="p-sec">'+b.title+(b.ask?'<span class="p-ask">'+b.ask+'</span>':'')+'</div>'
+      +twoCols(b.rows, function(row,i){
+        // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
+        //   （複数枚に分かれた日は、続きの枚でも通し番号になる）
+        var no=(b.noBase||0)+i+1;
+        ansList.push(no+" "+row.a);
+        var q=row.q||"";
+        var hint=row.hint?"<br><span style='font-size:8pt;color:#666'>（"+row.hint+"）</span>":"";
+        // ★空らんが複数ある問題は、**書くマスもその数だけ**出す。
+        //   1つしか出さないと、3つ答える問題なのに書く場所が1つしかない
+        //   （実物を刷って目で見て気づいた。C-4d）
+        var slots=row.slots&&row.slots.length?row.slots:[{yomi:"",around:""}];
+        var cells=slots.map(function(sl){
+          return "<div class='p-slot' style='height:"+boxH+"'>"
+            +(sl.yomi?"<span class='p-slotlab'>"+sl.yomi+"</span>":"")+"</div>";
+        }).join("");
+        return "<tr><td class='p-no'>"+no+"</td>"
+          +"<td class='p-q'>"+(q?"<span style='font-size:9.5pt'>"+q+"</span>":"")
+          +(q?hint:"<span style='font-size:9pt'>（"+row.hint+"）</span>")+"</td>"
+          // ★padding を 0 に。td の既定 padding(1.5mm) が上下に付くと、
+          //   1行あたり3mm 高くなり、30問で紙をはみ出す（実際に溢れて分かった）
+          +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"+cells+"</div></td></tr>";
+      });
+    keys.push({ title:b.keyTitle||b.title.replace(/^■\s*/,"").replace(/。$/,""), list:ansList });
+  });
   html+='</div>';
 
   // ★折り線。子ども向けの文字を入れる（ここで折るのは本人なので）
@@ -1023,12 +1183,13 @@ function printSessionPractice(){
 
   // ★答えは必ず折り線より下。番号は問題と一致させる
   html+='<div class="p-key"><b>おうちの方へ</b>（ここを折ると、答えは裏になります）<br>'
-    +(kakiKey.length ? '<span class="ans"><b>書きの答え</b>　'+kakiKey.join("　")+'</span><br>' : "")
-    +(yomiKey.length ? '<span class="ans"><b>読みの答え</b>　'+yomiKey.join("　")+'</span><br>' : "")
-    +'できたかどうかを「きろく」画面で入れてください。'
+    +keys.map(function(k){
+      return '<span class="ans"><b>'+k.title+'</b>　'+k.list.join("　")+'</span>';
+    }).join("<br>")
+    +'<br>できたかどうかを「きろく」画面で入れてください。'
     +'できなかった字は、次の日にまた出ます。</div>';
-  document.getElementById("print-region").innerHTML=html;
-  window.print();
+
+  return html+'</div>';
 }
 
 /* ---------- きろく：練習プリントに書いた字の採点。既定〇、✕だけタップ ----------

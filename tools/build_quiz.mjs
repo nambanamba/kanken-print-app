@@ -27,8 +27,24 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ITER = 200000;   // ★kanken-crypto.js の PBKDF2_ITER と必ず同じ値にすること
 const OUT = path.resolve(HERE, "..", "kanken-quiz.enc.js");
 
-const dirs = process.argv.slice(2);
-if (!dirs.length) { console.error("使い方: node tools/build_quiz.mjs <平文フォルダ> [...]"); process.exit(2); }
+/* ★引数なしで走れるようにする（単元が増えるたびに手でパスを打つと、そこが律速になる）。
+   ⚠️ 既定のパスは「このリポジトリの1つ上の 司令塔\漢検書き起こし_*\data」。
+      フォルダが動いたらここを直すこと。**絶対パスを直書きしない**（D-11b）。 */
+const DEFAULT_DIRS = [
+  path.resolve(HERE, "..", "..", "司令塔", "漢検書き起こし_ドリル", "data"),
+  path.resolve(HERE, "..", "..", "司令塔", "漢検書き起こし_ノート", "data")
+];
+let dirs = process.argv.slice(2);
+if (!dirs.length) {
+  dirs = DEFAULT_DIRS.filter(d => fs.existsSync(d));
+  if (!dirs.length) {
+    console.error("平文フォルダが見つかりません。既定の場所:");
+    DEFAULT_DIRS.forEach(d => console.error("  " + d));
+    console.error("別の場所なら: node tools/build_quiz.mjs <平文フォルダ> [...]");
+    process.exit(2);
+  }
+  console.log("既定の平文フォルダを使います（引数で上書きできます）");
+}
 
 /* 平文を読む。★このリポジトリの中を読ませない（事故防止） */
 const REPO = path.resolve(HERE, "..");

@@ -707,6 +707,137 @@ ok("★分けなかった単元は単元idのまま（記録のidを動かさな
 ok("かたまりのidに重複が無い", plan.ids.length === new Set(plan.ids).size);
 ok("★問数が分からないノートは切らない（推測で切らない）", plan.noteUntouched);
 
+console.log("\n=== 本の問題を紙に刷る（自動生成との混在） ===");
+// ユーザー:「テキストの問題はもれなく入れてください」→ 紙も本の問題に置き換わっていく。
+// ★「本に直接書けばいい」は成り立たない。本人の希望が「できなかったら、次の日も書く」なので、
+//   **同じ問題をもう一度書ける紙**が要る。本に書き込むと1回で消費されて2回目が書けない。
+// ⚠️ いま入っているのは102設問だけ。**混在した状態で成立すること**が要件。
+const mix = await page.evaluate(async () => {
+  // 本のデータを積む（照合ずみ1単元＋未照合1単元）
+  const verified = {
+    unitId: "dr_25", groups: [{ field: "bushu", instruction: "次の部首のなかまの…",
+      items: [
+        { id:"q_v1", no:1, field:"bushu", text:"刂　□用・以□",
+          answers:[{ansNo:1,text:"利"},{ansNo:1,text:"前"}], kanji:["利","前"],
+          ruby:[{base:"□",yomi:"り",nth:1}] },
+        { id:"q_v2", no:2, field:"bushu", text:"亻　□康",
+          answers:[{ansNo:1,text:"健"}], kanji:["健"], ruby:[] }
+      ]}]
+  };
+  const unverified = {
+    unitId: "dr_54", groups: [{ field: "jukugo", instruction: "…",
+      items: [{ id:"q_u1", no:1, field:"jukugo", text:"伝",
+        answers:[{ansNo:1,text:"オ 説"}], kanji:["説"], ruby:[] }]}]
+  };
+  BOOK_UNITS = [verified, unverified];
+
+  const keep = window.planToday;
+  const out = {};
+
+  // ① 照合ずみの単元の日 → 本の問題が紙に出る
+  window.planToday = () => ({ unit:"dr_25", from:1, to:10, n:10, day:1, parts:1, part:1,
+                              mat:"dr", label:"同じ部首①", pages:"25" });
+  out.verifiedRows = buildPaperBlocks().filter(b => b.src === "book")
+                       .reduce((a,b) => a + b.rows.length, 0);
+  out.verifiedHasGen = buildPaperBlocks().some(b => b.src === "gen");
+
+  // ② 未照合の単元の日 → 本の問題は出ない（自動生成だけになる）
+  window.planToday = () => ({ unit:"dr_54", from:1, to:12, n:12, day:2, parts:1, part:1,
+                              mat:"dr", label:"じゅく語作り④", pages:"54" });
+  out.unverifiedBookRows = buildPaperBlocks().filter(b => b.src === "book")
+                             .reduce((a,b) => a + b.rows.length, 0);
+  out.unverifiedGenRows = buildPaperBlocks().filter(b => b.src === "gen")
+                            .reduce((a,b) => a + b.rows.length, 0);
+
+  // ③ 本のデータが無い単元の日 → いままでどおり自動生成で出る
+  window.planToday = () => ({ unit:"dr_01", from:1, to:15, n:15, day:3, parts:1, part:1,
+                              mat:"dr", label:"漢字の読み①", pages:"1" });
+  out.noBookGenRows = buildPaperBlocks().filter(b => b.src === "gen")
+                        .reduce((a,b) => a + b.rows.length, 0);
+  out.noBookBookRows = buildPaperBlocks().filter(b => b.src === "book")
+                         .reduce((a,b) => a + b.rows.length, 0);
+
+  // ④ 本で出した字が、自動生成側に二重に出ないこと（同じ紙に同じ字＝A-1）
+  window.planToday = () => ({ unit:"dr_25", from:1, to:10, n:10, day:1, parts:1, part:1,
+                              mat:"dr", label:"同じ部首①", pages:"25" });
+  const blocks = buildPaperBlocks();
+  const bookK = [], genK = [];
+  blocks.forEach(b => b.rows.forEach(r => (b.src === "book" ? bookK : genK).push(...(r.kanji||[]))));
+  out.dup = bookK.filter(k => genK.indexOf(k) >= 0);
+
+  // ⑤ 本の問題にも kanji が付いていること（記録先。無いと「できた字は出さない」が動かない）
+  out.bookAllHaveKanji = blocks.filter(b => b.src === "book")
+    .every(b => b.rows.every(r => (r.kanji || []).length > 0));
+
+  // ⑥ 紙を実際に組んで、答えが折り線の下にあること
+  printSessionPractice();
+  const region = document.getElementById("print-region");
+  const key = region.querySelector(".p-key"), body = region.querySelector(".p-body");
+  out.keyHasBushu = key.textContent.indexOf("部首の答え") >= 0;
+  out.bodyHasAnswer = body.textContent.indexOf("答え") >= 0;
+  out.keyOverflow = key.scrollHeight - key.clientHeight;
+  out.bodyOverflow = body.scrollHeight - body.clientHeight;
+
+  window.planToday = keep;
+  BOOK_UNITS = null;
+  return out;
+});
+ok("★照合ずみの単元は、本の問題が紙に出る", mix.verifiedRows > 0, String(mix.verifiedRows));
+ok("★照合が通っていない単元は、本の問題を紙に出さない", mix.unverifiedBookRows === 0,
+   String(mix.unverifiedBookRows));
+ok("★照合が通っていない日でも、自動生成で紙は出る（空にしない）", mix.unverifiedGenRows > 0,
+   String(mix.unverifiedGenRows));
+ok("★本のデータが無い単元は、いままでどおり自動生成で出る",
+   mix.noBookGenRows > 0 && mix.noBookBookRows === 0,
+   `生成${mix.noBookGenRows} / 本${mix.noBookBookRows}`);
+ok("★本と自動生成が混ざっても成立する（両方出る日がある）", mix.verifiedHasGen);
+ok("★同じ字が本と自動生成で二重に出ない（A-1）", mix.dup.length === 0, mix.dup.join(""));
+ok("★本の問題にも記録先の漢字が付いている", mix.bookAllHaveKanji);
+ok("本の問題の答えも、折り線の下に出る", mix.keyHasBushu);
+ok("問題側に答えが混じっていない", !mix.bodyHasAnswer);
+ok("本の問題が混ざっても、答えが折り線をまたがない", mix.keyOverflow <= 0, String(mix.keyOverflow));
+ok("本の問題が混ざっても、問題が紙からはみ出さない", mix.bodyOverflow <= 0, String(mix.bodyOverflow));
+
+// ★★ここは「テストが全通過したのに紙が使えなかった」層。
+//   1問に空らんが3〜4個あるのに**書くマスが1つ**しかなかった。
+//   はみ出し0・答えは折り線の下・番号も一致——**機械的な条件は全部満たしていた。**
+//   刷って目で見るまで気づけなかったので、条件として書き下しておく。
+const slots = await page.evaluate(() => {
+  const verified = {
+    unitId: "dr_25", groups: [{ field: "bushu", instruction: "…", items: [
+      { id:"q_s1", no:1, field:"bushu", text:"刂　□用・以□・整□",
+        answers:[{ansNo:1,text:"利",around:"□用"},{ansNo:1,text:"前",around:"以□"},
+                 {ansNo:1,text:"列",around:"整□"}],
+        kanji:["利","前","列"],
+        ruby:[{base:"□",yomi:"り",nth:1},{base:"□",yomi:"ぜん",nth:2},{base:"□",yomi:"れつ",nth:3}] },
+      { id:"q_s2", no:2, field:"bushu", text:"亻　□康",
+        answers:[{ansNo:1,text:"健",around:"□康"}], kanji:["健"],
+        ruby:[{base:"□",yomi:"けん",nth:1}] }
+    ]}]
+  };
+  BOOK_UNITS = [verified];
+  const keep = window.planToday;
+  window.planToday = () => ({ unit:"dr_25", from:1, to:10, n:10, day:1, parts:1, part:1,
+                              mat:"dr", label:"同じ部首①", pages:"25" });
+  printSessionPractice();
+  const region = document.getElementById("print-region");
+  const rows = [...region.querySelectorAll(".p-body tr")];
+  // 本の問題の行だけ見る（先頭2行）
+  const got = rows.slice(0, 2).map(r => ({
+    slots: r.querySelectorAll(".p-slot").length,
+    labels: [...r.querySelectorAll(".p-slotlab")].map(e => e.textContent)
+  }));
+  window.planToday = keep; BOOK_UNITS = null;
+  return got;
+});
+ok("★★空らんが3つの問題は、書くマスも3つ出る", slots[0] && slots[0].slots === 3,
+   JSON.stringify(slots[0]));
+ok("★★空らんが1つの問題は、書くマスも1つ", slots[1] && slots[1].slots === 1,
+   JSON.stringify(slots[1]));
+ok("★★書くマス1つ1つに、その空らんの読みが付いている（まとめて書かない）",
+   !!(slots[0] && slots[0].labels.join("・") === "り・ぜん・れつ"),
+   JSON.stringify(slots[0] && slots[0].labels));
+
 console.log("\n=== 紙の折り線（答えが折り線をまたがないか。C-4d） ===");
 // ユーザー指示（2026-09-10）:「書きは、答えを紙をおれば見えないみたいにできますか? 広げてパパが丸付けします」
 // ★唯一の失敗のしかたは「答えが答え欄から溢れて、折り線より上に出ること」。
@@ -721,12 +852,17 @@ const foldCheck = await page.evaluate(() => {
     window.practiceList = () => pool.slice(0, n);
     printSessionPractice();
     const region = document.getElementById("print-region");
+    // ★複数枚に分かれる日があるので、**全ページのうち最悪のもの**で見る
+    const sheets = [...region.querySelectorAll(".p-sheet")];
+    const worst = (f) => Math.max.apply(null, sheets.map(f));
     const key = region.querySelector(".p-key"), fold = region.querySelector(".p-fold");
     const body = region.querySelector(".p-body");
     out.push({
-      n: n, hasFold: !!fold,
+      n: n, hasFold: !!fold, sheets: sheets.length,
+      // どのページにも折り線と答えがあること
+      everySheetHasFoldAndKey: sheets.every(s => s.querySelector(".p-fold") && s.querySelector(".p-key")),
       // 答え欄からの溢れ。1pxでも溢れたら、折っても答えが見える
-      keyOverflow: key ? key.scrollHeight - key.clientHeight : -1,
+      keyOverflow: worst(s => { const k = s.querySelector(".p-key"); return k ? k.scrollHeight - k.clientHeight : -1; }),
       // 折り線が答えより先に来ていること（逆なら折る意味がない）
       foldAboveKey: !!(fold && key &&
         (fold.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING)),
@@ -735,17 +871,26 @@ const foldCheck = await page.evaluate(() => {
       //   最初これを見ておらず「答え欄の中の溢れ」しか見ていなかったため、
       //   20問で問題が紙をはみ出して答えの上に重なっていたのに**テストは全通過した。**
       //   撮って目で見て初めて分かった（C-4d / D-14「その検査で捕まるかは試すまで分からない」）。
-      bodyOverflow: body ? body.scrollHeight - body.clientHeight : -1,
+      bodyOverflow: worst(s => { const b = s.querySelector(".p-body"); return b ? b.scrollHeight - b.clientHeight : -1; }),
       // 問題の最後の行が、折り線より上で終わっていること
-      lastRowBottom: (() => {
-        const rows = body ? body.querySelectorAll("tr") : [];
-        if (!rows.length) return 0;
-        return Math.round(rows[rows.length - 1].getBoundingClientRect().bottom);
-      })(),
-      foldTop: fold ? Math.round(fold.getBoundingClientRect().top) : -1,
+      // ★各ページごとに「最終行 ≦ そのページの折り線」を見る（ページをまたいで比べない）
+      rowBelowFold: sheets.filter(s => {
+        const rows = s.querySelectorAll("tr"), f = s.querySelector(".p-fold");
+        if (!rows.length || !f) return false;
+        return rows[rows.length - 1].getBoundingClientRect().bottom > f.getBoundingClientRect().top;
+      }).length,
+      lastRowBottom: 0, foldTop: 0,
       // ★問題側に答えが混じっていないこと
       bodyHasAnswer: !!body && body.textContent.indexOf("答え") >= 0,
-      regionH: region.getBoundingClientRect().height
+      // ★測るのは region 全体ではなく **1枚ごと**。
+      //   複数枚に分かれる日があるので、region の高さは枚数ぶんになる（それは正しい）。
+      //   守りたいのは「**どの1枚もA4で、折り線が毎回同じ位置**」のほう。
+      sheetHeights: sheets.map(s => Math.round(s.getBoundingClientRect().height)),
+      // そのページの上端から折り線までの距離が、どのページでも同じであること
+      foldOffsets: sheets.map(s => {
+        const f = s.querySelector(".p-fold");
+        return f ? Math.round(f.getBoundingClientRect().top - s.getBoundingClientRect().top) : -1;
+      })
     });
   });
   window.practiceList = real;
@@ -758,13 +903,20 @@ foldCheck.forEach(c => {
   ok("★答えが折り線をまたいでいない（" + c.n + "字）", c.keyOverflow <= 0, "はみ出し " + c.keyOverflow + "px");
   ok("★★問題が紙からはみ出していない（" + c.n + "字）", c.bodyOverflow <= 0, "はみ出し " + c.bodyOverflow + "px");
   ok("★★問題の最後の行が折り線より上で終わっている（" + c.n + "字）",
-     c.lastRowBottom <= c.foldTop, "最終行 " + c.lastRowBottom + "px / 折り線 " + c.foldTop + "px");
+     c.rowBelowFold === 0, "折り線を越えたページ " + c.rowBelowFold + " 枚");
+  ok("どのページにも折り線と答えがある（" + c.n + "字）", c.everySheetHasFoldAndKey,
+     "ページ数 " + c.sheets);
   ok("書きの答えが答え欄にある（" + c.n + "字）", c.hasKakiKey);
   ok("★問題側に答えが混じっていない（" + c.n + "字）", !c.bodyHasAnswer);
 });
-ok("紙の高さがA4に固定されている（折り線の位置が毎回同じ）",
-   foldCheck.every(c => Math.abs(c.regionH - foldCheck[0].regionH) < 1),
-   foldCheck.map(c => Math.round(c.regionH)).join(" / "));
+// ★1枚ごとにA4であること。region 全体の高さは枚数ぶんになるので、そちらでは見ない
+const allSheets = foldCheck.reduce((a, c) => a.concat(c.sheetHeights), []);
+ok("★どの1枚もA4の高さに固定されている",
+   allSheets.every(h => Math.abs(h - allSheets[0]) < 1), allSheets.join(" / "));
+// ★折り線の位置が、どのページでも同じ（毎回同じ場所で折れる。これが折り線の設計の要）
+const allOffsets = foldCheck.reduce((a, c) => a.concat(c.foldOffsets), []);
+ok("★折り線の位置が、どのページでも同じ",
+   allOffsets.every(o => Math.abs(o - allOffsets[0]) < 1), allOffsets.join(" / "));
 
 console.log("\n=== 目次のマージ（★焼き付いた端末が直るか。C-7b） ===");
 // もとの実装は `load(K_UNITS,null) || DEFAULT_UNITS` で、**保存ずみが1件でもあると
