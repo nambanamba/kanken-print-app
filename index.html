@@ -1182,7 +1182,16 @@ var SHEET_MAX = 30;
 function printSessionPractice(){
   var blocks=buildPaperBlocks();
   var total=blocks.reduce(function(a,b){return a+b.rows.length;},0);
-  if(!total){ alert("きょうの紙に出すものがありません。"); return; }
+  // ★出すものが無いときは、**前に作った紙を必ず消す。**
+  //   消さないと `print-region` に前回の紙が残り、
+  //   **別の単元のラベルで、前の単元の中身が印刷される。**
+  //   実際にそうなっていた（`dr_14` と書かれた紙に `dr_01` の15問。claude-e0 が発見）。
+  //   ★お子さんは「ステージ14」だと思って、ステージ1をもう一度解くことになる。
+  if(!total){
+    document.getElementById("print-region").innerHTML="";
+    alert("きょうの紙に出すものがありません。");
+    return;
+  }
   // ★上限を超えたら、ブロックを保ったまま複数枚に分ける
   var sheets=splitSheets(blocks, SHEET_MAX);
   document.getElementById("print-region").innerHTML=

@@ -129,6 +129,13 @@ for (const u of want) {
     };
   }, u);
 
+  // ★中身が無いなら、PNGも info も作らない。
+  //   作ると「1枚出た」ように見えて、**中身が前の単元のまま**でも気づけない。
+  if (!info.rows.length) {
+    await p.emulateMedia({ media: null });
+    console.log(`  ${u}: 照合ずみ=${info.verified === null ? "-" : (info.verified ? "○" : "×")} / 出るものがありません（0枚）`);
+    continue;
+  }
   await p.screenshot({ path: path.join(OUT, u + ".png"), fullPage: true });
   await p.emulateMedia({ media: null });
 

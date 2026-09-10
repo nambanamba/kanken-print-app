@@ -801,6 +801,49 @@ const mix = await page.evaluate(async () => {
 ok("★照合ずみの単元は、本の問題が紙に出る", mix.verifiedRows > 0, String(mix.verifiedRows));
 ok("★照合が通っていない単元は、本の問題を紙に出さない", mix.unverifiedBookRows === 0,
    String(mix.unverifiedBookRows));
+
+// ★★出すものが無いときに、**前に作った紙が残っていないこと。**
+//   残ると「dr_14」と書かれた紙に「dr_01」の中身が載る。
+//   ★お子さんは「ステージ14」だと思って、ステージ1をもう一度解くことになる。
+//   ⚠️ **単独で出すと空になるので正常に見える。**通過ずみと並べて出したときだけ出る。
+//      claude-e0 が `dr_01 dr_14` の順で出して見つけた。
+const stale = await page.evaluate(() => {
+  const mk = (id, text) => ({
+    unitId: id, groups: [{ field:"yomi", instruction:"…", items:[
+      { id:"q_"+id, no:1, field:"yomi", text:text,
+        answers:[{ansNo:1,text:"よみ"}], kanji:["山"], ruby:[] }
+    ]}]
+  });
+  BOOK_UNITS = [mk("dr_01", "とおった単元の問題文"), mk("dr_14", "とおっていない単元の問題文")];
+  const keepV = window.isVerifiedUnit; window.isVerifiedUnit = (id) => id === "dr_01";
+  const keep = window.planToday;
+  const region = document.getElementById("print-region");
+
+  // ① まず通過ずみを刷る
+  window.planToday = () => ({ unit:"dr_01", from:1, to:1, n:1, day:1, parts:1, part:1,
+                              mat:"dr", label:"通過ずみ", pages:"1" });
+  printSessionPractice();
+  const first = region.innerHTML.length;
+  const hadFirst = region.textContent.indexOf("とおった単元の問題文") >= 0;
+
+  // ② 続けて未通過を刷る（出るものが無いはず）
+  window.planToday = () => ({ unit:"dr_14", from:1, to:1, n:1, day:1, parts:1, part:1,
+                              mat:"dr", label:"未通過", pages:"14" });
+  window.practiceList = () => [];          // 自動生成も無い状態にする
+  printSessionPractice();
+  const out = {
+    hadFirst,
+    // ★前の紙が残っていないこと
+    leftover: region.textContent.indexOf("とおった単元の問題文") >= 0,
+    emptied: region.innerHTML.length === 0,
+    firstLen: first
+  };
+  window.planToday = keep; window.isVerifiedUnit = keepV; BOOK_UNITS = null;
+  return out;
+});
+ok("通過ずみの単元は紙に出る（検査が素通りしないこと）", stale.hadFirst, String(stale.firstLen));
+ok("★★出すものが無いとき、前に作った紙が残っていない", !stale.leftover);
+ok("★出すものが無いときは、紙そのものが空になる", stale.emptied);
 ok("★照合が通っていない日でも、自動生成で紙は出る（空にしない）", mix.unverifiedGenRows > 0,
    String(mix.unverifiedGenRows));
 ok("★本のデータが無い単元は、いままでどおり自動生成で出る",
