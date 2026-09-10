@@ -173,6 +173,9 @@
     .p-tight table.p-tbl td{padding:0.6mm 1.2mm;font-size:9pt;}
     .p-tight .p-q span{font-size:8.5pt !important;}
     .p-tight .p-sec{margin:2mm 0 1mm;padding:0.8mm 2mm;}
+    /* ★選択肢。1つ（「ア 表」）を折り返しの最小単位にする */
+    .p-choices{display:inline-block;font-size:8.5pt;}
+    .p-choice{display:inline-block;white-space:nowrap;margin-right:2.5mm;}
     .p-slots{display:flex;gap:1mm;}
     .p-slot{flex:1 1 0;border:1px solid #999;position:relative;min-width:8mm;}
     .p-slotlab{position:absolute;top:0.3mm;left:0.6mm;font-size:6.5pt;color:#888;}
@@ -1088,6 +1091,12 @@ function buildPaperBlocks(){
         var ans=it.answers||[], ruby=it.ruby||[];
         return {
           q: bookQuestionText(it),
+          // ★選択肢。**「記号で書きなさい」なのに紙に選択肢が無いと、絶対に解けない。**
+          //   実際にそうなっていた（dr_54。データは正しく、紙にしたときだけ解けなくなっていた）。
+          //   「出題できる」と「この紙で解ける」は別（確認ポイント B-1／B-2）。
+          choices: (it.choices || []).slice(),
+          // ★答えページの「注意」。ルビ付きで持っている（小4が読めるように）
+          note: bookNote(it.note),
           // ★空らんごとの読み。**まとめて「□＝り・□＝ぜん」と書くと、どの□の読みか分からない。**
           //   空らんの順＝answers の順＝ruby の順（書式5-6で並び順が固定されている）なので、
           //   **書くマスの1つ1つに、その空らんの読みを添える。**
@@ -1136,6 +1145,18 @@ function readingHint(r){
     if(seen[rd]) return; seen[rd]=1; if(out.length<3) out.push(rd);
   });
   return out.join("・");
+}
+
+/* 答えページの「注意」。書式v1.5 で {text, ruby[]} になった。
+   ⚠️ **ルビを落とすと読めない。**書き起こし側が「小4には読めないから」とルビを付けている。
+      落とすなら、そもそも書き起こす意味が無くなる。 */
+function bookNote(n){
+  if(!n) return "";
+  var t=(typeof n==="object") ? (n.text||"") : String(n);
+  if(!t) return "";
+  var ruby=(typeof n==="object" && n.ruby) ? n.ruby : [];
+  if(!ruby.length) return t;
+  return t+"（"+ruby.map(function(r){return r.base+"＝"+r.yomi;}).join("・")+"）";
 }
 
 /* 本の問題文を紙の形にする。
@@ -1213,6 +1234,19 @@ function renderSheet(blocks, page, pages){
         ansList.push(no+" "+row.a);
         var q=row.q||"";
         var hint=row.hint?"<br><span style='font-size:8pt;color:#666'>（"+row.hint+"）</span>":"";
+        // ★選択肢を問題文のあとに出す。これが無いと「記号で書きなさい」が成立しない
+        if(row.choices && row.choices.length){
+          // ★1つの選択肢（「ア 表」）が行の途中で切れないようにする。
+          //   切れると「ア 表 イ 説 ウ 先 エ / 灯 オ 駅」のようになり、
+          //   **どの記号がどの字か分からなくなる。**
+          hint+="<br><span class='p-choices' style='margin-top:0.5mm'>"
+            +row.choices.map(function(c){
+                return "<span class='p-choice'>"+c+"</span>";
+              }).join("")+"</span>";
+        }
+        if(row.note){
+          hint+="<br><span style='font-size:7.5pt;color:#666'>※"+row.note+"</span>";
+        }
         // ★空らんが複数ある問題は、**書くマスもその数だけ**出す。
         //   1つしか出さないと、3つ答える問題なのに書く場所が1つしかない
         //   （実物を刷って目で見て気づいた。C-4d）

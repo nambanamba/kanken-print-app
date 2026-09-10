@@ -810,6 +810,49 @@ ok("★本と自動生成が混ざっても成立する（両方出る日があ�
 ok("★同じ字が本と自動生成で二重に出ない（A-1）", mix.dup.length === 0, mix.dup.join(""));
 ok("★本の問題にも記録先の漢字が付いている", mix.bookAllHaveKanji);
 
+// ★★「出題できる」と「この紙で解ける」は別。
+//   dr_54 は データが正しく（本↔JSON 12問すべて一致）、needsFigure も false で、
+//   機械検査も照合も通っていた。**それでも紙にすると解けなかった。**
+//   指示文が「記号で書きなさい」なのに、**選択肢が紙に1つも出ていなかった**ため。
+//   → 紙を出して目で見るまで、誰も気づけなかった（確認ポイント B-1／B-2）。
+const solvable = await page.evaluate(() => {
+  const withChoices = {
+    unitId: "dr_54", groups: [{ field: "jukugo", instruction: "…記号で書きなさい。", items: [
+      { id:"q_c1", no:1, field:"jukugo", text:"□伝・伝□",
+        choices:["ア 表","イ 説","ウ 先","エ 灯","オ 駅"],
+        answers:[{ansNo:1,text:"オ 駅"},{ansNo:2,text:"イ 説"}], kanji:["駅","説"], ruby:[],
+        note:{ text:"「伝説」は、むかしから語りつがれてきた話。", ruby:[{base:"伝説",yomi:"でんせつ"}] } }
+    ]}]
+  };
+  BOOK_UNITS = [withChoices];
+  const keepV = window.isVerifiedUnit; window.isVerifiedUnit = (id) => id === "dr_54";
+  const keep = window.planToday;
+  window.planToday = () => ({ unit:"dr_54", from:1, to:12, n:12, day:1, parts:1, part:1,
+                              mat:"dr", label:"じゅく語作り④", pages:"54" });
+  printSessionPractice();
+  const body = document.getElementById("print-region").querySelector(".p-body");
+  const txt = body.textContent;
+  const out = {
+    // ★選択肢が紙に出ていること（全部）
+    allChoices: ["ア 表","イ 説","ウ 先","エ 灯","オ 駅"]
+      .every(c => txt.replace(/\s+/g, " ").indexOf(c) >= 0),
+    // ★1つの選択肢が折り返しで切れないこと
+    unbroken: body.querySelectorAll(".p-choice").length === 5,
+    // ★注意（note）が、ルビ付きで出ていること
+    hasNote: txt.indexOf("語りつがれ") >= 0,
+    hasNoteRuby: txt.indexOf("でんせつ") >= 0,
+    // ★答えは折り線の下にしか出ないこと（問題側に答えが漏れない）
+    answerInBody: txt.indexOf("オ 駅") >= 0 && txt.indexOf("イ 説") >= 0
+      && (txt.match(/オ 駅/g) || []).length > 1
+  };
+  window.planToday = keep; window.isVerifiedUnit = keepV; BOOK_UNITS = null;
+  return out;
+});
+ok("★★選択肢が紙に出ている（「記号で書きなさい」が成立する）", solvable.allChoices);
+ok("★1つの選択肢が折り返しで切れない（どの記号がどの字か分かる）", solvable.unbroken);
+ok("★答えページの「注意」が紙に出ている", solvable.hasNote);
+ok("★「注意」のルビも出ている（小4が読めるように）", solvable.hasNoteRuby);
+
 // ★★ここが今日いちばん危なかった穴。
 //   「本の問題にも kanji が付いている」は**通っていたのに**、
 //   採点画面が practiceList()（＝自動生成の字）しか並べていなかったため、
