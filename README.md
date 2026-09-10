@@ -50,3 +50,5 @@ node tools/shot.mjs         画面と印刷物の撮影
 
 ブラウザは **同梱chromium → Edge → Chrome** の順に探します（`tools/browser.mjs`）。
 どれで起動したかは実行時の1行目に出ます。
+
+
