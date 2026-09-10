@@ -282,6 +282,74 @@ const empty = await page.evaluate(() => {
 });
 ok("★出すものが無いとき、前に作った紙が残っていない", empty.left === "", empty.left.slice(0, 30));
 
+console.log("\n=== 紙のはみ出し（★本物と同じくらい長い文で） ===");
+// ⚠️ 2026-09-11、ダミーの短い文ではテストが通り、本物の紙は折り線を越えていた。
+//    長さは本物の平文から測った値に合わせる（書き取り 中央15字・最大19字／部首 最大23字・答え4つ／注意 最大35字）。
+//    ★測り方はアプリの sheetsFit とは別（D-13）: 印刷用CSSで組んだ紙の、行の下端と折り線の位置を比べる。
+async function measurePaper(label, prep) {
+  await page.evaluate(prep);
+  await page.evaluate(() => printSessionPractice());
+  await page.emulateMedia({ media: "print" });
+  await page.setViewportSize({ width: 794, height: 1123 });
+  const m = await page.evaluate(() => {
+    const sheets = [...document.querySelectorAll("#print-region .p-sheet")];
+    return sheets.map(s => {
+      const top = s.getBoundingClientRect().top;
+      const fold = s.querySelector(".p-fold").getBoundingClientRect().top - top;
+      const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool")]
+        .map(e => e.getBoundingClientRect().bottom - top));
+      const key = s.querySelector(".p-key");
+      const rows = s.querySelectorAll(".p-body tr").length;
+      const cites = s.querySelectorAll(".p-body .p-cite").length;
+      return { h: Math.round(s.getBoundingClientRect().height), fold: Math.round(fold), bottom: Math.round(bottom),
+               keyOver: key.scrollHeight - key.clientHeight, rows, cites };
+    });
+  });
+  await page.emulateMedia({ media: null });
+  const total = m.reduce((a, s) => a + s.rows, 0);
+  ok(`${label}: 問題が折り線より上に収まっている（${m.length}枚・${total}問）`,
+     m.every(s => s.bottom <= s.fold), m.map(s => `下端${s.bottom}/折り線${s.fold}`).join(" "));
+  ok(`${label}: 1枚の高さがA4のまま（重なっていない）`, m.every(s => Math.abs(s.h - 1123) <= 2), m.map(s => s.h).join(","));
+  ok(`${label}: 答えが答えの欄からはみ出していない`, m.every(s => s.keyOver <= 1), m.map(s => s.keyOver).join(","));
+  ok(`${label}: どの行にも出典がある`, m.every(s => s.cites === s.rows), m.map(s => `${s.cites}/${s.rows}`).join(" "));
+  return { m, total };
+}
+await page.evaluate(() => {
+  const pool = KANJI_MASTER.map(r => r.k); let ki = 0;
+  const long = (n) => "ながいぶんのダミー".repeat(4).slice(0, n);
+  function mkL(uid, mat, pages, n, field, len, nAns, noteLen) {
+    const items = [];
+    for (let i = 1; i <= n; i++) {
+      const ks = Array.from({ length: nAns }, () => pool[ki++ % pool.length]);
+      items.push({ id: "q_long_" + uid + "_" + i, no: i, text: long(len - (i % 3)),
+                   answers: ks.map((k, j) => ({ text: "こたえ" + j, around: nAns > 1 ? "□" : null })),
+                   ruby: nAns > 1 ? ks.map(() => ({ yomi: "よみ" })) : [],
+                   kanji: ks, field, note: (noteLen && i % 5 === 0) ? long(noteLen) : null });
+    }
+    return { unitId: uid, mat, srcPages: pages, groups: [{ gno: 0, field,
+             instruction: { text: long(40), ruby: [] }, items }] };
+  }
+  window.__longUnits = [
+    mkL("dr_08", "dr", [8], 15, "kaki", 19, 1, 35), mkL("dr_09", "dr", [9], 15, "kaki", 19, 1, 35),
+    mkL("dr_10", "dr", [10], 15, "kaki", 19, 1, 0), mkL("dr_25", "dr", [25], 10, "bushu", 23, 4, 27),
+    mkL("tn_08", "tn", [16, 17], 40, "kaki", 19, 1, 35)
+  ];
+  window.isVerifiedUnit = () => true;
+});
+await measurePaper("きょうの20問（書き取り16＋部首4）", () => {
+  BOOK_UNITS = window.__longUnits; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
+  window.__day = "2099-06-01";
+});
+await measurePaper("1単元40問（ノート・2ページの回）", () => {
+  BOOK_UNITS = window.__longUnits;
+  SESSION = { v: SHEET_VERSION, date: todayStr(), ids: bookAllItems().filter(x => x.u.unitId === "tn_08").map(x => x.it.id), results: {}, saved: false };
+});
+await measurePaper("✕の問題が5単元から来た日（見出しが多い）", () => {
+  BOOK_UNITS = window.__longUnits; RECORDS = {}; WEAK = {}; KSTATS = {}; SESSION = null; ITEMS = {};
+  ["dr_08", "dr_09", "dr_10", "dr_25", "tn_08"].forEach(u => [1, 2, 3, 4].forEach(i => { ITEMS["q_long_" + u + "_" + i] = { o: 0, x: 1, last: "x" }; }));
+  window.__day = "2099-06-02";
+});
+
 ok("最後までJSエラーが無い", errors.length === 0, errors.join(" | "));
 
 if (SHOT) {

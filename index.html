@@ -132,6 +132,12 @@
   @media print{
     body{background:#fff;padding:0;}
     header,.tabs,.wrap{display:none !important;}
+    #print-region{display:block !important;}
+  }
+  /* ★ここから下の紙のスタイルは @media print の外に置いている（2026-09-11）。
+     画面では #print-region が display:none なので効かないが、
+     **印刷の前に画面の外で紙を組んで、はみ出しを実測する**ために必要（fitSheets）。
+     ⚠️ @media print の中に戻すと、測った値が全部 0 になり、はみ出しを見逃す。 */
     /* ★答えを紙の下に置き、**折ると裏側に来る**ようにする（2026-09-10 ユーザー指示）。
        「広げてパパが丸付けします」。
        ⚠️ 折り線を「中身の直後」に置いてはいけない。**問題数によって位置が動き、
@@ -147,7 +153,6 @@
           折り線の下に答えの欄を62mm取っているため、ここが限界。
        ★1枚ごとに「問題／折り線／答え」がそろうので、**折り方は毎回同じ。**
           そのページの答えは、そのページの下にある。 */
-    #print-region{display:block !important;}
     .p-sheet{display:flex;flex-direction:column;
              box-sizing:border-box;height:297mm;padding:14mm 16mm;
              page-break-after:always;break-after:page;}
@@ -203,14 +208,16 @@
     .p-no{width:7%;text-align:center;background:#f5f5f5;}
     .p-q{width:45%;}
     /* ★出典（ドリル p12 の 3）。問題文より小さく・薄く。p-tight の一律指定に負けないよう !important */
-    .p-q .p-cite, .p-tight .p-q .p-cite{font-size:6.5pt !important;color:#888;margin-right:1mm;white-space:nowrap;}
+    /* ⚠️ 絶対配置（高さ0）。問題文の中に入れると行が伸びて、折り線を越える（実際に起きた） */
+    .p-slots{position:relative;}
+    .p-cite{position:absolute;right:0.8mm;bottom:0.4mm;font-size:5.5pt;color:#999;
+            white-space:nowrap;line-height:1;pointer-events:none;}
     .p-ans{width:48%;height:11mm;}
     .p-key{padding-top:2mm;font-size:8.5pt;line-height:1.75;}
     .p-key b{font-size:9pt;}
     .p-key .ans{letter-spacing:.02em;}
     .p-model{text-align:center;font-size:22pt;color:#c9c9c9;width:15%;}
     .p-blank{width:15%;height:15mm;}
-  }
 </style>
 </head>
 <body>
@@ -760,13 +767,18 @@ function renderKyou(){
 /* ★きょうの紙を印刷する。画面でやることはこれだけ */
 function printToday(){ printSessionPractice(); }
 
+/* BOX_SHRINK … 1枚に収めるために、書くマスを何mm小さくするか（printSessionPractice が実測して決める）。
+   ⚠️ 8mm より小さくはしない（漢字1字が書けなくなる） */
+var BOX_SHRINK = 0;
 function boxHeightFor(rowsPerCol){
-  if(rowsPerCol<= 8) return 18;
-  if(rowsPerCol<=10) return 15;
-  if(rowsPerCol<=12) return 13;
-  if(rowsPerCol<=15) return 11;
-  if(rowsPerCol<=18) return 9;
-  return 8;
+  var h;
+  if(rowsPerCol<= 8) h=18;
+  else if(rowsPerCol<=10) h=15;
+  else if(rowsPerCol<=12) h=13;
+  else if(rowsPerCol<=15) h=11;
+  else if(rowsPerCol<=18) h=9;
+  else h=8;
+  return Math.max(8, h-BOX_SHRINK);
 }
 
 /* ★問題を2段組みにする。1問1マスにしたので、20問でも1枚に収まる。
@@ -1005,9 +1017,13 @@ function buildPaperBlocks(){
   // ★ブロックは「本の単元の中の、問題のまとまり（group）」ごと。
   //   ⚠️ 分野ごとにまとめてはいけない。×の問題は別の単元から来るので、
   //      指示文・語群（pool）が**別の単元のもの**になり、紙で解けなくなる。
+  //   ★ただし**分野・指示文・語群がまったく同じ**なら、単元がちがっても1つのブロックにまとめる
+  //     （ドリルの書き取りは単元ごとに同じ指示文。見出しが並ぶと1枚に収まらなくなる。本物の紙で実測）。
+  //     どの単元の問題かは、1問ごとの出典で分かる。
   var blocks=[], byGroup={}, order=[];
   todaySheetItems().forEach(function(x){
-    var key=x.u.unitId+"#"+(x.g.gno||0);
+    var ins=x.g.instruction, insText=(ins&&typeof ins==="object")?JSON.stringify(ins):String(ins||"");
+    var key=itemFieldOf(x.it,x.g)+"|"+insText+"|"+JSON.stringify(x.g.pool||null)+"|"+(!!x.g.poolUseOnce);
     if(!byGroup[key]){ byGroup[key]={g:x.g, u:x.u, rows:[]}; order.push(key); }
     byGroup[key].rows.push(x);
   });
@@ -1077,11 +1093,38 @@ function printSessionPractice(){
     alert("きょうの紙に出すものがありません。");
     return;
   }
-  // ★上限を超えたら、ブロックを保ったまま複数枚に分ける
-  var sheets=splitSheets(blocks, SHEET_MAX);
-  document.getElementById("print-region").innerHTML=
-    sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
+  // ★上限を超えたら、ブロックを保ったまま複数枚に分ける。
+  // ★★そのうえで、**組んだ紙を実際に測って、はみ出していたら1枚の問数を減らして組み直す。**
+  //   ⚠️ 問数だけで決めると、問題文が長い日・見出しが多い日に折り線を越える
+  //      （2026-09-11 に本物の紙で起きた。行の高さは中身で変わるので、数では守れない）。
+  //   ★先に「書くマスを少し小さくする（最大3mm）」を試し、それでもだめなときだけ枚数を増やす。
+  //     20問が 16問＋4問 の2枚に割れると、紙の半分以上が空く（本物の紙で実測: 1枚だと46pxはみ出した）。
+  var region=document.getElementById("print-region"), fit=false;
+  for(var max=SHEET_MAX; max>=4 && !fit; max-=2){
+    var sheets=splitSheets(blocks, max);
+    for(BOX_SHRINK=0; BOX_SHRINK<=3; BOX_SHRINK++){
+      region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
+      if(sheetsFit(region)){ fit=true; break; }
+    }
+  }
+  BOX_SHRINK=0;
   window.print();
+}
+
+/* ★紙が1枚の中に収まっているかを、実際に組んだもので測る。
+   ・問題（p-body）が折り線より下にはみ出していない
+   ・答え（p-key）が答えの欄からはみ出していない（はみ出すと折っても答えが見える）
+   画面では #print-region が非表示なので、測る間だけ画面の外に出す（見えない）。 */
+function sheetsFit(region){
+  var keep=region.getAttribute("style");
+  region.setAttribute("style","display:block;position:absolute;left:-10000px;top:0;width:210mm;visibility:hidden;");
+  var ok=Array.prototype.every.call(region.querySelectorAll(".p-sheet"), function(s){
+    var b=s.querySelector(".p-body"), k=s.querySelector(".p-key");
+    return b && b.clientHeight>0 && b.scrollHeight<=b.clientHeight+1
+        && (!k || k.scrollHeight<=k.clientHeight+1);
+  });
+  if(keep===null) region.removeAttribute("style"); else region.setAttribute("style",keep);
+  return ok;
 }
 
 /* ブロックの列を、1枚ぶんずつに切る。**ブロックの途中でも切る**（1枚の上限が優先）。
@@ -1137,6 +1180,12 @@ function renderSheet(blocks, page, pages){
         +(b.poolUseOnce?"<span class='p-poolnote'>（1つの語は1回だけ使います）</span>":"")
         +'</div>';
     }
+    // ★書くマスが1〜2個のブロック（書き取り・送りがな・対義語など）は、問題文の欄を広く取る。
+    //   ⚠️ 既定の 45%／48% だと、漢字1字のマスが40mm幅に伸びる一方で問題文が2〜3行に折り返し、
+    //      行が高くなって20問が1枚に収まらなかった（本物の紙で実測: 46px はみ出し）。
+    //   マスが3つ以上（部首）のときは、マスの幅が要るので既定のまま。
+    var maxSlots=b.rows.reduce(function(a,r){ return Math.max(a,(r.slots||[]).length||1); },0);
+    var qW=(maxSlots<=2)?"66%":"45%", aW=(maxSlots<=2)?"27%":"48%";
     html+=twoCols(b.rows, function(row,i){
         // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
         //   （複数枚に分かれた日は、続きの枚でも通し番号になる）
@@ -1166,13 +1215,17 @@ function renderSheet(blocks, page, pages){
             +(sl.yomi?"<span class='p-slotlab'>"+sl.yomi+"</span>":"")+"</div>";
         }).join("");
         // ★出典は1問ごとに小さく添える。問題文より目立たせない（お子さんが読むのは問題文）
+        //   ⚠️⚠️ **行の高さを1mmも増やさない置き方にすること。**
+        //      最初は問題文の頭に入れた → 問題文が1行ぶん伸び、20問で折り線を越えて答えに重なった
+        //      （2026-09-11、本物の紙で claude-91 が発見。ダミーの短い文ではテストが通っていた）。
+        //   → 書くマスの枠の右下に、絶対配置で置く（高さ0）。
         var cite=row.cite?"<span class='p-cite'>（"+row.cite+"）</span>":"";
         return "<tr><td class='p-no'>"+no+"</td>"
-          +"<td class='p-q'>"+cite+(q?"<span style='font-size:9.5pt'>"+q+"</span>":"")
+          +"<td class='p-q' style='width:"+qW+"'>"+(q?"<span style='font-size:9.5pt'>"+q+"</span>":"")
           +(q?hint:"<span style='font-size:9pt'>（"+row.hint+"）</span>")+"</td>"
           // ★padding を 0 に。td の既定 padding(1.5mm) が上下に付くと、
           //   1行あたり3mm 高くなり、30問で紙をはみ出す（実際に溢れて分かった）
-          +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"+cells+"</div></td></tr>";
+          +"<td class='p-ansbox' style='padding:0;width:"+aW+"'><div class='p-slots'>"+cells+cite+"</div></td></tr>";
       });
     keys.push({ title:b.keyTitle||b.title.replace(/^■\s*/,"").replace(/。$/,""), list:ansList });
   });
