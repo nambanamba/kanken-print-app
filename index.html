@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>漢検7級 いっしょにがんばろう</title>
+<script src="kanken-crypto.js"></script>
+<!-- ★本の問題（暗号化ずみ）。**まだ無くてよい。**無ければ本の問題が出ないだけで、
+     642字マスタから作る出題・日割り・記録・応援はそのまま動く。 -->
+<script src="kanken-quiz.enc.js"></script>
 <script src="kanken-data.js"></script>
 <script src="kanken-kanji.js"></script>
 <script src="kanken-gen.js"></script>
@@ -221,6 +225,7 @@
   </div>
 
   <!-- ================= きょう（1日ぶんのセッション） ================= -->
+  <!-- ※ 本の問題の合言葉は「せってい」の中（親御さんが1回だけ入れる）。ここには置かない -->
   <div class="page" id="page-kyou">
     <!-- 開始前 -->
     <div id="ky-start">
@@ -375,6 +380,22 @@
       <h2>📑 本の目次</h2>
       <div id="units-box"></div>
       <button class="btn" style="margin-top:10px" onclick="saveUnits()">目次を保存</button>
+    </div>
+
+    <!-- ★本の問題の合言葉。親御さんが1回だけ入れるもの（お子さんは触らない） -->
+    <div class="card">
+      <h2>🔑 本の問題（おうちの方）</h2>
+      <div id="quiz-box"></div>
+      <div class="muted" style="margin-top:10px;font-size:.8rem">
+        本の問題は暗号化して置いてあります。合言葉を入れると読みこめます。<br>
+        ※ この仕組みは、検索やクローラに問題文が拾われないようにするためのものです。
+      </div>
+    </div>
+
+    <!-- ★進み具合（おうちの方向け）。お子さんの画面には「遅れ」を出さない -->
+    <div class="card">
+      <h2>📅 すすみ具合（おうちの方）</h2>
+      <div id="progress-box"></div>
     </div>
   </div>
 </div>
@@ -1158,6 +1179,35 @@ function renderSetei(){
         +"<td><input type='number' data-u='"+u.id+"' data-k='qs' value='"+(u.qs||"")+"' style='padding:4px;font-size:.8rem'></td></tr>";
     }).join("")+"</table>";
 }
+/* ★進み具合（親御さん向け）。**お子さんの画面には出さない。**
+   ユーザーは「あと何日、何問目まで進んだ」を最初から求めている（司令塔）。
+   ここでだけ、日割りの日数と受検日までの日数を突き合わせて出す。 */
+function renderProgress(){
+  var box=document.getElementById("progress-box"); if(!box) return;
+  var done=PLAN.filter(function(c){return !!RECORDS[c.id];}).length;
+  var left=PLAN.length-done, days=daysLeft();
+  var t=planToday();
+  var rows=[
+    ["受検日まで", days+" 日"],
+    ["日割り", "全 "+PLAN.length+" 日ぶん（ドリル）"],
+    ["おわった", done+" 日ぶん"],
+    ["のこり", left+" 日ぶん"],
+    ["きょうやるところ", t?(chunkLabel(t)+" "+chunkRange(t)+"（"+t.n+"問）"):"ぜんぶ おわりました"]
+  ];
+  var warn="";
+  if(left>days){
+    // ★ここは親御さんにだけ見せる。お子さんの画面には出さない
+    warn='<div class="note" style="margin-top:10px;text-align:left">'
+      +'<b>のこり '+left+' 日ぶんに対して、受検日まで '+days+' 日です（'+(left-days)+' 日ぶん多い）。</b><br>'
+      +'ドリルはステージ1（1〜29）とステージ2（30〜54）で同じ単元が2巡します。'
+      +'<b>ステージ2は、記録で苦手と分かった分野だけ</b>にすると収まります。'
+      +'<br><span class="muted">1日の量を増やして間に合わせる作りにはしていません。</span></div>';
+  }
+  box.innerHTML='<table>'+rows.map(function(r){
+    return "<tr><td style='white-space:nowrap'>"+r[0]+"</td><td><b>"+r[1]+"</b></td></tr>";
+  }).join("")+'</table>'+warn;
+}
+
 function saveUnits(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-u]"),function(el){
     var u=unitOf(el.dataset.u); if(!u) return;
@@ -1165,6 +1215,127 @@ function saveUnits(){
   });
   save(K_UNITS,UNITS); renderAll(); alert("目次を保存しました。");
 }
+/* =========================================================================
+   本の問題（暗号化ずみ）を読む
+   ★合言葉は保存しない。**導出した鍵だけ**を localStorage に置く。
+     端末を覗かれたら鍵は読めるが、合言葉そのものは漏れない（使い回されても被害が広がらない）。
+   ★合言葉が違えば AES-GCM の認証が失敗して例外になるので、
+     「合っているか」を別に持つ必要がない（＝ハッシュをリポジトリに置かなくてよい）。
+   ========================================================================= */
+var K_QKEY="kanken7_qkey_v1";
+var BOOK_UNITS=null;          // 復号できた本の問題。まだなら null
+
+/* ★出題してよい問題かどうかを、**入り口で1回だけ**判定する。
+   ⚠️ 出題側で弾く形にしないこと。印刷・予想得点・苦手判定と、数える場所が複数あるので
+      どこかで必ず書き忘れる（claude-1b と約束した形）。
+   弾く条件:
+     ・答えが無い（別冊p16が未撮影で、実戦テスト③の後半に発生する）
+     ・値が "__" で始まる（__UNREADABLE__ / __MISSING__）
+     ・needsFigure … アプリは文字しか出せない。図が要る問題は画面で解けない
+   ⚠️ **データは捨てない。**捨てると、再撮影が届いたときに何を埋めるか分からなくなる。 */
+function askable(item){
+  if(!item) return false;
+  if(item.needsFigure) return false;
+  var ans=item.answers||[];
+  if(!ans.length) return false;
+  for(var i=0;i<ans.length;i++){
+    var t=ans[i] && ans[i].text;
+    if(!t) return false;
+    if(String(t).indexOf("__")===0) return false;
+  }
+  if(!(item.kanji||[]).length) return false;   // 記録先が無い問題は出さない
+  return true;
+}
+
+/* ★「画面で出せる」と「紙で出せる」は別物。
+   実測（2026-09-10、最初の2単元 dr_25・tn_01 を取り込んで確認）:
+     設問50件のうち **記号選択は0件**。本の中身は**書かせる形式が主**だった。
+   アプリの画面は**タップで答える形しか自動採点できない**ので、
+     ・記号選択（choices がある・答えが1つ）… **画面**。その場で〇✕が出る
+     ・それ以外（書く・答えが複数）        … **紙**。父親が採点して登録する
+   ⚠️ これは引き継ぎ.md 12-1 の「記号で選ぶものは画面、手で書くものは紙」と同じ線。
+      本のデータが入っても、この線は動かない。 */
+function screenable(item){
+  if(!askable(item)) return false;
+  if(!Array.isArray(item.choices) || !item.choices.length) return false;
+  if((item.answers||[]).length !== 1) return false;   // 1タップで答えられる形だけ
+  // ★答えが選択肢のどれかと完全一致すること（アプリは値で採点している）
+  return item.choices.indexOf(item.answers[0].text) >= 0;
+}
+function printable(item){ return askable(item) && !screenable(item); }
+
+function bookLoaded(){ return !!BOOK_UNITS; }
+function bookStats(){
+  if(!BOOK_UNITS) return {units:0,items:0,askable:0};
+  var items=0, ok=0, scr=0, pr=0;
+  BOOK_UNITS.forEach(function(u){
+    (u.groups||[{items:u.items||[]}]).forEach(function(g){
+      (g.items||[]).forEach(function(it){
+        items++;
+        if(askable(it)){ ok++; if(screenable(it)) scr++; else pr++; }
+      });
+    });
+  });
+  return {units:BOOK_UNITS.length, items:items, askable:ok, screen:scr, paper:pr};
+}
+
+function tryLoadBook(){
+  if(typeof KANKEN_QUIZ_ENC==="undefined" || !KANKEN_QUIZ_ENC) return Promise.resolve(false);
+  var saved=load(K_QKEY,null);
+  if(!saved) return Promise.resolve(false);
+  return KANKEN_CRYPTO.importKey(saved)
+    .then(function(k){ return KANKEN_CRYPTO.decrypt(k, KANKEN_QUIZ_ENC); })
+    .then(function(u){ BOOK_UNITS=u; return true; })
+    .catch(function(){ return false; });   // 鍵が古い等。合言葉を入れ直してもらう
+}
+
+function unlockBook(){
+  var el=document.getElementById("q-pass"), msg=document.getElementById("q-msg");
+  var pass=(el.value||"").trim();
+  if(!pass){ msg.textContent="合言葉を入れてください。"; return; }
+  if(typeof KANKEN_QUIZ_ENC==="undefined" || !KANKEN_QUIZ_ENC){
+    msg.textContent="本の問題データがまだありません（これから入ります）。"; return;
+  }
+  msg.textContent="かくにん中…";
+  KANKEN_CRYPTO.deriveKey(pass, KANKEN_CRYPTO.b64ToBytes(KANKEN_QUIZ_ENC.salt))
+    .then(function(k){
+      return KANKEN_CRYPTO.decrypt(k, KANKEN_QUIZ_ENC).then(function(u){
+        BOOK_UNITS=u; el.value="";
+        // ★合言葉ではなく鍵を保存する
+        return KANKEN_CRYPTO.exportKey(k).then(function(b64){ save(K_QKEY,b64); });
+      });
+    })
+    .then(function(){ renderQuizBox(); renderAll(); })
+    .catch(function(){ msg.textContent="合言葉がちがうよ。もういちど入れてね。"; });
+}
+function forgetBookKey(){
+  try{ localStorage.removeItem(K_QKEY); }catch(e){}
+  BOOK_UNITS=null; renderQuizBox();
+}
+function renderQuizBox(){
+  var box=document.getElementById("quiz-box"); if(!box) return;
+  var has=(typeof KANKEN_QUIZ_ENC!=="undefined" && KANKEN_QUIZ_ENC);
+  if(!has){
+    box.innerHTML='<div class="muted">本の問題データは、まだ入っていません。'
+      +'入ると、ここで合言葉を入れて読みこめるようになります。</div>';
+    return;
+  }
+  if(BOOK_UNITS){
+    var s=bookStats();
+    box.innerHTML='<div class="muted">読みこみずみ：<b>'+s.units+'単元</b>／<b>'+s.items+'問</b><br>'
+      +'　画面（記号でえらぶ・その場で〇✕）… <b>'+s.screen+'問</b><br>'
+      +'　紙（手で書く。おうちの方が採点）… <b>'+s.paper+'問</b><br>'
+      +'　出さない（図が要る／答えがまだ無い）… <b>'+(s.items-s.askable)+'問</b></div>'
+      +'<button class="btn ghost" style="margin-top:8px" onclick="forgetBookKey()">この端末から合言葉を消す</button>';
+    return;
+  }
+  box.innerHTML='<div class="muted" style="margin-bottom:8px">本の問題を読みこむには、合言葉が要ります。'
+    +'<b>1回入れれば、次からは要りません。</b></div>'
+    +'<input type="password" id="q-pass" placeholder="あいことば" style="padding:8px;font-size:1rem;width:60%">'
+    +' <button class="btn" style="display:inline-block;width:auto;padding:8px 16px" onclick="unlockBook()">よみこむ</button>'
+    +'<div id="q-msg" class="muted" style="margin-top:6px"></div>';
+}
+
 function saveExamDate(){
   var v=document.getElementById("m-date").value; if(!v) return;
   SET.examDate=v; save(K_SET,SET); renderAll(); alert("受検日を保存しました。");
@@ -1188,8 +1359,11 @@ function printPractice(){
   window.print();
 }
 
-function renderAll(){ renderOuen(); renderKyou(); renderKiroku(); renderSetei(); }
+function renderAll(){ renderOuen(); renderKyou(); renderKiroku(); renderSetei();
+                      renderQuizBox(); renderProgress(); }
 renderAll();
+/* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */
+tryLoadBook().then(function(ok){ if(ok) renderAll(); });
 </script>
 </body>
 </html>

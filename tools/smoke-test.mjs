@@ -549,6 +549,105 @@ ok("セッションの状態も残っている（前後で変わらない）",
    `${JSON.stringify(beforeReload)} -> ${JSON.stringify(kept.s)}`);
 ok("リロード後もJSエラーが無い", errors.length === 0, errors.join(" | "));
 
+console.log("\n=== 本の問題の暗号化とログイン ===");
+// ⚠️ この仕組みの目的は「検索やクローラに問題文が拾われないこと」であって、
+//    本気の攻撃者から守ることではない（鍵はブラウザに渡る）。過大評価しないこと。
+const cryptoCheck = await page.evaluate(async () => {
+  const sample = [{
+    unit_id: "dr_01",
+    groups: [{ items: [
+      // 出せる問題
+      { id: "q_dr01_00_001", answers: [{ ansNo: 1, text: "どりょく" }], kanji: ["努", "力"] },
+      // 答えがまだ無い（別冊p16が未撮影のケース）
+      { id: "q_dr01_00_002", answers: [{ ansNo: 1, text: "__MISSING__" }], kanji: ["塩"] },
+      // 判読できなかった
+      { id: "q_dr01_00_003", answers: [{ ansNo: 1, text: "__UNREADABLE__" }], kanji: ["塩"] },
+      // 図が要る（アプリは文字しか出せない）
+      { id: "q_dr01_00_004", answers: [{ ansNo: 1, text: "北" }], kanji: ["北"], needsFigure: true },
+      // 答えが空
+      { id: "q_dr01_00_005", answers: [], kanji: ["南"] },
+      // 記録先の漢字が無い
+      { id: "q_dr01_00_006", answers: [{ ansNo: 1, text: "西" }], kanji: [] }
+    ]}]
+  }];
+  const pass = "ためしの あいことば";
+  const salt = KANKEN_CRYPTO.newSalt();
+  const key = await KANKEN_CRYPTO.deriveKey(pass, salt);
+  const payload = await KANKEN_CRYPTO.encrypt(key, sample);
+
+  // ① 正しい合言葉なら復号できる
+  const key2 = await KANKEN_CRYPTO.deriveKey(pass, salt);
+  const back = await KANKEN_CRYPTO.decrypt(key2, payload);
+
+  // ② ちがう合言葉なら失敗する（＝合言葉のハッシュを別に置く必要がない）
+  let wrongFailed = false;
+  try {
+    const bad = await KANKEN_CRYPTO.deriveKey(pass + "x", salt);
+    await KANKEN_CRYPTO.decrypt(bad, payload);
+  } catch (e) { wrongFailed = true; }
+
+  // ③ 暗号文に平文が現れていないこと
+  const leaked = payload.data.indexOf("どりょく") >= 0 || atob(payload.data).indexOf("努") >= 0;
+
+  // ④ 出題フィルタ（入り口で1回だけ弾く）
+  const items = sample[0].groups[0].items;
+  return {
+    roundTrip: JSON.stringify(back) === JSON.stringify(sample),
+    wrongFailed, leaked,
+    iter: KANKEN_CRYPTO.PBKDF2_ITER,
+    askable: items.map(it => askable(it)),
+    // 鍵を書き出して読み戻せる（次回から合言葉を聞かないため）
+    keyRoundTrip: await (async () => {
+      const b64 = await KANKEN_CRYPTO.exportKey(key);
+      const k3 = await KANKEN_CRYPTO.importKey(b64);
+      const b = await KANKEN_CRYPTO.decrypt(k3, payload);
+      return JSON.stringify(b) === JSON.stringify(sample);
+    })()
+  };
+});
+ok("暗号化して復号すると元に戻る", cryptoCheck.roundTrip);
+ok("★ちがう合言葉では復号できない（だから合言葉のハッシュを置かなくてよい）", cryptoCheck.wrongFailed);
+ok("★暗号文に問題文がそのまま出ていない", !cryptoCheck.leaked);
+ok("PBKDF2 の反復が20万回ある（下げないこと）", cryptoCheck.iter === 200000, String(cryptoCheck.iter));
+ok("★保存した鍵で読み直せる（合言葉は毎回聞かない）", cryptoCheck.keyRoundTrip);
+ok("★答えのある問題は出せる", cryptoCheck.askable[0] === true);
+ok("★答えがまだ無い問題(__MISSING__)は出さない", cryptoCheck.askable[1] === false);
+ok("★判読できなかった問題(__UNREADABLE__)は出さない", cryptoCheck.askable[2] === false);
+ok("★図が要る問題(needsFigure)は出さない", cryptoCheck.askable[3] === false);
+ok("★答えが空の問題は出さない", cryptoCheck.askable[4] === false);
+ok("★記録先の漢字が無い問題は出さない", cryptoCheck.askable[5] === false);
+
+// ★「画面で出せる」と「紙で出せる」は別。実測で、本の中身は書かせる形式が主だった
+const routing = await page.evaluate(() => {
+  const sel = { id:"s1", choices:["ア 器","イ 希","ウ 機"],
+                answers:[{ansNo:1,text:"ア 器"}], kanji:["器"] };
+  const selBad = { id:"s2", choices:["ア 器","イ 希"],
+                   answers:[{ansNo:1,text:"ウ 機"}], kanji:["機"] };   // 答えが選択肢に無い
+  const write = { id:"s3", choices:null, answers:[{ansNo:1,text:"どりょく"}], kanji:["努","力"] };
+  const multi = { id:"s4", choices:null,
+                  answers:[{ansNo:1,text:"利"},{ansNo:1,text:"前"}], kanji:["利","前"] };
+  const noAns = { id:"s5", choices:["ア 器"], answers:[], kanji:["器"] };
+  return {
+    selScreen: screenable(sel), selPaper: printable(sel),
+    selBadScreen: screenable(selBad),
+    writeScreen: screenable(write), writePaper: printable(write),
+    multiScreen: screenable(multi), multiPaper: printable(multi),
+    noAnsScreen: screenable(noAns), noAnsPaper: printable(noAns)
+  };
+});
+ok("記号選択（答えが1つ）は画面に出す", routing.selScreen && !routing.selPaper);
+ok("★答えが選択肢に無いものは画面に出さない（値で採点しているため）", !routing.selBadScreen);
+ok("書かせる形式は紙に回す", !routing.writeScreen && routing.writePaper);
+ok("★答えが複数ある設問は画面に出さない（1タップで答えられない）",
+   !routing.multiScreen && routing.multiPaper);
+ok("出せない問題は、画面にも紙にも出さない", !routing.noAnsScreen && !routing.noAnsPaper);
+
+// ★平文がリポジトリに入っていないこと（いちばん大事なので、ここでも見る）
+const encSrc = fs.readFileSync(path.join(ROOT, "kanken-quiz.enc.js"), "utf8");
+ok("★暗号文ファイルに平文の問題文が入っていない",
+   !/[ぁ-んァ-ヶ][ぁ-んァ-ヶ][ぁ-んァ-ヶ]/.test(encSrc.replace(/^[\s\S]*?\*\//, "")),
+   encSrc.slice(0, 80));
+
 console.log("\n=== 日割り（量をならす。重いステージを分ける） ===");
 // ユーザー:「じかんより、やれそうか、が大事」→ **最適化するのは所要時間ではなく、量のばらつき。**
 // ⚠️ 1日の量を増やして日数の帳尻を合わせないこと。足りなければ範囲を削る側で調整する。
