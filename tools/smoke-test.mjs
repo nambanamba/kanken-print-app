@@ -736,6 +736,16 @@ const mix = await page.evaluate(async () => {
   };
   BOOK_UNITS = [verified, unverified];
 
+  // ★どの単元が「いま」照合ずみかに依存させない。
+  //   ⚠️ もとは "dr_25" が照合ずみである前提で書いていた。
+  //      検証担当が dr_25 を一時的に外した瞬間に、**テストが4件落ちた。**
+  //      落ちたのは実装ではなく**テストの前提**で、これは実運用で必ず起きる
+  //      （通過・取り下げは日々動く）。
+  //   → **ここで見たいのは「照合ずみなら出る／未照合なら出ない」という仕組みのほう。**
+  //      判定そのものを差し替えて、単元名に依存しない形にする。
+  const keepVerified = window.isVerifiedUnit;
+  window.isVerifiedUnit = (id) => id === "dr_25";
+
   const keep = window.planToday;
   const out = {};
 
@@ -784,6 +794,7 @@ const mix = await page.evaluate(async () => {
   out.bodyOverflow = body.scrollHeight - body.clientHeight;
 
   window.planToday = keep;
+  window.isVerifiedUnit = keepVerified;
   BOOK_UNITS = null;
   return out;
 });
@@ -814,6 +825,8 @@ const gradable = await page.evaluate(() => {
     ]}]
   };
   BOOK_UNITS = [verified];
+  const keepVerified = window.isVerifiedUnit;
+  window.isVerifiedUnit = (id) => id === "dr_25";
   const keep = window.planToday;
   window.planToday = () => ({ unit:"dr_25", from:1, to:10, n:10, day:1, parts:1, part:1,
                               mat:"dr", label:"同じ部首①", pages:"25" });
@@ -833,7 +846,7 @@ const gradable = await page.evaluate(() => {
     // ★並び順が紙と同じか（照らし合わせが目で追えること）
     sameOrder: JSON.stringify(domK) === JSON.stringify(gradableK)
   };
-  window.planToday = keep; BOOK_UNITS = null;
+  window.planToday = keep; window.isVerifiedUnit = keepVerified; BOOK_UNITS = null;
   return out;
 });
 ok("★★紙に出た字が、すべて採点できる", gradable.ungradable.length === 0,
@@ -968,6 +981,9 @@ const slots = await page.evaluate(() => {
     ]}]
   };
   BOOK_UNITS = [verified];
+  // ★照合ずみかどうかの判定に依存させない（どの単元が通過ずみかは日々動く）
+  const keepVerified = window.isVerifiedUnit;
+  window.isVerifiedUnit = (id) => id === "dr_25";
   const keep = window.planToday;
   window.planToday = () => ({ unit:"dr_25", from:1, to:10, n:10, day:1, parts:1, part:1,
                               mat:"dr", label:"同じ部首①", pages:"25" });
@@ -979,7 +995,7 @@ const slots = await page.evaluate(() => {
     slots: r.querySelectorAll(".p-slot").length,
     labels: [...r.querySelectorAll(".p-slotlab")].map(e => e.textContent)
   }));
-  window.planToday = keep; BOOK_UNITS = null;
+  window.planToday = keep; window.isVerifiedUnit = keepVerified; BOOK_UNITS = null;
   return got;
 });
 ok("★★空らんが3つの問題は、書くマスも3つ出る", slots[0] && slots[0].slots === 3,
