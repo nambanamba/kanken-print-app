@@ -1002,6 +1002,31 @@ ok("★★空らんが3つの問題は、書くマスも3つ出る", slots[0] &&
    JSON.stringify(slots[0]));
 ok("★★空らんが1つの問題は、書くマスも1つ", slots[1] && slots[1].slots === 1,
    JSON.stringify(slots[1]));
+console.log("");
+console.log("=== 例語の位置と、読みの手がかり ===");
+const exAlign = await page.evaluate(() => {
+  // ★kunWords() は ex を「on.length + kun の添字」で引く。
+  //   つまり **ex は on と kun のすべての読みに1つずつ対応している前提**。
+  //   ⚠️ 例語が空の読みを ex からだけ落とすと位置がずれ、
+  //      訓読みに別の語がぶら下がる（実測48字。書き取り・読みの出題から静かに消えていた）。
+  const bad = KANJI_MASTER.filter(r =>
+    (r.ex || []).length !== (r.on || []).length + (r.kun || []).length);
+  // ★紙の手がかりに同じ読みを2回出さない（3つ出すつもりが実質2つになる）
+  const dupHint = KANJI_MASTER.filter(r => {
+    const h = readingHint(r).split("・").filter(Boolean);
+    return new Set(h).size !== h.length;
+  });
+  return { bad: bad.length, badEx: bad.slice(0, 5).map(r => r.k),
+           dupHint: dupHint.length, dupEx: dupHint.slice(0, 5).map(r => r.k),
+           sample: readingHint(KANJI_MASTER.find(r => r.k === "夏")) };
+});
+ok("★例語の数が、音と訓の数の合計と一致する（位置がずれていない）",
+   exAlign.bad === 0, `ずれ ${exAlign.bad} 字 ${exAlign.badEx.join("")}`);
+ok("★紙の手がかりに、同じ読みを2回出さない",
+   exAlign.dupHint === 0, `${exAlign.dupHint} 字 ${exAlign.dupEx.join("")}`);
+ok("重複を省いたぶん、手がかりが埋まる（夏＝カ・ゲ・なつ）",
+   exAlign.sample === "カ・ゲ・なつ", exAlign.sample);
+
 ok("★★書くマス1つ1つに、その空らんの読みが付いている（まとめて書かない）",
    !!(slots[0] && slots[0].labels.join("・") === "り・ぜん・れつ"),
    JSON.stringify(slots[0] && slots[0].labels));

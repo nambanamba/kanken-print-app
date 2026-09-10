@@ -1107,8 +1107,7 @@ function buildPaperBlocks(){
       ask:"（　）は読みです。", src:"gen",
       rows:kaki.map(function(k){
         var r=MASTER_BY_K[k]||{on:[],kun:[]};
-        return { q:"", hint:[].concat(r.on||[],r.kun||[]).slice(0,3).join("・"),
-                 a:k, kanji:[k], field:"kaki" };
+        return { q:"", hint:readingHint(r), a:k, kanji:[k], field:"kaki" };
       })});
   }
   if(yomi.length){
@@ -1120,6 +1119,20 @@ function buildPaperBlocks(){
       })});
   }
   return blocks;
+}
+
+/* 読みの手がかり（音・訓を3つまで）。
+   ⚠️ **同じ読みを2回出さない。**常用漢字表には、同じ音が例語つきと例語なしで
+      2回並ぶ字がある（実測10字。場・夏・歌・開・深・整・指・意・好・清）。
+      そのまま出すと **「セイ・ショウ・セイ」** のようになり、
+      **手がかりが1つぶん無駄になる**（3つ出すつもりが実質2つ）。
+   ★読みそのものは消さない（マスタは常用漢字表どおりに保つ）。**出すときだけ重複を省く。** */
+function readingHint(r){
+  var seen={}, out=[];
+  [].concat(r.on||[], r.kun||[]).forEach(function(rd){
+    if(seen[rd]) return; seen[rd]=1; if(out.length<3) out.push(rd);
+  });
+  return out.join("・");
 }
 
 /* 本の問題文を紙の形にする。
