@@ -438,7 +438,34 @@ function mergeUnits(saved,defaults){
 
 function fieldOf(k){ return FIELDS.filter(function(f){return f.key===k;})[0]; }
 function matOf(k){ return MATERIALS.filter(function(m){return m.key===k;})[0]; }
-function unitOf(id){ return UNITS.filter(function(u){return u.id===id;})[0]; }
+/* ★かたまりid（"dr_19#1"）でも元の単元を引けるようにする。
+   日割りで単元を2日に分けると、記録は "dr_19#1" / "dr_19#2" の2件になる。
+   単元id そのものは動かないので、既存の記録は無事（C-5）。 */
+function baseUnitId(id){ return String(id).split("#")[0]; }
+function unitOf(id){
+  var b=baseUnitId(id);
+  return UNITS.filter(function(u){return u.id===b;})[0];
+}
+
+/* ★日割り。ドリルを主軸にする（ノートは弱点狙いなので、日割りには載せない）。
+   ⚠️ PLAN は UNITS から毎回作り直す。保存しないので、
+      DEFAULT_UNITS を直せば全端末の日割りが更新される（mergeUnits と同じ考え方）。 */
+var PLAN=buildPlan(UNITS.filter(function(u){return u.mat==="dr"&&u.field!=="test";}),{});
+function planIdxToday(){
+  for(var i=0;i<PLAN.length;i++){ if(!RECORDS[PLAN[i].id]) return i; }
+  return -1;   // 全部おわり
+}
+function planToday(){ var i=planIdxToday(); return i<0?null:PLAN[i]; }
+/* かたまりの見出し。「昨日の続き」が分かるようにする（司令塔の条件） */
+function chunkLabel(c){
+  var m=matOf(c.mat);
+  var s=(m?m.short:"")+" "+c.label+(c.pages?"（本の"+c.pages+"ページ）":"");
+  if(c.parts>1) s+=" の "+(c.part===1?"前半":"後半");
+  return s;
+}
+function chunkRange(c){
+  return c.parts>1 ? ("問"+c.from+"〜"+c.to) : ("問1〜"+c.to);
+}
 function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function todayStr(){ return ymd(new Date()); }
 function daysLeft(){
@@ -658,8 +685,23 @@ function renderKyou(){
   if(!live){
     only(start);
     var left=KANJI_MASTER.filter(function(r){return !isOK(r.k);}).length;
+    // ★「きょうは本のどこをやるか」を出す。**終わりが見えるようにする**（司令塔の条件）。
+    //   ⚠️ 「遅れ」は出さない。日割りが残り日数を超えていても、それは画面に出さない
+    //      （責めない設計。残り日数との突き合わせは「せってい」で親御さんが見る）
+    var t=planToday(), book="";
+    if(t){
+      book='<div class="note" style="margin-top:10px;text-align:left">'
+        +'<b>きょうの 本</b><br>'
+        +chunkLabel(t)+'<br>'
+        +'<b>'+chunkRange(t)+'　'+t.n+'問</b>'
+        +(t.parts>1&&t.part>1?'<br><span class="muted">きのうの つづきです</span>':'')
+        +'<br><span class="muted">'+t.day+'日目 ／ 全'+PLAN.length+'日</span>'
+        +'</div>';
+    }else{
+      book='<div class="note" style="margin-top:10px">本のもんだいは ぜんぶ おわりました。</div>';
+    }
     document.getElementById("ky-info").innerHTML=
-      "受検日まで <b>あと "+daysLeft()+" 日</b>。まだ確かめていない字が <b>"+left+" 字</b>あります。";
+      "受検日まで <b>あと "+daysLeft()+" 日</b>。まだ確かめていない字が <b>"+left+" 字</b>あります。"+book;
     return;
   }
   if(SESSION.done){ only(end); renderKyouEnd(); return; }
@@ -1044,9 +1086,18 @@ function saveSheetResult(){
 function renderKiroku(){
   renderMarks();
   var sel=document.getElementById("k-unit"), keep=sel.value;
-  sel.innerHTML=UNITS.map(function(u){
-    var m=matOf(u.mat), r=RECORDS[u.id];
-    return '<option value="'+u.id+'">'+(m?m.short:"")+" "+u.label+(u.pages?" ("+u.pages+")":"")+(r?" ✓済":"")+"</option>";
+  // ★日割りのかたまり（ドリル）＋ それ以外の単元（ノート・テスト）。
+  //   ドリルを分割した日は、かたまり単位で記録する（"dr_19#1" / "dr_19#2"）
+  var rows=PLAN.map(function(c){
+    return { id:c.id, label:chunkLabel(c)+" "+chunkRange(c), n:c.n };
+  }).concat(UNITS.filter(function(u){
+    return !(u.mat==="dr"&&u.field!=="test");
+  }).map(function(u){
+    var m=matOf(u.mat);
+    return { id:u.id, label:(m?m.short:"")+" "+u.label+(u.pages?" ("+u.pages+")":""), n:u.qs||0 };
+  }));
+  sel.innerHTML=rows.map(function(r){
+    return '<option value="'+r.id+'">'+r.label+(RECORDS[r.id]?" ✓済":"")+"</option>";
   }).join("");
   var fu=UNITS.filter(function(u){return !RECORDS[u.id];})[0];
   sel.value=(keep&&unitOf(keep))?keep:(fu?fu.id:(UNITS[0]||{}).id);
