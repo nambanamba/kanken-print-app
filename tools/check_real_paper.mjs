@@ -93,6 +93,11 @@ if (allUnits) {
     await measure(u, (u) => { SESSION = { v: SHEET_VERSION, date: todayStr(), ids: bookAllItems().filter(x => x.u.unitId === u).map(x => x.it.id), results: {}, saved: false, _tool: true }; }, u);
   }
 }
+// ★送りがな（アプリの3択）: 長さで選ぶ作戦が、でたらめより得をしないか（本物の全問）
+const ob = await p.evaluate(() => okuriBias());
+ok("送りがな: 長さで選ぶ作戦が、でたらめより15ポイント以上得をしない", ob.ok, JSON.stringify({ three: ob.three, two: ob.two, skip: ob.skip, edge: ob.edge }));
+const okPaper = await p.evaluate(() => bookAllItems().filter(x => itemFieldOf(x.it, x.g) === "okuri").length);
+ok("送りがなは紙に出ない", okPaper === 0, String(okPaper));
 ok("JSエラーが無い", errs.length === 0, errs.join(" | "));
 await p.evaluate(() => { localStorage.clear(); });
 await b.close(); srv.close();

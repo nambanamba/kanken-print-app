@@ -152,8 +152,8 @@ ok("★紙の問題は全部、本の問題（アプリが作った問題が無�
 ok("★アプリの問題生成が1回も呼ばれていない", d1.gen.length === 0, d1.gen.join(","));
 ok("★照合の通っていない単元の問題が出ていない", d1.fromUnverified === 0, String(d1.fromUnverified));
 ok("★読みの問題が紙に1問も出ていない（読みはアプリ側）", d1.yomiOnPaper === 0, String(d1.yomiOnPaper));
-ok("★紙は手で書く分野だけ（書き取り・部首・同じ読み・送りがな・対義語）",
-   d1.fields.every(f => ["kaki", "bushu", "onaji", "okuri", "taigi"].includes(f)), [...new Set(d1.fields)].join(","));
+ok("★紙は手で書く分野だけ（書き取り・部首・同じ読み・対義語。送りがなは2026-09-11にアプリへ）",
+   d1.fields.every(f => ["kaki", "bushu", "onaji", "taigi"].includes(f)), [...new Set(d1.fields)].join(","));
 ok("出せない分野の枠は、ほかの紙の分野で埋まっている（書き取り15＋部首5）",
    d1.fields.filter(f => f === "kaki").length === 15 && d1.fields.filter(f => f === "bushu").length === 5,
    `kaki ${d1.fields.filter(f => f === "kaki").length} / bushu ${d1.fields.filter(f => f === "bushu").length}`);
@@ -171,12 +171,13 @@ const mix = await page.evaluate(() => {
   BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; SESSION = keepS; ITEMS = keepI;
   return { c, q };
 });
-ok("★配点比の割り振りは 書き取り8・部首4・同じ読み3・送りがな3・対義語2",
-   mix.q.kaki === 8 && mix.q.bushu === 4 && mix.q.onaji === 3 && mix.q.okuri === 3 && mix.q.taigi === 2 &&
-   Object.keys(mix.q).length === 5, JSON.stringify(mix.q));
+ok("★配点比の割り振りは 書き取り9・部首5・同じ読み4・対義語2（紙＝86点分）",
+   mix.q.kaki === 9 && mix.q.bushu === 5 && mix.q.onaji === 4 && mix.q.taigi === 2 &&
+   Object.keys(mix.q).length === 4, JSON.stringify(mix.q));
 ok("★全分野がそろえば、紙はその割り振りどおりに混ざる",
-   mix.c.kaki === 8 && mix.c.bushu === 4 && mix.c.onaji === 3 && mix.c.okuri === 3 && mix.c.taigi === 2,
+   mix.c.kaki === 9 && mix.c.bushu === 5 && mix.c.onaji === 4 && mix.c.taigi === 2,
    JSON.stringify(mix.c));
+ok("★送りがなは紙に1問も出ない（アプリへ移した）", !mix.c.okuri, JSON.stringify(mix.c));
 ok("★漢字えらび・画数（アプリ側）は紙に出ない", !mix.c.erabi && !mix.c.kakusu && !mix.c.yomi, JSON.stringify(mix.c));
 ok("★1問ごとに出典が出ている（本の名前・ページ・問番号）",
    d1.cites.length === d1.n && d1.cites.every(c => /^（ドリル p\d+(-\d+)? の \d+）$/.test(c)),
@@ -362,9 +363,9 @@ await measurePaper("✕の問題が5単元から来た日（見出しが多い�
 console.log("\n=== 紙で解けるか（○の中の漢字・組の番号） ===");
 const gv = await page.evaluate(() => {
   const u = { unitId: "dr_23", mat: "dr", srcPages: [23], groups: [
-    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "okuri", instruction: "ダミー（○の中の漢字）", example: { text: "れいのダミー文", answers: ["れいのこたえ"], givenKanji: KANJI_MASTER[0].k }, items: [1, 2, 3].map(i => ({
+    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "taigi", instruction: "ダミー（○の中の漢字）", example: { text: "れいのダミー文", answers: ["れいのこたえ"], givenKanji: KANJI_MASTER[0].k }, items: [1, 2, 3].map(i => ({
       id: "q_gv_" + i, no: i, text: "ダミーの文 " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[i].k], givenKanji: KANJI_MASTER[i].k })) },
-    { gno: 0, blockNo: 2, blockLabel: "(2)", field: "okuri", instruction: "ダミー（○の中の漢字）", items: [1, 2].map(i => ({
+    { gno: 0, blockNo: 2, blockLabel: "(2)", field: "taigi", instruction: "ダミー（○の中の漢字）", items: [1, 2].map(i => ({
       id: "q_gv2_" + i, no: i, text: "ダミーの文B " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[10 + i].k], givenKanji: KANJI_MASTER[10 + i].k })) }
   ] };
   BOOK_UNITS = [u]; window.isVerifiedUnit = () => true; ITEMS = {}; SESSION = null; window.__day = "2099-06-10";
@@ -423,11 +424,12 @@ const five = await page.evaluate(() => {
   const n = SESSION.ids.length;
   return { c, n, q: paperQuota(n), sheets: 1 };
 });
-ok("検査の前提: 5分野そろった日で、1枚に入る数（17問）まで削っている", five.n === 17, `${five.n}問`);
+const PAPER_FIELDS_T = ["kaki", "bushu", "onaji", "taigi"];
+ok("検査の前提: 分野がそろった日で、1枚に入る数（17問）まで削っている", five.n === 17, `${five.n}問`);
 ok("★削っても、各分野の数は配点比のまま（書き取りを先に削っていない）",
-   ["kaki", "bushu", "onaji", "okuri", "taigi"].every(f => (five.c[f] || 0) === Math.max(1, five.q[f])) , `${JSON.stringify(five.c)} / 比 ${JSON.stringify(five.q)}`);
-ok("★削っても、どの分野も0問にならない", ["kaki", "bushu", "onaji", "okuri", "taigi"].every(f => (five.c[f] || 0) >= 1), JSON.stringify(five.c));
-ok("★書き取りがいちばん多いまま", ["bushu", "onaji", "okuri", "taigi"].every(f => (five.c.kaki || 0) >= (five.c[f] || 0)), JSON.stringify(five.c));
+   PAPER_FIELDS_T.every(f => (five.c[f] || 0) === Math.max(1, five.q[f])) , `${JSON.stringify(five.c)} / 比 ${JSON.stringify(five.q)}`);
+ok("★削っても、どの分野も0問にならない", PAPER_FIELDS_T.every(f => (five.c[f] || 0) >= 1), JSON.stringify(five.c));
+ok("★書き取りがいちばん多いまま", ["bushu", "onaji", "taigi"].every(f => (five.c.kaki || 0) >= (five.c[f] || 0)), JSON.stringify(five.c));
 const trimmed = scen.filter(s => s.perSheet.length === 1 && s.rows < s.composed);
 ok("★削って1枚にした日も、書くマスは減らす前の問数で決まる高さのまま（小さくして詰め込んでいない）",
    trimmed.every(s => s.slotH === s.boxMM + "mm"), trimmed.map(s => `${s.slotH}/${s.boxMM}`).join(" "));
@@ -463,11 +465,22 @@ await page.evaluate(() => {
     // 画数は、本と同じく「図が要る問題（何画目）」を1問まぜる（アプリには出ない）
     if (field === "kakusu") items.push({ id: "q_app_" + uid + "_fig", no: 99, ruby: [], text: pool[0], needsFigure: true, answers: [{ text: "3" }], kanji: [pool[0]] });
     const ins = field === "onkun" ? "次の漢字の読みは、音読み（ア）ですか、訓読み（イ）ですか。記号で答えなさい。" : "ダミーの指示文（" + uid + "）";
-    const example = field === "onkun" ? { text: "れいの字", answers: ["イ"], ruby: [] } : null;
+    const example = field === "onkun" ? { text: "れいの字", answers: ["イ"], ruby: [] }
+      // ★dr_19 と同じ形: 〈例〉が2つあり range で出し分ける。出す問（1〜10）に合う〈例〉だけが出ること（claude-e0 No.26）
+      : field === "kakusu" ? [{ text: "あうれい", answers: ["3"], range: [1, 10] }, { text: "あわないれい", answers: ["6"], range: [90, 99] }] : null;
     return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3))], groups: [{ gno: 0, field, instruction: { text: ins, ruby: [] }, example, items }] };
   }
+  // 送りがな（本と同じ形: ——線はカタカナ、答えは「○の漢字＋送りがな」）。ことばはどれも一般の語
+  const OK = [["正","タダシイ","正しい"],["付","ツケル","付ける"],["養","ヤシナウ","養う"],["争","アラソウ","争う"],["連","ツラナル","連なる"],
+              ["表","アラワス","表す"],["加","クワワル","加わる"],["浅","アサイ","浅い"],["伝","ツタエル","伝える"],["失","ウシナウ","失う"],
+              ["群","ムラガル","群がる"],["教","オシエル","教える"]];
+  const okuriUnit = { unitId: "dr_23", mat: "dr", srcPages: [23], groups: [{ gno: 0, field: "okuri",
+    instruction: { text: "ダミー（○の中の漢字と送りがな）", ruby: [] }, example: null,
+    items: OK.map(([k, t, a], i) => ({ id: "q_app_okuri_" + (i + 1), no: i + 1, ruby: [], text: "ダミー" + t + "。", target: t,
+      givenKanji: k, answers: [{ text: a }], kanji: [k] })) }] };
+  window.__okuriUnit = okuriUnit;
   window.__appUnits = [mkA("dr_01", 15, "yomi"), mkA("dr_17", 10, "erabi"), mkA("dr_19", 10, "kakusu"),
-                       mkA("dr_20", 10, "onkun"), mkA("dr_54", 10, "jukugo")];
+                       mkA("dr_20", 10, "onkun"), mkA("dr_54", 10, "jukugo"), okuriUnit];
   BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = () => true;
   RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; APP_S = null;
   window.__day = "2099-07-01"; window.__genCalls = [];
@@ -478,7 +491,7 @@ await page.click('.tab[data-page="kyou"]');
 // いま出ている問題に答える（ok=true なら正解を、false ならまちがいを選ぶ）。画面のボタンを押す
 async function answerCurrent(okWanted) {
   return await page.evaluate((okWanted) => {
-    const s = APP_S, id = s.ids[s.pos], x = appIndex()[id], it = x.it, f = itemFieldOf(it, x.g);
+    const s = APP_S, id = s.ids[s.pos], x = appIndex()[id], it = x.it, f = itemFieldOf(it, x.g), CH = appChoicesOf(it, f);
     const box = document.getElementById("ap-box");
     const btn = (sel) => box.querySelector(sel);
     const info = { id, f, before: box.innerText };
@@ -498,8 +511,8 @@ async function answerCurrent(okWanted) {
         const b2 = document.getElementById("ap-box");
         const btns = [...b2.querySelectorAll('[data-act="pick"]')];
         const body = choiceBody(a.text);
-        const target = okWanted ? btns.find(b => choiceBody(it.choices[+b.dataset.ci]) === body)
-                                : btns.find(b => choiceBody(it.choices[+b.dataset.ci]) !== body);
+        const target = okWanted ? btns.find(b => choiceBody(CH[+b.dataset.ci]) === body)
+                                : btns.find(b => choiceBody(CH[+b.dataset.ci]) !== body);
         target.click();
       });
     }
@@ -518,8 +531,8 @@ const a1 = await page.evaluate(() => {
 });
 ok("アプリの問題は20問", a1.n === 20, String(a1.n));
 ok("★アプリの問題は全部、本の問題", a1.allBook);
-ok("★配点比 読み6・漢字えらび4・じゅく語作り4・音訓4・画数2",
-   a1.c.yomi === 6 && a1.c.erabi === 4 && a1.c.jukugo === 4 && a1.c.onkun === 4 && a1.c.kakusu === 2, JSON.stringify(a1.c));
+ok("★配点比どおり（読み・漢字えらび・じゅく語作り・音訓・画数・送りがな）",
+   Object.keys(a1.q).every(f => (a1.c[f] || 0) === a1.q[f]) && a1.c.okuri >= 1, JSON.stringify(a1.c) + " / " + JSON.stringify(a1.q));
 ok("★音訓は選択肢を並べ替えない", a1.ordOnkun.every(o => o === undefined), JSON.stringify(a1.ordOnkun));
 
 const log = [];
@@ -541,7 +554,10 @@ ok("図が要る問題の無い組では、その一言を出さない", log.fil
 const onLog = log.filter(l => l.f === "onkun");
 ok("★音訓: 選択肢はア（音読み）→イ（訓読み）の順のまま", onLog.every(l => l.labels.join("/") === "ア　音読み/イ　訓読み"), onLog.map(l => l.labels.join("/")).join(" | "));
 ok("★アプリ: 本の〈例〉が画面に出ている（〈例〉のある組）", onLog.every(l => /〈例〉 れいの字 → イ/.test(l.before)), onLog.map(l => l.before.slice(0, 80)).slice(0, 1).join(""));
-ok("アプリ: 〈例〉の無い組には〈例〉を出さない", log.filter(l => l.f !== "onkun").every(l => !/〈例〉/.test(l.before)));
+ok("アプリ: 〈例〉の無い組には〈例〉を出さない", log.filter(l => l.f !== "onkun" && l.f !== "kakusu").every(l => !/〈例〉/.test(l.before)));
+const kk2 = log.filter(l => l.f === "kakusu");
+ok("★アプリ: 〈例〉が2つある組では、出している問の range に合う〈例〉だけを出す（合わない〈例〉は出さない）",
+   kk2.length > 0 && kk2.every(l => /あうれい → 3/.test(l.before) && !/あわないれい/.test(l.before)), kk2.map(l => l.before.slice(0, 90)).slice(0, 1).join(""));
 ok("★音訓: 問題の字にルビ（読み）が出ている", onLog.every(l => /よみ/.test(l.before)));
 ok("画数: 数字（全角でも）で答えられる", log.filter(l => l.f === "kakusu").every(l => l.res));
 const end1 = await page.evaluate(() => document.getElementById("ap-box").innerText);
@@ -559,6 +575,44 @@ const a2 = await page.evaluate((xIds) => {
 ok("★前日に✕だった問題が、翌日また出る", xIds.every(id => a2.ids.includes(id)), `${xIds.length}問`);
 ok("★前日に〇だった問題は、翌日出ない", !oIds.some(id => a2.ids.includes(id)));
 ok("★記号: 同じ問題を2回目に出したとき、選択肢の並びが前回と同じではない", a2.sameOrd.length === 0, a2.sameOrd.join(","));
+console.log("");
+console.log("=== 送りがな（アプリ・3択） ===");
+const ok1 = await page.evaluate(() => {
+  const plan = okuriPlan(), u = window.__okuriUnit;
+  const res = u.groups[0].items.map(it => { const q = plan[it.id] || {}; return { ans: it.answers[0].text, K: it.givenKanji, choices: q.choices, skip: q.skip, pattern: q.pattern }; });
+  const onPaper = bookAllItems().filter(x => itemFieldOf(x.it, x.g) === "okuri").length;
+  return { res, bias: okuriBias(), onPaper };
+});
+const okRes = ok1.res.filter(r => r.choices);
+ok("検査の前提: 送りがなの問題に選択肢ができている", okRes.length >= 10, `${okRes.length}/${ok1.res.length}`);
+ok("★送りがな: 紙には1問も出ない", ok1.onPaper === 0, String(ok1.onPaper));
+ok("★送りがな: 正解は本のデータのまま（選択肢の1つめ＝本の答え）", okRes.every(r => r.choices[0] === r.ans));
+ok("★送りがな: まちがいは切れ目をずらしただけ（○の漢字＋かな・正解と別）",
+   okRes.every(r => r.choices.slice(1).every(c => c[0] === r.K && /^[ぁ-ゖ]+$/.test(c.slice(1)) && c !== r.ans)), okRes.map(r => r.choices.join("/")).slice(0, 3).join(" | "));
+ok("★送りがな: 通則1の許容（表わす など6語）はまちがいにしない",
+   okRes.every(r => !r.choices.some(c => ["表わす", "著わす", "現われる", "行なう", "断わる", "賜わる"].includes(c))), (okRes.find(r => r.K === "表") || {}).choices + "");
+ok("★送りがな: 短い側のまちがいも作っている（司令塔決定）", okRes.some(r => r.choices.slice(1).some(c => c.length < r.ans.length)));
+ok("★送りがな: 長さで選ぶ作戦が、でたらめより15ポイント以上得をしない", ok1.bias.ok, JSON.stringify(ok1.bias));
+// ★D-17: わざと「いつもまん中」にすると、上の検査が落ちること（検査が鳴ることの確認）
+const mid = await page.evaluate(() => {
+  // 送りがなの全問を「短い1・長い1」の3択（正解がいつもまん中）にした計画に差しかえて測る
+  const keepPlan = window.okuriPlan, plan = {};
+  window.__okuriUnit.groups[0].items.forEach(it => { const r = okuriAnalyze(it); if (r.ok && r.cands[-1] && r.cands[1]) plan[it.id] = { pattern: "C", choices: [r.correct, r.cands[-1], r.cands[1]] }; });
+  window.okuriPlan = () => plan;
+  const b = okuriBias();
+  window.okuriPlan = keepPlan;
+  return Object.assign(b, { n: Object.keys(plan).length });
+});
+ok("★（検査の自己試験）いつもまん中にすると、偏りの検査が鳴る", mid.ok === false && mid.edge.middle > 0.15, JSON.stringify(mid.edge));
+// 位置: 同じ問題を何度も出したとき、正解の位置が1〜3番目に散らばる
+const pos = await page.evaluate(() => {
+  const it = window.__okuriUnit.groups[0].items.find(i => (okuriPlan()[i.id] || {}).choices && okuriPlan()[i.id].choices.length === 3);
+  const cnt = [0, 0, 0]; let prev = null, same = 0;
+  for (let k = 0; k < 300; k++) { const o = randPerm(3, prev); if (prev && o.join() === prev.join()) same++; cnt[o.indexOf(0)]++; prev = o; }
+  return { cnt, same };
+});
+ok("★送りがな: 正解の位置が1・2・3番目に散らばる（300回で各2割以上）", pos.cnt.every(c => c >= 60), pos.cnt.join(","));
+ok("★送りがな: 続けて同じ並びにならない", pos.same === 0, String(pos.same));
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 

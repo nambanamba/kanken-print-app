@@ -117,13 +117,16 @@
   .ap-q{font-size:1.25rem;line-height:2.1;margin:8px 0 6px;}
   .ap-q ruby rt{font-size:.6em;}
   .ap-q.big{font-size:3rem;text-align:center;line-height:1.6;}
+  .ap-given{display:inline-block;width:1.7em;height:1.7em;line-height:1.7em;text-align:center;
+            border:1.5px solid #334155;border-radius:50%;margin-left:.4em;}
   .ap-q.big ruby rt{font-size:.35em;}
   .ap-ans{font-size:1.1rem;margin:8px 0;padding:10px;background:#f1f5f9;border-radius:10px;text-align:center;}
   .ap-slots{display:flex;gap:10px;justify-content:center;margin:6px 0;font-size:1.3rem;}
   .ap-slot{padding:4px 10px;border:1px solid #cbd5e1;border-radius:8px;}
   .ap-slot.on{border-color:#2563eb;box-shadow:0 0 0 2px #bfdbfe;}
   .ap-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
-  .ap-row .ky-btn{flex:1 1 30%;font-size:1.2rem;}
+  /* ★選択肢の中で改行しない（送りがなで「伝え／る」と切れて読みにくかった）。入らなければボタンごと次の行へ */
+  .ap-row .ky-btn{flex:1 1 30%;font-size:1.15rem;white-space:nowrap;padding-left:6px;padding-right:6px;}
 
   /* 採点：既定は〇。まちがえた番号だけタップして✕にする */
   .marks{display:flex;flex-wrap:wrap;gap:7px;}
@@ -311,7 +314,7 @@
       <h2>▶️ きょうのぶん</h2>
       <div class="muted" style="margin-bottom:12px" id="ky-info"></div>
       <div class="muted" style="margin-bottom:10px;font-size:.8rem">
-        紙は<b>手で書く問題だけ</b>です（書き取り・部首・同じ読み・送りがな・対義語）。<br>
+        紙は<b>手で書く問題だけ</b>です（書き取り・部首・同じ読み・対義語）。<br>
         <b>読み・記号で答える問題・画数は、下の「アプリでやる問題」でやります。</b>
       </div>
       <button class="btn" onclick="printToday()">きょうの紙を印刷（A4）</button>
@@ -808,8 +811,8 @@ function printToday(){ printSessionPractice(); }
        音訓（ア＝音／イ＝訓）   … **並べ替えない**（意味が壊れる）。出題順だけ変える
        読み・画数（選択肢なし）  … 出題順だけ
    ========================================================================= */
-var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu"];
-var SHUFFLE_CHOICE_FIELDS = ["erabi","jukugo"];
+var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu","okuri"];   // ★送りがなは 2026-09-11 に紙からアプリへ（下の okuriChoices）
+var SHUFFLE_CHOICE_FIELDS = ["erabi","jukugo","okuri"];
 var APP_TARGET = 20;
 var K_APP="kanken7_app_v1";
 var APP_S=load(K_APP,null);
@@ -822,7 +825,11 @@ function appAllItems(){
     if(!isVerifiedUnit(u.unitId)) return;
     (u.groups||[]).forEach(function(g){
       (g.items||[]).forEach(function(it){
-        if(askable(it) && isAppField(itemFieldOf(it,g))) out.push({ u:u, g:g, it:it });
+        var f=itemFieldOf(it,g);
+        if(!askable(it) || !isAppField(f)) return;
+        // 送りがなは、まちがいの選択肢が作れた（判定できた）問題だけ
+        if(f==="okuri" && appChoicesOf(it,f).length<2) return;
+        out.push({ u:u, g:g, it:it });
       });
     });
   });
@@ -879,7 +886,7 @@ function todayApp(){
   var ids=shuffle(xs.map(function(x){ return x.it.id; }), Math.random);   // ★出題順を並べ替える
   var ord={};
   xs.forEach(function(x){
-    var f=itemFieldOf(x.it,x.g), ch=x.it.choices||[];
+    var f=itemFieldOf(x.it,x.g), ch=appChoicesOf(x.it,f);
     if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0 && ch.length>1){
       ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);   // ★前回と同じ並びにしない
     }
@@ -910,6 +917,136 @@ function appChoiceLabel(f, ch, ord, ci, g){
   if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0) return (KANA_LABELS[ord.indexOf(ci)]||"")+"　"+choiceBody(ch[ci]);
   return ch[ci];
 }
+/* =========================================================================
+   ★送りがなの3択（2026-09-11 ユーザー指示・承認ずみ）
+     「送り仮名って、漢字が答えに書いてあるんですね。これなら、3択にしませんか？」
+     → 紙では○の漢字が出ているので、かなを書くだけで漢字の練習にならない。アプリへ移した。
+
+   ⚠️⚠️ **これは「アプリが問題を作る」ことの復活ではない。**
+     ・**問題文も正解も本のデータのまま**（正解＝answers[0]。変えない）
+     ・アプリが作るのは**まちがいの選択肢だけ**で、作り方は**送りがなの切れ目をずらす**ことだけ
+       （正しい → 正い／正だしい）。**語そのものは作らない**
+     ・この線引きはユーザーに説明して承認をもらっている（司令塔経由）
+     次の担当が「自動生成が復活している」と誤解して消さないこと。
+
+   ★まちがいの選択肢の扱い（2026-09-11 司令塔決定）:
+     一次資料＝文化庁「送り仮名の付け方」（昭和48年内閣告示）本文を取得して確認した。
+     ・通則2 許容 … 「読み間違えるおそれのない場合は…送り仮名を省くことができる」（一覧が閉じていない。
+         例: 生れる・終る・変る・当る）。漢検の採点基準は「送り仮名は、内閣告示『送り仮名の付け方』による」
+         とだけあり、許容を正解にするかは**公式に書かれていない**（標準解答にも注記なし）。
+       → **それでも短い側のまちがい（伝える→伝る）は出してよい**、と司令塔が決定した。理由:
+         **本の正解（本則）で覚えれば、漢検が本則だけ認める場合も許容も認める場合も〇になる。お子さんが損をしない。**
+         逆に許容形を覚えると、本則だけの場合に落とす。**本則に寄せるのは常に安全。**
+         （はじめは「判定できないので出さない」としたが、それだと短い側がほぼ作れず、
+           正解がいつも「いちばん短い」になった＝ユーザーが指摘した偏りそのもの）
+     ・**通則1 許容の6語だけは、まちがいにしない**（告示に名指しで載っていて、一覧が閉じている）→ OKURI_KYOYO_1
+         表す（表わす） 著す（著わす） 現れる（現われる） 行う（行なう） 断る（断わる） 賜る（賜わる）
+         ⚠️ この6語が対象になった問題は、その選択肢を作らない（2択になるか、作れなければ出さない）
+     ・常用漢字表の例欄にある語（ほかの正しい語）と一致するものも出さない
+     ・**正解は本のデータのまま**（answers[0]）。読みの確認は、——線のカタカナと答えの送りがなが合うことだけ
+
+   ★丸暗記の対策（ユーザーの指摘）:
+     「1文字消す・1文字足す」だと、正解が**いつも長さがまん中**になる（位置を並べ替えても「まん中の長さ」で当たる）。
+     → 問題ごとに型を変える: A＝短い2つ（正解がいちばん長い）／B＝長い2つ（いちばん短い）／C＝短い1・長い1（まん中）。
+       全問を通して A・B・C が同じくらいになるように割り振る（okuriPlan）。偏りは okuriBias() で測る。
+     位置は毎回並べ替え、前回と同じ並びにしない（漢字えらびと同じ）。
+   ========================================================================= */
+var OKURI_KYOYO_1 = ["表わす","著わす","現われる","行なう","断わる","賜わる"];
+var OKURI_PATTERNS = { A:[-2,-1], B:[1,2], C:[-1,1] };   // 送りがなの字数を何字ずらすか（+＝長く）
+function kata2hira(s){ return String(s||"").replace(/[ァ-ヶ]/g,function(c){ return String.fromCharCode(c.charCodeAt(0)-0x60); }); }
+var OKURI_EX_WORDS=null;
+function okuriExWords(){
+  if(OKURI_EX_WORDS) return OKURI_EX_WORDS;
+  var s={};
+  KANJI_MASTER.forEach(function(r){ (r.ex||[]).forEach(function(e){
+    String(e).split(/[，、,]/).forEach(function(w){ w=w.trim(); if(w) s[w]=1; });
+  }); });
+  return OKURI_EX_WORDS=s;
+}
+/* 1問を調べる。{ok, why, cands:{ずらし:語}} */
+function okuriAnalyze(it){
+  var K=it.givenKanji, a=(it.answers||[])[0];
+  if(typeof K!=="string" || K.length!==1 || !a || !it.target) return {ok:false, why:"データの形が想定外"};
+  var ans=String(a.text||"");
+  if(ans.charAt(0)!==K) return {ok:false, why:"答えが○の漢字で始まらない"};
+  var okuri=ans.slice(1);
+  if(!/^[ぁ-ゖ]+$/.test(okuri)) return {ok:false, why:"送りがながひらがなだけでない"};
+  var reading=kata2hira(it.target);
+  if(!/^[ぁ-ゖ]+$/.test(reading)) return {ok:false, why:"——線の読みがかなだけでない"};
+  if(reading.slice(-okuri.length)!==okuri || reading.length<=okuri.length) return {ok:false, why:"読みと送りがなが合わない"};
+  var cands={};
+  [-2,-1,1,2].forEach(function(d){
+    var o2=okuri.length+d;
+    if(o2<1 || o2>reading.length-1) return;          // 漢字の読みが0字／送りがなが0字になるものは作らない
+    var w=K+reading.slice(reading.length-o2);
+    if(OKURI_KYOYO_1.indexOf(w)>=0) return;            // 通則1 の許容（正しい書き方）
+    if(okuriExWords()[w]) return;                      // 常用漢字表の例欄にある、別の正しい語
+    cands[d]=w;
+  });
+  return {ok:true, correct:ans, cands:cands};
+}
+/* 全問を通して A・B・C を割り振る（本の順に、いちばん使われていない型を選ぶ）。BOOK_UNITS ごとに1回 */
+var OKURI_PLAN=null, OKURI_PLAN_SRC=null;
+function okuriPlan(){
+  if(OKURI_PLAN && OKURI_PLAN_SRC===BOOK_UNITS) return OKURI_PLAN;
+  var plan={}, used={short:0,long:0,middle:0};
+  (BOOK_UNITS||[]).forEach(function(u){ (u.groups||[]).forEach(function(g){ (g.items||[]).forEach(function(it){
+    if(itemFieldOf(it,g)!=="okuri") return;
+    var r=okuriAnalyze(it);
+    if(!r.ok){ plan[it.id]={ skip:r.why }; return; }
+    // ★作れる形を全部並べ、「正解がいちばん短い／いちばん長い／まん中」の数がいちばん均等になる形を選ぶ。
+    //   3択の型（A＝最長・B＝最短・C＝まん中）に加えて、2択（長いまちがいだけ＝最短／短いまちがいだけ＝最長）も候補にする。
+    //   ⚠️ 3択にこだわると、C しか作れない語ばかりの単元で「いつもまん中」になる（検査で実際に起きた）
+    var opts=[];
+    ["C","A","B"].forEach(function(p){
+      if(OKURI_PATTERNS[p] && OKURI_PATTERNS[p].every(function(d){ return r.cands[d]; }))
+        opts.push({ p:p, ds:OKURI_PATTERNS[p], cat:(p==="A"?"long":p==="B"?"short":"middle") });
+    });
+    [1,2].forEach(function(d){ if(r.cands[d]){ opts.push({ p:"S2", ds:[d], cat:"short" }); } });
+    [-1,-2].forEach(function(d){ if(r.cands[d]){ opts.push({ p:"L2", ds:[d], cat:"long" }); } });
+    if(!opts.length){ plan[it.id]={ skip:"まちがいの選択肢が作れない" }; return; }
+    // 同じ数なら3択を先に（opts の並び順）
+    var best=opts.slice().sort(function(a,b){ return used[a.cat]-used[b.cat]; })[0];
+    used[best.cat]++;
+    plan[it.id]={ pattern:best.p, choices:[r.correct].concat(best.ds.map(function(d){ return r.cands[d]; })) };
+  }); }); });
+  OKURI_PLAN=plan; OKURI_PLAN_SRC=BOOK_UNITS;
+  return plan;
+}
+/* 偏りの測定: 3択の問題で、正解が「長さの順」で何番目か（1＝いちばん短い） */
+/* ★偏りの判定（ユーザーの指摘「かならず2番が正解になる」への答え）。
+   測るのは**「長さで選ぶ作戦」が、でたらめに選ぶより何割よく当たるか**。
+     作戦: いつも一番短いのを選ぶ／いつも一番長いのを選ぶ／いつもまん中の長さを選ぶ（3択だけ）
+     でたらめ: 1問あたり 1/選択肢の数 の平均
+   **どの作戦も、でたらめより 15ポイント以上よく当たったら偏り（ok=false）。**
+   ⚠️ 2択が混ざるので「3択で順位が均等か」だけでは測れない（2択は短い側にしか作れない語が多い＝本の語の性質）。
+      お子さんが実際に使える抜け道（長さで選ぶ）の得を、そのまま測る。
+   問題が少ないうちは判定しない（6問未満）。位置の偏りは並べ替えなので smoke-test で測る */
+var OKURI_BIAS_MAX = 0.15;
+function okuriBias(){
+  var plan=okuriPlan(), rank={1:0,2:0,3:0}, n3=0, n2=0, skip=0, hit={short:0,long:0,middle:0}, rnd=0;
+  Object.keys(plan).forEach(function(id){
+    var p=plan[id];
+    if(p.skip){ skip++; return; }
+    var L=p.choices.map(function(c){ return c.length; }), me=L[0];
+    var r=1+L.filter(function(l){ return l<me; }).length;
+    if(r===1) hit.short++;
+    if(r===L.length) hit.long++;
+    if(L.length===3 && r===2) hit.middle++;
+    rnd+=1/L.length;
+    if(L.length<3) n2++; else { n3++; rank[r]++; }
+  });
+  var n=n2+n3, exp=n?rnd/n:0, edge={};
+  Object.keys(hit).forEach(function(k){ edge[k]=n ? Math.round((hit[k]/n-exp)*100)/100 : 0; });
+  var ok = n<6 || Object.keys(edge).every(function(k){ return edge[k]<=OKURI_BIAS_MAX; });
+  return { rank:rank, three:n3, two:n2, skip:skip, hit:hit, randomRate:Math.round(exp*100)/100, edge:edge, ok:ok };
+}
+/* アプリの選択肢（送りがなは okuriPlan、それ以外は本の choices） */
+function appChoicesOf(it, f){
+  if(f==="okuri"){ var p=okuriPlan()[it.id]; return (p && p.choices) ? p.choices : []; }
+  return it.choices||[];
+}
+
 /* 問題文にルビを付ける（音訓の「好（こう）」など。読みが分からないと答えられない） */
 function withRuby(html, ruby){
   (ruby||[]).forEach(function(r){
@@ -947,10 +1084,12 @@ function renderApp(){
     +((x.g.items||[]).some(function(i){ return i.needsFigure; })
       ? '<br><b>※ 図が要る問題は、アプリでは出ません（本でやってね）。</b>' : '')
     // 本の〈例〉（紙と同じ。claude-e0 の指摘 No.25）
-    +(exampleText(x.g.example) ? '<br>'+exampleText(x.g.example) : '')
+    +(exampleText(x.g.example,[it.no]) ? '<br>'+exampleText(x.g.example,[it.no]) : '')
     +'</div>'
     // 漢字1〜2字だけの問題（音訓・画数）は大きく出す
-    +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'">'+withRuby(bookQuestionText(it), it.ruby)+'</div>';
+    +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'">'+withRuby(bookQuestionText(it), it.ruby)
+    // ○の中の漢字（送りがな）。紙と同じく CSS の丸で
+    +(typeof it.givenKanji==="string" && it.givenKanji ? '<span class="ap-given">'+it.givenKanji+'</span>' : '')+'</div>';
   var ans=it.answers||[];
 
   if(f==="yomi"){
@@ -972,7 +1111,7 @@ function renderApp(){
     }
   }else{
     // 記号で答える問題（漢字えらび・じゅく語作り・音訓）
-    var ch=it.choices||[], ord=s.ord[id]||ch.map(function(_,i){return i;});
+    var ch=appChoicesOf(it,f), ord=s.ord[id]||ch.map(function(_,i){return i;});
     var slotN=ans.length, picked=st.picked||[];
     var cur=picked.length;   // いま何番目の空らんを選んでいるか（じゅく語作りは2つ）
     if(slotN>1){
@@ -990,7 +1129,7 @@ function renderApp(){
   if(res){
     var right=ans.map(function(a){
       if(f==="onkun") return onkunLabel(a.text,x.g);
-      var ch2=it.choices||[], ord2=s.ord[id]||ch2.map(function(_,i){return i;});
+      var ch2=appChoicesOf(it,f), ord2=s.ord[id]||ch2.map(function(_,i){return i;});
       var ci=ch2.map(choiceBody).indexOf(choiceBody(a.text));
       return ci>=0 ? appChoiceLabel(f,ch2,ord2,ci,x.g) : choiceBody(a.text);
     }).join("・");
@@ -1027,7 +1166,7 @@ function appAct(act, ci){
   }else if(act==="pick"){
     st.picked=(st.picked||[]).concat([parseInt(ci,10)]);
     if(st.picked.length<ans.length){ save(K_APP,s); renderApp(); return; }
-    var ch=it.choices||[];
+    var ch=appChoicesOf(it,f);
     // ★判定は中身で。記号（ア・イ）では比べない（並べ替えると記号がずれる）
     var slotOk=ans.map(function(a,i){ return choiceBody(ch[st.picked[i]])===choiceBody(a.text); });
     perKanji=(it.kanji||[]).map(function(k,i){ return ans.length>1 ? !!slotOk[i] : slotOk[0]; });
@@ -1125,7 +1264,7 @@ var SHEET_TARGET = 20;   // 1日の問数。本人の希望「毎日20問書く�
      紙   … 書き取り40・部首20・同じ読み16・送りがな14・対義語10（＝100点分）
      アプリ… 読み30・漢字えらび20・じゅく語作り20・音訓20・画数10（紙には1問も出さない）
    ⚠️ 読みを紙に戻さないこと（「ひらがなで書く」形式だが、ユーザーはアプリ側と決めた）。 */
-var PAPER_FIELDS = ["kaki","bushu","onaji","okuri","taigi"];
+var PAPER_FIELDS = ["kaki","bushu","onaji","taigi"];   // ★送りがなは 2026-09-11 にアプリへ移した（○の漢字が出ていて、紙ではかなを書くだけになるため。ユーザー指示）
 function itemFieldOf(it,g){ return it.field||(g&&g.field)||""; }
 function isPaperField(f){ return PAPER_FIELDS.indexOf(f)>=0; }
 
@@ -1310,9 +1449,17 @@ function bookCite(x){
      {text, answers[], ruby?, givenKanji?}      … dr_20・dr_21・dr_23・dr_25・dr_54
      [{text, answers[], range}]                  … dr_19（何画目・総画数で〈例〉が2つ）
    → 「〈例〉 問題 → 答え」。ルビは注意と同じ形で添える。○の漢字は丸で囲む */
-function exampleText(ex){
+/* ★nos … いま出している問の番号。〈例〉に range（[はじめ,おわり]）があるときは、
+   **出している問が range に入っている〈例〉だけ**を出す（claude-e0 の指摘 No.26）。
+   ⚠️ dr_19 は「何画目（1〜13）〈例〉正→3」と「総画数（14〜26）〈例〉字→6」が同じ組にある。
+      アプリには総画数だけ出るのに「正 → 3」まで出ていて、**正は3画だと覚えてしまう**形だった。
+      〈例〉は手本なので、いちばん信じられる。 */
+function exampleText(ex, nos){
   if(!ex) return "";
-  var list=Array.isArray(ex) ? ex : [ex];
+  var list=(Array.isArray(ex) ? ex : [ex]).filter(function(e){
+    if(!e || !Array.isArray(e.range) || e.range.length<2 || !nos) return true;
+    return nos.some(function(n){ return typeof n==="number" && n>=e.range[0] && n<=e.range[1]; });
+  });
   var parts=list.map(function(e){
     if(!e || !e.text) return "";
     var q=bookNote({ text:String(e.text), ruby:e.ruby||[] });
@@ -1362,7 +1509,7 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
       poolUseOnce:!!b.g.poolUseOnce,
       // ★本の〈例〉。**紙に出していなかった**（claude-e0 の指摘 No.25）。
       //   dr_25（部首）では〈例〉が「□ごとに別の字を入れる」ことを示していて、無いと「同じ字を全部の□に」とも読める
-      example: exampleText(b.g.example),
+      example: exampleText(b.g.example, b.rows.map(function(x){ return x.it.no; })),
       title:"■ "+(fd?fd.name:"もんだい"),
       keyTitle:(fd?fd.name:"もんだい")+"の答え",
       // ★書式v1.6 で instruction が {text, ruby[]} になりうる。文字列でもオブジェクトでも読む（ルビも出す）
