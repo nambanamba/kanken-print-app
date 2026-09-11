@@ -617,15 +617,29 @@ function estimate(){
       var s=KSTATS[k][f]; add(f,s.o||0,(s.o||0)+(s.x||0));
     });
   });
-  var keys=Object.keys(agg).filter(function(k){return agg[k].t>0;}), w=0,p=0;
-  keys.forEach(function(k){ var f=fieldOf(k); w+=(agg[k].c/agg[k].t)*f.points; p+=f.points; });
+  var keys=Object.keys(agg).filter(function(k){return agg[k].t>0;}), w=0,p=0, measured=0, perField={};
+  keys.forEach(function(k){
+    var f=fieldOf(k);
+    w+=(agg[k].c/agg[k].t)*f.points; p+=f.points;
+    // ★★「測った点」は、**やった数に比例させる**（2026-09-11 ユーザー発見「まだ20問しかやってないのに130点って？？」）。
+    //   ⚠️ 前は「その分野を1問でも解いたら、その分野の配点まるごとを測った」にしていた。
+    //      20問で「100点分を測った」ことになり、正答率を200点に引き伸ばして130点と出ていた（実力より高く出る危ない向き）。
+    //   → 測った点 ＝ 配点 × min(1, やった数 ÷ 本番の問数)。書き取り（本番20問）を9問なら 40×9/20＝18点分
+    var m=f.points*Math.min(1, agg[k].t/(f.qs||1));
+    perField[k]=m; measured+=m;
+  });
   return { agg:agg, est:p>0?Math.round(w/p*KANKEN.fullMarks):null,
            testScore:test?Math.round(test.correct/test.total*KANKEN.fullMarks):null,
            covered:keys.length, totalFields:FIELDS.length,
-           // ★分野の「数」ではなく「配点」で、どれだけ測れたかを持つ。
-           //   対義語10点と書き取り40点を1個ずつ数えるのは、点を語るうえで意味がない
-           coveredPoints:p, totalPoints:FIELDS.reduce(function(a,f){return a+f.points;},0) };
+           // ★「どれだけ測ったか」は、やった数に比例した点（上）。触れた分野の配点の合計ではない
+           coveredPoints:Math.round(measured), measuredByField:perField, touchedPoints:p,
+           totalPoints:FIELDS.reduce(function(a,f){return a+f.points;},0) };
 }
+/* ★予想得点を出しはじめる「測った点」の下限。
+   100点分＝本番の半分を、実際にやった数で測ってから。それまでは点数を出さない（嘘の点数より「まだ出せません」）。
+   理由: 分野ごとの正答率を200点に引き伸ばして出すので、測った量が少ないと、数問の当たり外れで大きく動く。
+         半分を測れば、残りの半分を同じ割合と見なしても大きくは外れない。合格圏かどうかの判定は、別に140点分から */
+var SCORE_MIN_MEASURED = 100;
 
 /* できている字＝どれか1つでも形式で正解し、いま✕が残っていない字 */
 function isOK(k){
@@ -676,10 +690,19 @@ function renderOuen(){
   //   → **合格ラインと同じ140点分を測るまでは、合格圏かどうかを言わない。**
   //     140点分を測っていなければ、140点に届くかは原理的に分からない。
   var reliable=hasTest||e.coveredPoints>=KANKEN.passMark;
-  if(shown===null||shown===undefined){
+  // ★測った量が少ないうちは点数を出さない（ユーザー発見: 20問で130点と出ていた）
+  var tooFew=!hasTest && e.coveredPoints<SCORE_MIN_MEASURED;
+  if(shown===null||shown===undefined||tooFew){
     sc.innerHTML="—<small> 点</small>";
-    cap.textContent="1枚やって採点すると出ます";
-    document.getElementById("s-bar").style.width="0%"; note.textContent="";
+    document.getElementById("s-bar").style.width="0%";
+    if(shown===null||shown===undefined){
+      cap.textContent="紙やアプリの問題をやると、出せるようになります";
+      note.textContent="";
+    }else{
+      cap.innerHTML="まだ点数は出せません。<b>もう少しやると出ます</b>";
+      note.innerHTML="いま <b>"+e.coveredPoints+" / "+e.totalPoints+" 点分</b>を測ったところです。"
+        +SCORE_MIN_MEASURED+" 点分（本番の半分）をやると、目安の点数が出ます。";
+    }
   }else{
     sc.innerHTML=shown+"<small> 点</small>";
     document.getElementById("s-bar").style.width=(shown/KANKEN.fullMarks*100)+"%";

@@ -691,6 +691,34 @@ ok("図が入っている問題は「アプリでは出ません」の数に入�
 // 版の表示（配信のたびに自動で変わる。手で書かない）
 const ver = await page.evaluate(() => document.getElementById("app-version").textContent);
 ok("せっていに版（配信の時刻）が出る", /^版 \d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(ver), ver);
+console.log("");
+console.log("=== 予想得点（測った量に比例させる） ===");
+// ★ユーザー発見「まだ20問しかやってないのに130点って？？」: 1問でも解いた分野の配点をまるごと「測った」にしていた
+const sc = await page.evaluate(() => {
+  const pool = KANJI_MASTER.map(r => r.k);
+  function setStats(spec) {   // spec: {分野: [正解数, まちがい数]} を、字ごとの記録にばらして入れる
+    KSTATS = {}; RECORDS = {}; let ki = 0;
+    Object.keys(spec).forEach(f => { const [o, x] = spec[f];
+      for (let i = 0; i < o; i++) { const k = pool[ki++]; (KSTATS[k] = KSTATS[k] || {})[f] = { o: 1, x: 0 }; }
+      for (let i = 0; i < x; i++) { const k = pool[ki++]; (KSTATS[k] = KSTATS[k] || {})[f] = { o: 0, x: 1 }; } });
+    renderOuen();
+    return { score: document.getElementById("s-score").textContent, cap: document.getElementById("s-caption").textContent, e: estimate() };
+  }
+  const one = setStats({ kaki: [1, 0] });
+  // 今日の紙20問＋アプリ20問くらい（書き取り9・部首の字17・同じ読み4・対義語2／読み16・じゅく語の字8）。ほぼ全部正解
+  const day = setStats({ kaki: [8, 1], bushu: [15, 2], onaji: [4, 0], taigi: [2, 0], yomi: [15, 1], jukugo: [8, 0] });
+  const want = 40 * 9 / 20 + 20 * Math.min(1, 17 / 10) + 16 * 4 / 8 + 10 * 2 / 5 + 30 * 16 / 30 + 20 * 8 / 10;
+  // 本番1回ぶん以上（全分野を本番の問数ぶん）
+  const full = setStats({ kaki: [16, 4], yomi: [24, 6], erabi: [8, 2], kakusu: [8, 2], onkun: [8, 2], taigi: [4, 1], okuri: [6, 1], bushu: [8, 2], onaji: [6, 2], jukugo: [8, 2] });
+  KSTATS = {}; renderOuen();
+  return { one, day, want: Math.round(want), full };
+});
+ok("★1問だけ解いた状態では、点数を出さない", /—/.test(sc.one.score) && /まだ点数は出せません/.test(sc.one.cap), sc.one.score + " / " + sc.one.cap);
+ok("★1問だけなら「測った点」は配点のごく一部（書き取り1問＝40×1/20＝2点分）", sc.one.e.coveredPoints === 2, String(sc.one.e.coveredPoints));
+ok("★20問＋20問の日も、点数を出さない（130点のような数を出さない）", /—/.test(sc.day.score), sc.day.score + " / " + sc.day.cap);
+ok("★「測った点」が、実際にやった数に釣り合っている（配点×やった数÷本番の問数）", sc.day.e.coveredPoints === sc.want, `${sc.day.e.coveredPoints} / 計算 ${sc.want}`);
+ok("★1問も解いていない分野は「測った」に入らない", sc.day.e.measuredByField.erabi === undefined && sc.day.e.measuredByField.kakusu === undefined, JSON.stringify(sc.day.e.measuredByField));
+ok("本番1回ぶん以上やれば、点数が出る", /\d+/.test(sc.full.score) && !/—/.test(sc.full.score), sc.full.score + " / " + sc.full.cap);
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 
