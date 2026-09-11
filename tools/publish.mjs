@@ -3,6 +3,7 @@
  *   node tools/publish.mjs "コミットメッセージ"
  *   node tools/publish.mjs -F メッセージファイル
  *   node tools/publish.mjs --dry     … 検査だけして、commit も push もしない
+ *   node tools/publish.mjs --base <確かめたコミット> "…"  … ★そのコミットから動いていたら止める（下の checkBase）
  *
  * ⚠️⚠️ **なぜ `.git/hooks/` ではなく `tools/` に置くのか**
  *   フックは `.git/hooks/` にあり、**リポジトリに入りません。**
@@ -29,6 +30,28 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const args = process.argv.slice(2);
 const dry = args.includes("--dry");
+
+/* --base <コミット> … 「このコミットの上で確かめた」と宣言する（2026-09-11 取り込み担当 claude-91 [2a9e1f]）
+ *   ⚠️ 実際に起きた: 確かめたあと、publish の直前に最新を取り込んだら他人の index.html の変更が入り、
+ *      **確かめていないものを配信した**（後から比べて一致したので実害は無かった）。
+ *   → 指定すると、①HEAD がそのコミットか ②origin/master がそこから動いていないか、を commit の直前に見る。
+ *     どちらかが違えば止める。**止まったら、取り込み直して「確かめる」ところからやり直す。** */
+const bi = args.indexOf("--base");
+const base = bi >= 0 ? args[bi + 1] : null;
+if (bi >= 0) args.splice(bi, 2);
+function checkBase() {
+  if (!base) return;
+  const head = execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
+  execSync("git fetch -q origin", { cwd: ROOT });
+  const remote = execSync("git rev-parse origin/master", { cwd: ROOT, encoding: "utf8" }).trim();
+  const full = execSync(`git rev-parse ${base}`, { cwd: ROOT, encoding: "utf8" }).trim();
+  if (head !== full || remote !== full) {
+    console.log(`★★ 止めました: 確かめたコミット ${base} から動いています（HEAD ${head.slice(0, 7)} / origin/master ${remote.slice(0, 7)}）。`);
+    console.log("    取り込み直して、確かめるところからやり直してください。");
+    process.exit(1);
+  }
+  console.log(`― 確かめたコミット … OK（HEAD＝origin/master＝${base}）`);
+}
 
 function run(label, cmd, cmdArgs) {
   process.stdout.write("― " + label + " … ");
@@ -115,6 +138,7 @@ if (!msg && !msgFile) {
 }
 /* ★テストの間に作業ツリーが変わっていないか、もう一度見る（C-4c: 検査と実行の間にも中身は変わりうる） */
 checkTree("commit の直前");
+checkBase();
 
 console.log("\n― commit …");
 if (msgFile) execFileSync("git", ["commit", "-F", msgFile], { cwd: ROOT, stdio: "inherit" });
