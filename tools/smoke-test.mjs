@@ -855,6 +855,41 @@ ok("★おかわりを記録しても、日割りは進まない", ok2.planSame)
 ok("おかわりの記録は、きょうの分と区別できる（extra）", ok2.logExtra && ok2.extra1 === 1);
 ok("★本の問題が尽きたら「もうありません」と出し、作って埋めない", ok2.exhausted);
 ok("★アプリ: 終わったら「もっとやる」で次の分（同じ問題は出ない）", ok2.appBtn && ok2.appExtra);
+console.log("");
+console.log("=== 本で できた字を入れる ===");
+const dw = await page.evaluate(() => {
+  BOOK_UNITS = window.__longUnits; window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+  window.__day = "2100-01-01";
+  const first = todaySheetItems().map(x => x.it);
+  const kaki = first.filter(it => BOOK_UNITS.some(u => u.groups.some(g => g.field === "kaki" && g.items.includes(it)))).slice(0, 3);
+  const ks = kaki.map(it => it.kanji[0]);
+  SESSION = null;   // まだ紙は組んでいない状態に戻す（あしたの紙で確かめる）
+  // 語のまま・読点と改行まじり・範囲外の字（蔵）入り
+  const raw = ks[0] + "、" + ks[1] + "く" + String.fromCharCode(10) + "冷蔵" + ks[2] + "　";   // 改行まじり
+  renderKiroku();
+  document.getElementById("d-field").value = "kaki";
+  document.getElementById("d-words").value = raw;
+  saveDoneWords();
+  const msg = document.getElementById("d-result").innerText;
+  const logBook = LOG.filter(e => e.src === "book");
+  window.__day = "2100-01-02"; SESSION = null;
+  const next = todaySheetItems().map(x => x.it.id);
+  // 一覧で1つを✕に直すと、その問題はあしたに出る
+  renderLog();
+  const idx = LOG.findIndex(e => e.id === kaki[0].id);
+  document.querySelector('#log-box .mark[data-i="' + idx + '"][data-ki="0"]').click();
+  window.__day = "2100-01-03"; SESSION = null;
+  const next2 = todaySheetItems().map(x => x.it.id);
+  return { ks, msg, ids: kaki.map(it => it.id), logBook: logBook.map(e => e.id), next, next2,
+           inMaster: !!MASTER_BY_K["蔵"] };
+});
+ok("検査の前提: 蔵 は642字マスタに無い（範囲外の例として使える）", !dw.inMaster);
+ok("★範囲外の字は黙って捨てず、「入れていません」と名前を出す", /蔵/.test(dw.msg) && /範囲外/.test(dw.msg), dw.msg.slice(0, 120));
+ok("★語のまま貼っても漢字だけ取り出す（入れた字の数が出る）", dw.ks.every(k => dw.msg.includes(k)), dw.msg.slice(0, 80));
+ok("★入れた字の本の問題は、次の日の紙に出ない", dw.ids.every(id => !dw.next.includes(id)), dw.ids.join(","));
+ok("★一覧に「本」の記録として出る", dw.ids.every(id => dw.logBook.includes(id)), dw.logBook.join(","));
+ok("★一覧で✕に直すと、その問題はまた出る", dw.next2.includes(dw.ids[0]), dw.ids[0]);
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 

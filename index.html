@@ -413,6 +413,25 @@
       </div>
     </div>
 
+    <!-- ★本でやって「できた字」を入れる（ユーザー指示 2026-09-11）。本でやったとき親が分かっているのは「できた語」のほう -->
+    <div class="card">
+      <h2>📗 本で できた字を入れる</h2>
+      <div class="muted" style="margin-bottom:10px">
+        本でやって<b>できた語を、そのまま貼ってください</b>（「、」・空白・改行、どれで区切ってもOK）。<br>
+        <b>入れた字の問題は、次の日から出なくなります。</b>まちがえて入れたら、下の「やった問題」で直せます。
+      </div>
+      <div class="field">
+        <label>何の問題でしたか</label>
+        <select id="d-field"></select>
+      </div>
+      <div class="field">
+        <label>できた語</label>
+        <textarea id="d-words" rows="3" style="width:100%;font-size:1rem;padding:8px;box-sizing:border-box" placeholder="例）席、焼く、冷蔵庫、静かな"></textarea>
+      </div>
+      <button class="btn sec" onclick="saveDoneWords()">できた字を入れる</button>
+      <div id="d-result" class="muted" style="margin-top:8px"></div>
+    </div>
+
     <div class="card">
       <h2>📘 ちがうところをやった／点数も入れる</h2>
       <div class="muted" style="margin-bottom:10px">
@@ -1383,6 +1402,70 @@ function logAnswer(src, id, f, cite, kanji){
    ・本の問題が尽きたら「もうありません」。自動生成で埋めない
    ・記録（LOG）には extra（何回目のおかわりか）を残すので、「きょうの分」と区別できる
    ========================================================================= */
+/* =========================================================================
+   ★本でやって「できた字」を入れる（2026-09-11 ユーザー指示）
+     「漢字の書き、6の① 席、焼く、冷蔵庫、…ができました。うまいこと反映できませんか？」
+   ・語のまま貼る → 漢字だけ取り出す（焼く→焼、冷蔵庫→冷・庫）
+   ・642字マスタにある字だけ〇として記録。**範囲外の字は黙って捨てず、名前を出す**（蔵 は6年の漢字）
+   ・**本の問題（その分野）のうち、ためす字がぜんぶ「できた字」に入っている問題を「できた」にする**
+     → ITEMS[id].last="o" になるので、**次の日の紙とアプリに出なくなる**（出題は問題ごとに決めているため）
+   ・記録（LOG）に src:"book" で残すので、「やった問題」の一覧に出て、あとから〇✕を直せる
+     （本の問題に当たらなかった字も、字だけの記録として一覧に出す）
+   ========================================================================= */
+function kanjiOf(s){ return (String(s).match(/[一-鿿々]/g)||[]); }
+function doneWords(raw, field){
+  var all=kanjiOf(raw), seen={}, inR=[], outR=[];
+  all.forEach(function(k){ if(seen[k]) return; seen[k]=1; (MASTER_BY_K[k]?inR:outR).push(k); });
+  var set={}; inR.forEach(function(k){ set[k]=1; });
+  // 字ごとの記録（〇）
+  inR.forEach(function(k){
+    if(!KSTATS[k]) KSTATS[k]={};
+    var st=KSTATS[k][field]||(KSTATS[k][field]={o:0,x:0});
+    st.o=(st.o||0)+1; st.run=(st.run||0)+1;
+    if(WEAK[k] && !WEAK[k].got){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false; }
+  });
+  // 本の問題（その分野）で、ためす字がぜんぶ入っているもの
+  var items=[], used={};
+  (BOOK_UNITS||[]).forEach(function(u){
+    if(!isVerifiedUnit(u.unitId)) return;
+    (u.groups||[]).forEach(function(g){ (g.items||[]).forEach(function(it){
+      if(itemFieldOf(it,g)!==field) return;
+      var ks=it.kanji||[]; if(!ks.length) return;
+      if(!ks.every(function(k){ return set[k]; })) return;
+      if(ITEMS[it.id] && ITEMS[it.id].last==="o") return;   // もう〇の問題はそのまま
+      items.push({ u:u, g:g, it:it });
+    }); });
+  });
+  var src0=SESSION, app0=APP_S; SESSION=null; APP_S=null;   // logAnswer の extra を 0 にする
+  items.forEach(function(x){
+    var r=ITEMS[x.it.id]||(ITEMS[x.it.id]={o:0,x:0});
+    r.o++; r.last="o"; r.date=todayStr();
+    x.it.kanji.forEach(function(k){ used[k]=1; });
+    logAnswer("book", x.it.id, field, bookCite(x), x.it.kanji.map(function(k){ return { k:k, ok:true }; }));
+  });
+  // 本の問題に当たらなかった字も、一覧で直せるように字だけの記録を残す
+  var rest=inR.filter(function(k){ return !used[k]; });
+  rest.forEach(function(k){ logAnswer("book", "bookword:"+todayStr()+":"+field+":"+k, field, "（本・字だけ）", [{ k:k, ok:true }]); });
+  SESSION=src0; APP_S=app0;
+  SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_ITEMS,ITEMS); save(K_SET,SET);
+  return { inR:inR, outR:outR, items:items.length, bookLoaded:bookLoaded() };
+}
+function saveDoneWords(){
+  var raw=(document.getElementById("d-words")||{}).value||"";
+  var field=(document.getElementById("d-field")||{}).value||"kaki";
+  var res=document.getElementById("d-result");
+  if(!kanjiOf(raw).length){ if(res) res.textContent="漢字が見つかりません。できた語を貼ってください。"; return; }
+  var r=doneWords(raw, field), fd=fieldOf(field);
+  var msg=(fd?fd.name:"")+"で <b>"+r.inR.length+" 字</b>を「できた」にしました（"+r.inR.join(" ")+"）。";
+  if(r.items) msg+="<br>本の問題 <b>"+r.items+" 問</b>を「できた」にしました（次の日から出ません）。";
+  else if(!r.bookLoaded) msg+="<br>⚠️ 本の問題が読みこまれていないので、出題には反映できませんでした（「せってい」で合言葉を入れてから、もう一度）。";
+  if(r.outR.length) msg+="<br>⚠️ <b>"+r.outR.join(" ")+"</b> は7級の範囲外の字なので、入れていません。";
+  document.getElementById("d-words").value="";
+  renderAll();
+  if(res) res.innerHTML=msg;   // renderAll のあとに出す（消えないように）
+}
+
 function startExtraSheet(){
   if(!SESSION || SESSION.date!==todayStr() || !SESSION.saved){ alert("まず、きょうの紙を「きろく」で記録してください。"); return; }
   var ids=fitToday().map(function(x){ return x.it.id; });
@@ -1507,7 +1590,7 @@ function renderLog(){
     byDate[d].slice().sort(function(a,b){ return (LOG[b].t-LOG[a].t) || (a-b); }).forEach(function(i){
       var e=LOG[i], tm=new Date(e.t), hh=String(tm.getHours()).padStart(2,"0")+":"+String(tm.getMinutes()).padStart(2,"0");
       html+='<div class="mark-row log-row"><span class="mark-no" style="min-width:3.2em">'+hh+'</span>'
-        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":"アプリ")+(e.extra?"（おかわり）":"")+'・'+(FN[e.f]||e.f)+'</span>'
+        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":e.src==="book"?"本":"アプリ")+(e.extra?"（おかわり）":"")+'・'+(FN[e.f]||e.f)+'</span>'
         +e.kanji.map(function(q,ki){
           return '<div class="mark'+(q.ok?"":" x")+'" data-i="'+i+'" data-ki="'+ki+'" onclick="toggleLogMark(+this.dataset.i,+this.dataset.ki)">'
             +q.k+(q.ok?" ○":" ✕")+'</div>';
@@ -2350,6 +2433,14 @@ function renderKiroku(){
   }).join("");
   var fu=UNITS.filter(function(u){return !RECORDS[u.id];})[0];
   sel.value=(keep&&unitOf(keep))?keep:(fu?fu.id:(UNITS[0]||{}).id);
+  // 「本で できた字を入れる」の分野（書き取りを先頭に。前に選んだものは残す）
+  var df=document.getElementById("d-field");
+  if(df){
+    var dkeep=df.value||"kaki";
+    df.innerHTML=["kaki"].concat(FIELDS.map(function(f){return f.key;}).filter(function(k){return k!=="kaki";}))
+      .map(function(k){ var f=fieldOf(k); return '<option value="'+k+'">'+(f?f.name:k)+'</option>'; }).join("");
+    df.value=dkeep;
+  }
   var fs=document.getElementById("k-field");
   fs.innerHTML='<option value="">（えらぶ）</option>'
     +FIELDS.map(function(f){return '<option value="'+f.key+'">'+f.name+"（"+f.points+"点）</option>";}).join("")
