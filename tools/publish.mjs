@@ -17,6 +17,7 @@
  * 何を守るか（2026-09-11、実際に平文を1件漏らした）:
  *   ① 検出器の自己試験 … **鳴らない検出器で「漏れ0件」と言わない**
  *   ② 平文の漏れ走査   … 追跡ファイル全部（`.md` 含む）
+ *   ②b 画像の関門 … 画像・PDF・data:image を含むファイルを1つも追跡させない（check_no_images）
  *   ③ 除外フォルダの混入 … `公式資料` `元データ` `情報` `書き起こし`
  *   ④ テスト
  *   ⑤ 本物の紙（check_real_paper。合言葉が要る。無ければ「飛ばした」と大きく出す）
@@ -110,6 +111,12 @@ const leak = run("平文の漏れ走査（自己試験つき）", process.execPa
 process.stdout.write(leak.split("\n").filter(Boolean).map(l => "    " + l).join("\n") + "\n");
 
 /* ③ 除外フォルダが追跡されていないか */
+/* ②b 画像の関門（2026-09-11 claude-eb の依頼）。画像・PDF・data:image を含むファイルを1つも追跡させない。
+ *   ⚠️ 本の問題文と答えが写った撮影（png）が公開されていた。漏れ走査は文字しか見ないので捕まらなかった。
+ *   ⚠️ 消しても履歴には残る（公開リポジトリなので過去のコミットから取り出せる）。**入れないことが唯一の守り。** */
+const img = run("画像の関門（check_no_images）", process.execPath, [path.join(HERE, "check_no_images.mjs")]);
+process.stdout.write(img.split("\n").filter(Boolean).map(l => "    " + l).join("\n") + "\n");
+
 process.stdout.write("― 除外フォルダの混入 … ");
 const tracked = execSync("git ls-files -z", { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean);
 const bad = tracked.filter(f => /公式資料|元データ|情報|書き起こし/.test(f));
