@@ -400,9 +400,10 @@ for (const every of [1, 2, 3, 4]) {
   }, every));
 }
 const desc = scen.map(s => `注意${s.every}問に1つ: ${s.perSheet.join("+")}問/組んだ${s.composed}`).join(" ／ ");
-ok("検査の前提: 削って1枚にする日が、少なくとも1つある", scen.some(s => s.perSheet.length === 1 && s.rows < s.composed), desc);
-ok("★2枚目以降が5問以下の紙を出していない", scen.every(s => s.perSheet.length === 1 || s.perSheet.slice(1).every(n => n > 5)), desc);
-ok("★1枚にしたときに削ったのは5問まで", scen.every(s => s.perSheet.length > 1 || s.composed - s.rows <= 5), desc);
+// ★2026-09-11 ユーザー指示「書き問題20問、なければそこまで」→ 20問は削らない。入らなければ2枚（司令塔の「1枚に収める」より優先）
+ok("★20問は削らない（本の問題が足りる日は、いつも20問）", scen.every(s => s.composed === 20 && s.rows === 20), desc);
+ok("検査の前提: 1枚に入らず2枚になる日がある（2枚の組み方を見られる）", scen.some(s => s.perSheet.length === 2), desc);
+ok("空の紙を出さない", scen.every(s => s.perSheet.every(n => n > 0)), desc);
 ok("2枚に分けるときは、枚ごとの問数がそろっている（18＋2 のようにしない）",
    scen.every(s => s.perSheet.length === 1 || Math.max(...s.perSheet) - Math.min(...s.perSheet) <= 1), desc);
 ok("紙と「きろく」の問題数が一致（削った問題は、その日の記録に入らない）", scen.every(s => s.ids === s.rows), desc);
@@ -425,14 +426,25 @@ const five = await page.evaluate(() => {
   return { c, n, q: paperQuota(n), sheets: 1 };
 });
 const PAPER_FIELDS_T = ["kaki", "bushu", "onaji", "taigi"];
-ok("検査の前提: 分野がそろった日で、1枚に入る数（17問）まで削っている", five.n === 17, `${five.n}問`);
-ok("★削っても、各分野の数は配点比のまま（書き取りを先に削っていない）",
+ok("★1枚に17問しか入らない日も、20問は削らない", five.n === 20, `${five.n}問`);
+ok("★各分野の数は配点比のまま",
    PAPER_FIELDS_T.every(f => (five.c[f] || 0) === Math.max(1, five.q[f])) , `${JSON.stringify(five.c)} / 比 ${JSON.stringify(five.q)}`);
-ok("★削っても、どの分野も0問にならない", PAPER_FIELDS_T.every(f => (five.c[f] || 0) >= 1), JSON.stringify(five.c));
+ok("★どの分野も0問にならない", PAPER_FIELDS_T.every(f => (five.c[f] || 0) >= 1), JSON.stringify(five.c));
 ok("★書き取りがいちばん多いまま", ["bushu", "onaji", "taigi"].every(f => (five.c.kaki || 0) >= (five.c[f] || 0)), JSON.stringify(five.c));
-const trimmed = scen.filter(s => s.perSheet.length === 1 && s.rows < s.composed);
-ok("★削って1枚にした日も、書くマスは減らす前の問数で決まる高さのまま（小さくして詰め込んでいない）",
-   trimmed.every(s => s.slotH === s.boxMM + "mm"), trimmed.map(s => `${s.slotH}/${s.boxMM}`).join(" "));
+// ★前の版で組んだ「まだ記録していない」きょうの紙は、作り直す（送りがなが紙から外れた・20問を削らない、の反映）。
+//   記録ずみの紙は作り直さない（記録と紙がずれるため）
+const rebuild = await page.evaluate(() => {
+  BOOK_UNITS = window.__longUnits; window.isVerifiedUnit = () => true; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {};
+  window.__day = "2099-06-30";
+  const some = bookAllItems().slice(0, 12).map(x => x.it.id);
+  SESSION = { v: 4, date: todayStr(), ids: some, results: {}, saved: false };
+  const a = todaySheetItems().length;
+  SESSION = { v: 4, date: todayStr(), ids: some, results: {}, saved: true };
+  const b = todaySheetItems().length;
+  return { a, b };
+});
+ok("★前の版の、まだ記録していないきょうの紙は作り直す（20問になる）", rebuild.a === 20, String(rebuild.a));
+ok("前の版でも、記録ずみのきょうの紙は作り直さない", rebuild.b === 12, String(rebuild.b));
 
 console.log("\n=== アプリでやる問題（読み・記号・画数） ===");
 // ダミー: 読み15・漢字えらび10・じゅく語作り10・音訓10・画数10（すべて本の形式どおりの形）

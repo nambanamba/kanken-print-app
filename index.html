@@ -1415,11 +1415,11 @@ function composeSheet(target){
    SESSION = { v:3, date, ids:[問題id], results:{ "問題id|字": "x" }, saved }
    ⚠️ 旧形式は、同じ日付でも作り直す。
       v2 は読みが紙に乗っていた（紙とアプリの分離前）ので、v3 に上げて作り直させている。 */
-var SHEET_VERSION = 4;   // 4: 1枚に収まる数に絞る（fitTodayIds）
+var SHEET_VERSION = 5;   // 5: 送りがなを紙から外した＋20問を削らない（2026-09-11）。4 以前の「まだ記録していない紙」は作り直す
 function todaySheet(){
   if(!bookLoaded()) return null;
   if(SESSION && SESSION.date===todayStr()
-     && (SESSION.v===SHEET_VERSION || (SESSION.v===3 && SESSION.saved))) return SESSION;   // 記録ずみの紙は作り直さない
+     && (SESSION.v===SHEET_VERSION || (SESSION.v>=3 && SESSION.saved))) return SESSION;   // 記録ずみの紙は作り直さない（記録と紙がずれるため）
   var ids=fitToday().map(function(x){ return x.it.id; });
   if(!ids.length) return null;
   SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false, boxMM:FIT_BOX };
@@ -1605,6 +1605,7 @@ function printSessionPractice(){
    ・削った問題は記録されないので、翌日「次の問題」としてそのまま出る（やる量は変わらない）
    ・実際に紙を組んで測る（sheetsFit）。問数では決めない */
 var FIT_BOX=null;   // 固定したマスの高さ（todaySheet が SESSION.boxMM に入れる）
+var MAX_TRIM = 0;   // 1枚に収めるために削ってよい問数（ユーザー指示で 0。20問は削らない）
 function fitToday(){
   var full=composeSheet(SHEET_TARGET);
   var region=document.getElementById("print-region");
@@ -1621,8 +1622,11 @@ function fitToday(){
     return sheetsFit(region);
   }
   try{
-    // 2枚目が5問以下になる程度なら、1枚に収める（6問以上あふれる日は2枚）
-    for(var t=full.length; t>=full.length-5 && t>0; t--){
+    // ★2026-09-11 ユーザー指示「今日の分で書き問題20問ありますか？なければそこまでお願いします」
+    //   → **20問は削らない。**1枚に入らない日は、2枚にする（枚ごとの問数をそろえる。printSessionPractice）。
+    //   司令塔の「1枚に収める（2枚目が5問以下なら削る）」より、ユーザーの「20問」が優先（司令塔確認ずみ）。
+    //   ⚠️ 下の MAX_TRIM を 0 より大きくすると、また削るようになる。戻すならユーザーに確かめてから
+    for(var t=full.length; t>=full.length-MAX_TRIM && t>0; t--){
       var list=(t===full.length) ? full : composeSheet(t);
       if(fits(list)) return list;
     }

@@ -81,7 +81,10 @@ const comp = await p.evaluate(() => {
   return { c, n: SESSION.ids.length, q: paperQuota(SESSION.ids.length),
            avail: PAPER_FIELDS.filter(f => bookAllItems().some(x => itemFieldOf(x.it, x.g) === f && !ITEMS[x.it.id])) };
 });
-ok("きょうの紙は1枚（2枚目が5問以下の紙を出していない）", day.length === 1 || day.slice(1).every(s => s.rows > 5), day.map(s => s.rows).join("+"));
+// ★ユーザー指示「書き問題20問」→ 本の問題が足りる限り20問。入らなければ2枚（枚ごとにそろえる）
+const dayRows = day.reduce((a, s) => a + s.rows, 0);
+ok("きょうの紙は20問（本の問題が足りる限り）", dayRows === 20, day.map(s => s.rows).join("+"));
+ok("2枚のときは枚ごとの問数がそろっている", day.length === 1 || Math.max(...day.map(s => s.rows)) - Math.min(...day.map(s => s.rows)) <= 1, day.map(s => s.rows).join("+"));
 ok("出せる分野はどれも1問以上", comp.avail.every(f => (comp.c[f] || 0) >= 1), `${JSON.stringify(comp.c)} / 出せる分野 ${comp.avail.join(",")}`);
 ok("書き取りがいちばん多い（書き取りを先に削っていない）", Object.keys(comp.c).every(f => (comp.c.kaki || 0) >= comp.c[f]), JSON.stringify(comp.c));
 console.log(`  （${comp.n}問: ${JSON.stringify(comp.c)}／配点比 ${JSON.stringify(comp.q)}）`);
