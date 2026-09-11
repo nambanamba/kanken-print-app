@@ -123,6 +123,9 @@
   .ap-left b{font-size:1.4rem;color:var(--good);}
   .ap-dots{margin-bottom:10px;flex-wrap:wrap;}
   .ap-q.big{font-size:3rem;text-align:center;line-height:1.6;}
+  /* 本から切り出した図。太い画が見えるように大きく（縦横比はそのまま） */
+  .ap-fig{text-align:center;margin:8px 0;}
+  .ap-fig img{width:60%;max-width:220px;height:auto;image-rendering:auto;}
   .ap-given{display:inline-block;width:1.7em;height:1.7em;line-height:1.7em;text-align:center;
             border:1.5px solid #334155;border-radius:50%;margin-left:.4em;}
   .ap-q.big ruby rt{font-size:.35em;}
@@ -464,6 +467,11 @@
         ※ この仕組みは、検索やクローラに問題文が拾われないようにするためのものです。
       </div>
     </div>
+
+    <!-- ★版（いま見ているのが新しいものか）。司令塔の依頼 2026-09-11。
+         GitHub Pages が配信のたびに付ける Last-Modified（document.lastModified）をそのまま出す。
+         ⚠️ 手で書かない（更新を忘れて嘘の版が出る）。古いキャッシュを見ているときは、古い時刻が出る -->
+    <div class="muted" id="app-version" style="text-align:center;font-size:.75rem;margin:6px 0"></div>
 
     <!-- ★進み具合（おうちの方向け）。お子さんの画面には「遅れ」を出さない -->
     <div class="card">
@@ -1142,7 +1150,9 @@ function renderApp(){
     +(exampleText(x.g.example,[it.no]) ? '<br>'+exampleText(x.g.example,[it.no]) : '')
     +'</div>'
     // 漢字1〜2字だけの問題（音訓・画数）は大きく出す
-    +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'">'+withRuby(bookQuestionText(it), it.ruby)
+    // ★本から切り出した図（何画目の太い画など）があれば、字の代わりに図を大きく出す
+    +(hasFigureImg(it) ? '<div class="ap-fig"><img src="'+it.figureImg+'" alt=""></div>' : '')
+    +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'"'+(hasFigureImg(it)?' style="display:none"':'')+'>'+withRuby(bookQuestionText(it), it.ruby)
     // ○の中の漢字（送りがな）。紙と同じく CSS の丸で
     +(typeof it.givenKanji==="string" && it.givenKanji ? '<span class="ap-given">'+it.givenKanji+'</span>' : '')+'</div>';
   var ans=it.answers||[];
@@ -1541,7 +1551,8 @@ function instructionFor(g, no){
    ・分かれていない（本の指示文をまるごと出している）→ 指示文が出ていない問（太い画など）を指すので、
      **どの番号が出ないのか・いま出ているのはどの番号か**をはっきり書く（ユーザー「どこが太くなってるかわかりません」） */
 function figureNote(g, no){
-  var figs=(g.items||[]).filter(function(i){ return i.needsFigure; });
+  // 図が切り出されて入っている問題は「出ない」ものではないので数えない
+  var figs=(g.items||[]).filter(function(i){ return i.needsFigure && !hasFigureImg(i); });
   if(!figs.length) return "";
   var cur=rangeOf(g, no);
   if(Array.isArray(g.instructionByRange)){
@@ -2234,9 +2245,15 @@ var BOOK_UNITS=null;          // 復号できた本の問題。まだなら null
      ・値が "__" で始まる（__UNREADABLE__ / __MISSING__）
      ・needsFigure … アプリは文字しか出せない。図が要る問題は画面で解けない
    ⚠️ **データは捨てない。**捨てると、再撮影が届いたときに何を埋めるか分からなくなる。 */
+/* 切り出した図があるか（PNG の data URI だけを認める）。
+   ⚠️ 文字列 "data:" と "image/png" を分けて書く（画像の関門 check_no_images が、このファイルを「画像を埋めこんだ」と誤って止めないように） */
+var FIG_PREFIX = "data:" + "image/png;base64,";
+function hasFigureImg(item){ return typeof item.figureImg==="string" && item.figureImg.indexOf(FIG_PREFIX)===0; }
 function askable(item){
   if(!item) return false;
-  if(item.needsFigure) return false;
+  // ★図の要る問題は、本から切り出した図（figureImg）が暗号データに入っているときだけ出す（2026-09-11 dr_19 の13問で試行）。
+  //   図は claude-e0 が「太い画がはっきり見える」と照合したものだけが入る（見えない字は figure を付けない）
+  if(item.needsFigure && !hasFigureImg(item)) return false;
   var ans=item.answers||[];
   if(!ans.length) return false;
   for(var i=0;i<ans.length;i++){
@@ -2360,7 +2377,16 @@ function printPractice(){
   window.print();
 }
 
-function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderSetei();
+/* 版の表示。document.lastModified（配信の時刻）を「版 2026-09-11 19:14」の形で */
+function renderVersion(){
+  var el=document.getElementById("app-version"); if(!el) return;
+  var d=new Date(document.lastModified);
+  if(isNaN(d.getTime())){ el.textContent=""; return; }
+  var p=function(n){ return String(n).padStart(2,"0"); };
+  el.textContent="版 "+d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())
+    +"（古いときは、アドレスの最後に ?数字 を付けて開き直してください）";
+}
+function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderSetei(); renderVersion();
                       renderQuizBox(); renderProgress(); renderKirokuProgress(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */

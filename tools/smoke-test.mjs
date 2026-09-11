@@ -669,6 +669,28 @@ const pos = await page.evaluate(() => {
 });
 ok("★送りがな: 正解の位置が1・2・3番目に散らばる（300回で各2割以上）", pos.cnt.every(c => c >= 60), pos.cnt.join(","));
 ok("★送りがな: 続けて同じ並びにならない", pos.same === 0, String(pos.same));
+// ★本から切り出した図（figureImg）がある「図の要る問題」は、アプリに出す（2026-09-11 dr_19 の13問で試行）
+const figT = await page.evaluate(() => {
+  // 1x1 の白いPNG（ダミー）。⚠️ "data:" と "image/png" を分けて書く（画像の関門がこのファイルを止めないように）
+  const PNG = "data:" + "image/png;base64," + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGP4DwABAQEAG7buVgAAAABJRU5ErkJggg==";
+  const g = { gno: 0, field: "kakusu", instruction: { text: "ダミー（太い画は何画目）", ruby: [] }, items: [
+    { id: "q_fig_1", no: 1, text: "字", needsFigure: true, figureImg: PNG, answers: [{ text: "3" }], kanji: ["字"] },
+    { id: "q_fig_2", no: 2, text: "字", needsFigure: true, answers: [{ text: "4" }], kanji: ["字"] },
+    { id: "q_fig_3", no: 3, text: "字", needsFigure: true, figureImg: "data:text/html,xx", answers: [{ text: "4" }], kanji: ["字"] }] };
+  BOOK_UNITS = [{ unitId: "dr_19", mat: "dr", srcPages: [19], groups: [g] }]; window.isVerifiedUnit = () => true;
+  ITEMS = {}; APP_S = null; window.__day = "2099-09-01";
+  const ids = appAllItems().map(x => x.it.id);
+  const s = todayApp(); s.pos = s.ids.indexOf("q_fig_1"); renderApp();
+  const box = document.getElementById("ap-box");
+  return { ids, img: !!box.querySelector(".ap-fig img"), note: figureNote(g, 1) };
+});
+ok("★切り出した図がある「図の要る問題」はアプリに出る／図が無い・PNGでないものは出ない",
+   figT.ids.join() === "q_fig_1", figT.ids.join());
+ok("★図がある問題は、画面に図を出す", figT.img);
+ok("図が入っている問題は「アプリでは出ません」の数に入れない（図の無い no.2 だけが出ない）", /図が要る/.test(figT.note), figT.note);
+// 版の表示（配信のたびに自動で変わる。手で書かない）
+const ver = await page.evaluate(() => document.getElementById("app-version").textContent);
+ok("せっていに版（配信の時刻）が出る", /^版 \d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(ver), ver);
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 
