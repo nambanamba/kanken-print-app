@@ -131,8 +131,12 @@ for (const u of want) {
       }),
       rows,
       totalSlots: rows.reduce((a, r) => a + r.slots, 0),
+      // ⚠️ answerBlock・bodyText は【1枚目だけ】（前からの形。照合担当の道具が使っているので変えない）
       answerBlock: key ? key.textContent.replace(/\s+/g, " ").trim() : null,
-      bodyText: region.querySelector(".p-body") ? region.querySelector(".p-body").textContent : ""
+      bodyText: region.querySelector(".p-body") ? region.querySelector(".p-body").textContent : "",
+      // ★枚ごと（2026-09-11 claude-e0 の依頼）。2枚になる日に、2枚目を「未確認」にしないため
+      answerBlocks: sheets.map(s => { const k = s.querySelector(".p-key"); return k ? k.textContent.replace(/\s+/g, " ").trim() : null; }),
+      bodyTexts: sheets.map(s => { const b = s.querySelector(".p-body"); return b ? b.textContent : ""; })
     };
   }, u);
 
