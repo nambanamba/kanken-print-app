@@ -483,7 +483,7 @@ await page.evaluate(() => {
     }
     // 画数は、本と同じく「図が要る問題（何画目）」を1問まぜる（アプリには出ない）
     if (field === "kakusu") items.push({ id: "q_app_" + uid + "_fig", no: 99, ruby: [], text: pool[0], needsFigure: true, answers: [{ text: "3" }], kanji: [pool[0]] });
-    const ins = field === "onkun" ? "次の漢字の読みは、音読み（ア）ですか、訓読み（イ）ですか。記号で答えなさい。" : "ダミーの指示文（" + uid + "）";
+    const ins = field === "onkun" ? "ダミーの指示: 音読み（ア）／訓読み（イ）"   /* ★本の指示文をそのまま書かない（公開リポジトリ）。アプリが見る「音読み（ア）」「訓読み（イ）」だけを含む */ : "ダミーの指示文（" + uid + "）";
     const example = field === "onkun" ? { text: "れいの字", answers: ["イ"], ruby: [] }
       // ★dr_19 と同じ形: 〈例〉が2つあり range で出し分ける。出す問（1〜10）に合う〈例〉だけが出ること（claude-e0 No.26）
       : field === "kakusu" ? [{ text: "あうれい", answers: ["3"], range: [1, 10] }, { text: "あわないれい", answers: ["6"], range: [90, 99] }] : null;
