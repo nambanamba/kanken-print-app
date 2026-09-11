@@ -5,3 +5,18 @@
 元データ/
 
 node_modules/
+
+# ★画像・PDF は追跡しない（2026-09-11）。本の図や、本の文面が写った画面の撮影を公開しないため。
+#   本の図は暗号の中にだけ置く（tools/crop_figures.py → build_quiz.mjs）。画面の撮影は一時領域に出す。
+#   これは保険。本体の関門は tools/check_no_images.mjs（.gitignore は git add -f で越えられるため）
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.heic
+*.tif
+*.tiff
+*.pdf
+*.svg
