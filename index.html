@@ -340,6 +340,8 @@
         紙に書いてもらったら、<b>「きろく」で〇×を入れてください。</b><br>
         <b>×にした字は、次の日の紙にまた出ます。</b>
       </div>
+      <!-- ★おかわり（きょうの紙を記録したあとに出る） -->
+      <div id="ky-extra" style="margin-top:12px"></div>
     </div>
 
     <!-- ★アプリでやる問題（読み・漢字えらび・じゅく語作り・音訓・画数）。**全部、本の問題。**
@@ -849,8 +851,19 @@ function renderKyou(){
     return;
   }
   var items=todaySheetItems();
+  // ★おかわり: きょうの紙を記録したら「つぎの分の紙を出す」
+  var ex=document.getElementById("ky-extra");
+  if(ex){
+    var done=!!(SESSION && SESSION.date===todayStr() && SESSION.saved);
+    ex.innerHTML = done
+      ? '<div class="note" style="text-align:left">✅ '+(SESSION.extra?'おかわり '+SESSION.extra+' 回目の紙':'きょうの紙')+'は 記録ずみです。</div>'
+        +'<button class="btn sec" style="margin-top:8px" onclick="startExtraSheet()">📄 つぎの分の紙を出す（おかわり）</button>'
+        +'<div class="muted" style="font-size:.75rem;margin-top:4px">日割りは進みません。きょう✕だった問題は、あしたに出ます。</div>'
+      : (SESSION && SESSION.extra ? '<div class="note" style="text-align:left">📄 おかわり '+SESSION.extra+' 回目の紙です。</div>' : '');
+  }
   // まえに ✕ だった問題（＝紙で記録したことがある問題）
-  var retryN=items.filter(function(x){ return !!ITEMS[x.it.id]; }).length;
+  // ★「まえに✕」は、きょうより前の日に記録があった問題だけ（きょう記録した問題を数えない。記録したあと「20問のうち20問」と出ていた）
+  var retryN=items.filter(function(x){ return answeredBefore(x.it.id); }).length;
   info.innerHTML='受検日まで <b>あと '+daysLeft()+' 日</b>。<br>'
     +'きょうの紙は <b>'+items.length+' 問</b>'
     +(retryN? '（うち <b>'+retryN+' 問</b>は、まえに ✕ だった問題）' : '')+'。'
@@ -869,7 +882,7 @@ function renderKyou(){
     return "<tr><td style='width:2em;color:#64748b'>"+(i+1)+"</td>"
       +"<td style='color:#64748b;white-space:nowrap;font-size:.8rem'>"+bookCite(x)+"</td>"
       +"<td>"+q+"</td>"
-      +"<td style='color:#64748b;white-space:nowrap'>"+(ITEMS[x.it.id]?"まえに ✕":"")+"</td></tr>";
+      +"<td style='color:#64748b;white-space:nowrap'>"+(answeredBefore(x.it.id)?"まえに ✕":"")+"</td></tr>";
   }).join("")+'</table>';
 }
 
@@ -929,7 +942,7 @@ function appQuota(n){
 
 function composeApp(){
   var all=appAllItems();
-  var retry=all.filter(function(x){ var r=ITEMS[x.it.id]; return r && r.last==="x"; }).slice(0,APP_TARGET);
+  var retry=all.filter(function(x){ return isRetryItem(x.it.id); }).slice(0,APP_TARGET);
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
   var left=APP_TARGET-retry.length, cand={};
   APP_FIELDS.forEach(function(f){ cand[f]=[]; });
@@ -1168,8 +1181,9 @@ function renderAppEntry(){
   box.innerHTML = left
     ? '<div class="muted" style="margin-bottom:10px">読み・記号で答える問題・画数・送りがな。1問ずつ出ます。</div>'
       +'<button class="btn" onclick="openApp()">📱 '+(started?'つづきから やる':'アプリの問題をやる')+'（のこり '+left+'問）</button>'
-    : '<div style="font-weight:700;color:var(--good)">✅ きょうのアプリの問題は おわり！</div>'
-      +'<button class="btn ghost" style="margin-top:8px" onclick="openApp()">もう一度 見る</button>';
+    : '<div style="font-weight:700;color:var(--good)">✅ '+(s.extra?'おかわり '+s.extra+' 回目も':'きょうのアプリの問題は')+' おわり！</div>'
+      +'<button class="btn sec" style="margin-top:8px" onclick="moreApp()">📱 もっとやる（おかわり）</button>'
+      +'<button class="btn ghost" style="margin-top:8px" onclick="openApp()">いまの分を もう一度 見る</button>';
 }
 /* 専用の画面を開く／閉じる（タブには出さない画面） */
 function openApp(){
@@ -1201,7 +1215,9 @@ function renderApp(){
       +'<div style="font-size:1.6rem;font-weight:800;color:var(--good)">おわり！</div>'
       +'<div style="margin-top:8px">よくがんばったね。</div>'
       +(anyX? '<div class="muted" style="margin-top:6px">まちがえた字は、あした もう一回出るよ。</div>' : '')
-      +'<button class="btn" style="margin-top:16px" onclick="closeApp()">きょうにもどる</button></div>';
+      +'<button class="btn" style="margin-top:16px" onclick="closeApp()">きょうにもどる</button>'
+      // ★おかわり（ユーザー指示「なんかいでもできるようにしてほしいです」）
+      +'<button class="btn sec" style="margin-top:8px" onclick="moreApp()">📱 もっとやる</button></div>';
     return;
   }
   var id=s.ids[s.pos], x=idx[id], it=x.it, f=itemFieldOf(it,x.g), fd=fieldOf(f);
@@ -1353,8 +1369,41 @@ function appRecord(id, f, kanji, perKanji, allOk, ord){
 var K_LOG="kanken7_log_v1";
 var LOG=load(K_LOG,[]);
 function logAnswer(src, id, f, cite, kanji){
-  LOG.push({ t:Date.now(), date:todayStr(), src:src, id:id, f:f, cite:cite, kanji:kanji });
+  // extra … おかわり（きょうの分のあとに追加でやった回）の番号。0＝きょうの分
+  var extra = (src==="paper") ? ((SESSION&&SESSION.extra)||0) : ((APP_S&&APP_S.extra)||0);
+  LOG.push({ t:Date.now(), date:todayStr(), src:src, id:id, f:f, cite:cite, kanji:kanji, extra:extra });
   save(K_LOG,LOG);
+}
+
+/* =========================================================================
+   ★おかわり（2026-09-11 ユーザー指示「今日の分とかじゃなくて、なんかいでもできるようにしてほしいです」）
+   ・紙: きょうの紙を記録したあと「つぎの分の紙を出す」／アプリ: きょうの分が終わったあと「もっとやる」
+   ・**日割りは進めない**（おかわりの紙を記録しても、日割りの「おわった日」は付けない）
+   ・**きょう✕になった問題は、おかわりに出さない**（あしたに回す。isRetryItem）。できた問題も出さない（今までどおり）
+   ・本の問題が尽きたら「もうありません」。自動生成で埋めない
+   ・記録（LOG）には extra（何回目のおかわりか）を残すので、「きょうの分」と区別できる
+   ========================================================================= */
+function startExtraSheet(){
+  if(!SESSION || SESSION.date!==todayStr() || !SESSION.saved){ alert("まず、きょうの紙を「きろく」で記録してください。"); return; }
+  var ids=fitToday().map(function(x){ return x.it.id; });
+  if(!ids.length){ alert("本の問題は、もうありません（照合が済んだ単元の問題は、ぜんぶやりました）。"); return; }
+  SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false, boxMM:FIT_BOX, extra:(SESSION.extra||0)+1 };
+  save(K_SESSION,SESSION);
+  renderAll();
+}
+function moreApp(){
+  var s=APP_S;
+  if(!s || s.date!==todayStr() || appLeft(s)>0){ return; }
+  var xs=composeApp();
+  if(!xs.length){ alert("アプリでやる本の問題は、もうありません。"); return; }
+  var ids=shuffle(xs.map(function(x){ return x.it.id; }), Math.random), ord={};
+  xs.forEach(function(x){
+    var f=itemFieldOf(x.it,x.g), ch=appChoicesOf(x.it,f);
+    if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0 && ch.length>1) ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);
+  });
+  APP_S={ v:APP_VERSION, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{}, extra:(s.extra||0)+1 };
+  save(K_APP,APP_S);
+  openApp();
 }
 /* その問題の、いちばん新しい記録で ITEMS[id].last を決め直す（無ければ ITEMS[id] を消す） */
 function relastItem(id){
@@ -1458,7 +1507,7 @@ function renderLog(){
     byDate[d].slice().sort(function(a,b){ return (LOG[b].t-LOG[a].t) || (a-b); }).forEach(function(i){
       var e=LOG[i], tm=new Date(e.t), hh=String(tm.getHours()).padStart(2,"0")+":"+String(tm.getMinutes()).padStart(2,"0");
       html+='<div class="mark-row log-row"><span class="mark-no" style="min-width:3.2em">'+hh+'</span>'
-        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":"アプリ")+'・'+(FN[e.f]||e.f)+'</span>'
+        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":"アプリ")+(e.extra?"（おかわり）":"")+'・'+(FN[e.f]||e.f)+'</span>'
         +e.kanji.map(function(q,ki){
           return '<div class="mark'+(q.ok?"":" x")+'" data-i="'+i+'" data-ki="'+ki+'" onclick="toggleLogMark(+this.dataset.i,+this.dataset.ki)">'
             +q.k+(q.ok?" ○":" ✕")+'</div>';
@@ -1574,6 +1623,15 @@ function paperQuota(n){
    ⚠️ 問題id は書き起こしの `id`（q_dr01_00_00_001 など）。**動かさない**（C-5）。 */
 var K_ITEMS="kanken7_items_v1";
 var ITEMS=load(K_ITEMS,{});
+/* ★「前日に✕だった問題」か。**きょう✕になった問題は、あしたに回す**（おかわりで同じ日にすぐまた出さない）。
+   ユーザーの流れは「✕は翌日また出す」なので、同じ日のおかわりに混ぜると「翌日」の意味がくずれる */
+function isRetryItem(id){ var r=ITEMS[id]; return !!(r && r.last==="x" && r.date!==todayStr()); }
+/* きょうより前の日に記録があった問題か（きょうの紙の「まえに✕」の数え方）。LOG が無いころの記録は ITEMS の日付で見る */
+function answeredBefore(id){
+  var d=todayStr();
+  if(LOG.some(function(e){ return e.id===id && e.date<d; })) return true;
+  var r=ITEMS[id]; return !!(r && r.date && r.date<d);
+}
 
 /* 問題id から本の問題を引く（照合ずみ・紙に出せるものだけ） */
 function bookIndex(){
@@ -1607,7 +1665,7 @@ function bookItemsForRetry(){
   var all=bookAllItems(), out=[], seen={};
   all.forEach(function(x){
     var r=ITEMS[x.it.id];
-    if(r && r.last==="x"){ out.push(x); seen[x.it.id]=1; }
+    if(isRetryItem(x.it.id)){ out.push(x); seen[x.it.id]=1; }
   });
   var must={};
   Object.keys(WEAK).forEach(function(k){ if(WEAK[k] && WEAK[k].must && !WEAK[k].got) must[k]=1; });
@@ -2258,7 +2316,8 @@ function saveSheetResult(){
   });
   // ★日割りを進める。かたまりの（照合ずみ・紙に出せる）問題が全部記録されたら「おわり」。
   //   ⚠️ 点は KSTATS 側で数えているので、ここでは total:0（予想得点に二重に入れない）
-  PLAN.forEach(function(c){
+  //   ★おかわりの紙（SESSION.extra）では日割りを進めない（ユーザー条件「日割りが勝手に進まないこと」）
+  if(!SESSION.extra) PLAN.forEach(function(c){
     if(RECORDS[c.id]) return;
     var its=bookItemsOfChunk(c);
     if(its.length && its.every(function(x){ return !!ITEMS[x.it.id]; })){

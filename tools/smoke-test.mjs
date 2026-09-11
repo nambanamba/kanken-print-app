@@ -798,6 +798,63 @@ ok("★照合ずみが読みとじゅく語作りだけの日は、上限で止�
 ok("★じゅく語作りは上限を超えない", (two.c.jukugo || 0) <= two.cap.jukugo, JSON.stringify(two.c));
 ok("★前の版で組んだ未回答のアプリの分は、組み直す", two.rebuilt === two.n, String(two.rebuilt));
 ok("1問でも答えたアプリの分は、組み直さない", two.kept === 1, String(two.kept));
+console.log("");
+console.log("=== おかわり（何回でもできる） ===");
+const ok2 = await page.evaluate(() => {
+  const alerts = []; const keepA = window.alert; window.alert = (m) => alerts.push(String(m));
+  BOOK_UNITS = window.__longUnits; window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+  window.__day = "2099-12-01";
+  const first = todaySheetItems().map(x => x.it.id);
+  renderMarks(); document.querySelector("#mark-box .mark").click();   // 1問目を✕
+  const xId = first[0];
+  saveSheetResult();
+  const recBefore = JSON.stringify(RECORDS);
+  renderKyou();
+  const btn = /つぎの分の紙を出す/.test(document.getElementById("ky-extra").innerText);
+  const infoAfter = document.getElementById("ky-info").innerText;
+  startExtraSheet();
+  const second = todaySheetItems().map(x => x.it.id);
+  const extra1 = SESSION.extra;
+  saveSheetResult();
+  const r = { btn, extra1, infoAfter, n1: first.length, n2: second.length,
+    disjoint: second.every(id => !first.includes(id)), noTodayX: !second.includes(xId),
+    planSame: JSON.stringify(RECORDS) === recBefore, logExtra: LOG.filter(e => e.extra === 1).length === second.length };
+  // あした: きょう✕の問題が出る
+  window.__day = "2099-12-02"; SESSION = null;
+  r.xTomorrow = todaySheetItems().map(x => x.it.id)[0] === xId;
+  // 本の問題が尽きたら「もうありません」
+  BOOK_UNITS = [JSON.parse(JSON.stringify(window.__longUnits[3]))];   // 部首10問だけ
+  RECORDS = {}; ITEMS = {}; SESSION = null; window.__day = "2099-12-03";
+  todaySheetItems(); saveSheetResult();
+  let idsBefore = SESSION.ids.join(), rounds = 0, seen = SESSION.ids.slice();
+  for (; rounds < 6; rounds++) {   // 尽きるまでおかわりを続ける
+    const n = alerts.length; startExtraSheet();
+    if (alerts.length > n) break;
+    seen = seen.concat(SESSION.ids); saveSheetResult(); idsBefore = SESSION.ids.join();
+  }
+  r.exhausted = alerts.some(a => /もうありません/.test(a)) && SESSION.ids.join() === idsBefore && new Set(seen).size === seen.length && seen.length === 10;
+  r.rounds = rounds;
+  // アプリ: 終わったら「もっとやる」で次の分（同じ問題は出ない）
+  BOOK_UNITS = window.__appUnits; ITEMS = {}; APP_S = null; window.__day = "2099-12-04";
+  const a1 = todayApp().ids.slice();
+  a1.forEach(id => { APP_S.res[id] = { ok: true }; ITEMS[id] = { o: 1, x: 0, last: "o", date: todayStr() }; });
+  APP_S.pos = a1.length; renderAppEntry();
+  r.appBtn = /もっとやる/.test(document.getElementById("ap-entry").innerText);
+  moreApp();
+  r.appExtra = APP_S.extra === 1 && APP_S.ids.every(id => !a1.includes(id)) && APP_S.ids.length > 0;
+  window.alert = keepA;
+  return r;
+});
+ok("★きょうの紙を記録したら「つぎの分の紙を出す」が出る", ok2.btn);
+ok("★記録したあとの「きょう」に、きょう記録した問題を「まえに✕」と数えない", !/まえに ✕ だった問題/.test(ok2.infoAfter), ok2.infoAfter.slice(0, 80));
+ok("★おかわりの紙は、きょうの紙と別の問題（同じ問題は出ない）", ok2.disjoint && ok2.n2 > 0, `${ok2.n1}+${ok2.n2}`);
+ok("★きょう✕の問題は、おかわりには出さない（あしたに回す）", ok2.noTodayX);
+ok("★きょう✕の問題は、あしたの紙の先頭に出る", ok2.xTomorrow);
+ok("★おかわりを記録しても、日割りは進まない", ok2.planSame);
+ok("おかわりの記録は、きょうの分と区別できる（extra）", ok2.logExtra && ok2.extra1 === 1);
+ok("★本の問題が尽きたら「もうありません」と出し、作って埋めない", ok2.exhausted);
+ok("★アプリ: 終わったら「もっとやる」で次の分（同じ問題は出ない）", ok2.appBtn && ok2.appExtra);
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 
