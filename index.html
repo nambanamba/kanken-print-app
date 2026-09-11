@@ -1135,10 +1135,9 @@ function renderApp(){
     +'<span class="ap-left">のこり <b>'+left+'</b> 問</span></div>'
     +'<div class="ky-dots ap-dots">'+dots+'</div>'
     +'<div class="ky-prog"><span class="muted" style="font-size:.75rem">'+(fd?fd.name:"")+'　'+bookCite(x)+'</span></div>'
-    +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(bookNote(x.g.instruction)||"")
-    // ★指示文が、アプリに出していない問（図が要る問）を指していることがある（dr_19 の「1〜13」。claude-e0 の指摘）
-    +((x.g.items||[]).some(function(i){ return i.needsFigure; })
-      ? '<br><b>※ 図が要る問題は、アプリでは出ません（本でやってね）。</b>' : '')
+    +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(instructionFor(x.g, it.no)||"")
+    // ★図の要る問題の一言は、この問の範囲に図の要る問題があるときだけ（総画数の画面には要らない。ユーザー発見）
+    +(figureNote(x.g, it.no) ? '<br><b>'+figureNote(x.g, it.no)+'</b>' : '')
     // 本の〈例〉（紙と同じ。claude-e0 の指摘 No.25）
     +(exampleText(x.g.example,[it.no]) ? '<br>'+exampleText(x.g.example,[it.no]) : '')
     +'</div>'
@@ -1514,6 +1513,46 @@ function bookCite(x){
    ⚠️ dr_19 は「何画目（1〜13）〈例〉正→3」と「総画数（14〜26）〈例〉字→6」が同じ組にある。
       アプリには総画数だけ出るのに「正 → 3」まで出ていて、**正は3画だと覚えてしまう**形だった。
       〈例〉は手本なので、いちばん信じられる。 */
+/* ★1つの組に2種類の大問が入っているとき（dr_19: 1〜13＝何画目／14〜26＝総画数）の出し分け。
+   ・range … 問番号 no が入る範囲。〈例〉の range（書式で決まっている）を使う
+   ・指示文 … 書式に `instructionByRange: [{range:[a,b], text, ruby}]` があれば、その問の範囲のものを出す。
+     ⚠️ **アプリの側で本の文を切り分けない**（切り方を誤ると本と違う文になる）。切り分けた文面は書き起こし側が持つ。
+        無ければ本の指示文をそのまま出す（2026-09-11 時点では書式に無く、claude-e0 に相談中）
+   ・「図が要る問題は出ません」の一言 … その問の範囲に図の要る問題があるときだけ（総画数の画面には出さない） */
+function rangeOf(g, no){
+  var lists=[].concat(Array.isArray(g.instructionByRange)?g.instructionByRange:[], Array.isArray(g.example)?g.example:[]);
+  for(var i=0;i<lists.length;i++){
+    var r=lists[i] && lists[i].range;
+    if(Array.isArray(r) && r.length>=2 && no>=r[0] && no<=r[1]) return r;
+  }
+  return null;
+}
+function instructionFor(g, no){
+  if(Array.isArray(g.instructionByRange)){
+    for(var i=0;i<g.instructionByRange.length;i++){
+      var e=g.instructionByRange[i], r=e && e.range;
+      if(Array.isArray(r) && no>=r[0] && no<=r[1]) return bookNote(e);
+    }
+  }
+  return bookNote(g.instruction);
+}
+/* 図の要る問題についての一言（要らなければ ""）。
+   ・指示文が範囲ごとに分かれている（instructionByRange）→ この問の範囲に図の要る問題があるときだけ出す
+   ・分かれていない（本の指示文をまるごと出している）→ 指示文が出ていない問（太い画など）を指すので、
+     **どの番号が出ないのか・いま出ているのはどの番号か**をはっきり書く（ユーザー「どこが太くなってるかわかりません」） */
+function figureNote(g, no){
+  var figs=(g.items||[]).filter(function(i){ return i.needsFigure; });
+  if(!figs.length) return "";
+  var cur=rangeOf(g, no);
+  if(Array.isArray(g.instructionByRange)){
+    var inCur=figs.some(function(i){ return cur ? (i.no>=cur[0] && i.no<=cur[1]) : true; });
+    return inCur ? "※ 図が要る問題は、アプリでは出ません（本でやってね）。" : "";
+  }
+  var fr=rangeOf(g, figs[0].no);
+  if(fr && cur && (fr[0]!==cur[0] || fr[1]!==cur[1]))
+    return "※ "+fr[0]+"〜"+fr[1]+" の問題は図が要るので、アプリでは出ません（本でやってね）。いまは "+cur[0]+"〜"+cur[1]+" の問題です。";
+  return "※ 図が要る問題は、アプリでは出ません（本でやってね）。";
+}
 function exampleText(ex, nos){
   if(!ex) return "";
   var list=(Array.isArray(ex) ? ex : [ex]).filter(function(e){
@@ -1573,7 +1612,7 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
       title:"■ "+(fd?fd.name:"もんだい"),
       keyTitle:(fd?fd.name:"もんだい")+"の答え",
       // ★書式v1.6 で instruction が {text, ruby[]} になりうる。文字列でもオブジェクトでも読む（ルビも出す）
-      ask:bookNote(b.g.instruction)||FIELD_ASK[f]||"",
+      ask:instructionFor(b.g, (b.rows[0]&&b.rows[0].it.no))||FIELD_ASK[f]||"",
       src:"book",
       rows:b.rows.map(function(x){
         var it=x.it, ans=it.answers||[], ruby=it.ruby||[];

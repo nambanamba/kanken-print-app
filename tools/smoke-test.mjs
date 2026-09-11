@@ -586,9 +586,23 @@ ok("★記号（漢字えらび・じゅく語作り）: ボタンの記号は�
    pickLog.length > 0 && pickLog.every(l => l.labels.every((t, i) => t.startsWith("アイウエオ"[i] + "　"))),
    pickLog.map(l => l.labels.join("/")).slice(0, 2).join(" | "));
 const kkLog = log.filter(l => l.f === "kakusu");
-ok("★図が要る問題を外した組では「図が要る問題はアプリでは出ません」と出す（指示文が出ていない問を指すため）",
-   kkLog.length > 0 && kkLog.every(l => /図が要る問題は、アプリでは出ません/.test(l.before)));
-ok("図が要る問題の無い組では、その一言を出さない", log.filter(l => l.f !== "kakusu").every(l => !/図が要る問題/.test(l.before)));
+// ダミーの画数: 〈例〉の range が [1,10]（出す問）と [90,99]（図の要る問 no.99）。指示文は1つ（本と同じ形）
+ok("★図の要る問題を外した組で、指示文が分かれていないときは「どの番号が出ないか・いまはどの番号か」を書く",
+   kkLog.length > 0 && kkLog.every(l => /90〜99 の問題は図が要るので、アプリでは出ません/.test(l.before) && /いまは 1〜10 の問題です/.test(l.before)),
+   kkLog.map(l => l.before.slice(0, 120)).slice(0, 1).join(""));
+ok("図が要る問題の無い組では、その一言を出さない", log.filter(l => l.f !== "kakusu").every(l => !/図が要る/.test(l.before)));
+// ★指示文が範囲ごとに分かれている（instructionByRange）ときは、その問の範囲の指示文だけを出し、図の一言も出さない
+const ibr = await page.evaluate(() => {
+  const g = { field: "kakusu", instruction: { text: "ふたつまとめたしじぶん", ruby: [] },
+    instructionByRange: [{ range: [1, 13], text: "なんかくめのしじ", ruby: [] }, { range: [14, 26], text: "そうかくすうのしじ", ruby: [] }],
+    example: [{ text: "れい1", answers: ["3"], range: [1, 13] }, { text: "れい2", answers: ["6"], range: [14, 26] }],
+    items: [{ no: 3, needsFigure: true }, { no: 15 }] };
+  return { ins15: instructionFor(g, 15), note15: figureNote(g, 15), ins3: instructionFor(g, 3), note3: figureNote(g, 3),
+           plain: instructionFor({ instruction: { text: "ふつうのしじ", ruby: [] } }, 5) };
+});
+ok("★instructionByRange があれば、その問の範囲の指示文だけ（総画数の問に「太い画」の文を出さない）",
+   ibr.ins15 === "そうかくすうのしじ" && ibr.ins3 === "なんかくめのしじ" && ibr.plain === "ふつうのしじ", JSON.stringify(ibr));
+ok("★指示文が分かれていれば、図の要らない範囲（総画数）には「図が要る」の一言を出さない", ibr.note15 === "" && /図が要る/.test(ibr.note3), JSON.stringify(ibr));
 const onLog = log.filter(l => l.f === "onkun");
 ok("★音訓: 選択肢はア（音読み）→イ（訓読み）の順のまま", onLog.every(l => l.labels.join("/") === "ア　音読み/イ　訓読み"), onLog.map(l => l.labels.join("/")).join(" | "));
 ok("★アプリ: 本の〈例〉が画面に出ている（〈例〉のある組）", onLog.every(l => /〈例〉 れいの字 → イ/.test(l.before)), onLog.map(l => l.before.slice(0, 80)).slice(0, 1).join(""));
