@@ -605,7 +605,7 @@ const ibr = await page.evaluate(() => {
 });
 ok("★instructionByRange があれば、その問の範囲の指示文だけ（総画数の問に「太い画」の文を出さない）",
    ibr.ins15 === "そうかくすうのしじ" && ibr.ins3 === "なんかくめのしじ" && ibr.plain === "ふつうのしじ", JSON.stringify(ibr));
-ok("★指示文が分かれていれば、図の要らない範囲（総画数）には「図が要る」の一言を出さない", ibr.note15 === "" && /図が要る/.test(ibr.note3), JSON.stringify(ibr));
+ok("★指示文が分かれていれば、図の要らない範囲（総画数）には「図が要る」の一言を出さない", ibr.note15 === "" && /1〜13 のうち 1問は、アプリに出せません/.test(ibr.note3), JSON.stringify(ibr));
 const onLog = log.filter(l => l.f === "onkun");
 ok("★音訓: 選択肢はア（音読み）→イ（訓読み）の順のまま", onLog.every(l => l.labels.join("/") === "ア　音読み/イ　訓読み"), onLog.map(l => l.labels.join("/")).join(" | "));
 ok("★アプリ: 本の〈例〉が画面に出ている（〈例〉のある組）", onLog.every(l => /〈例〉 れいの字 → イ/.test(l.before)), onLog.map(l => l.before.slice(0, 80)).slice(0, 1).join(""));
@@ -695,7 +695,8 @@ ok("★切り出した図がある「図の要る問題」はアプリに出る�
 ok("★図がある問題は、画面に図を出す", figT.img);
 ok("★図のそばに「タップすると大きくなる」と出る（大きくしないと分からない字があるため）", figT.hint, "");
 ok("★タップして広げた図は、画面の中に字全体が収まる（端が切れない）", figT.zoomFits, JSON.stringify(figT.zi));
-ok("図が入っている問題は「アプリでは出ません」の数に入れない（図の無い no.2 だけが出ない）", /図が要る/.test(figT.note), figT.note);
+ok("★図が入っている問題は「出せない」に数えない（図の無い no.2 と、PNGでない no.3 の2問）", /アプリに出せない問題が 2問/.test(figT.note), figT.note);
+ok("★図つきの画面に「図が要る問題は出ません」と書かない（目の前と食い違う）", !/図が要る問題は、アプリでは出ません/.test(figT.note), figT.note);
 // 版の表示（配信のたびに自動で変わる。手で書かない）
 const ver = await page.evaluate(() => document.getElementById("app-version").textContent);
 ok("せっていに版（配信の時刻）が出る", /^版 \d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(ver), ver);

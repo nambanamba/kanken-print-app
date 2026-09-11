@@ -1773,14 +1773,16 @@ function figureNote(g, no){
   var figs=(g.items||[]).filter(function(i){ return i.needsFigure && !hasFigureImg(i); });
   if(!figs.length) return "";
   var cur=rangeOf(g, no);
+  // ★「図が要る問題は出ません」とは書かない。図つきで出している問題もあるので、目の前と食い違う（claude-e0 No.31）。
+  //   → **出せない問題の数**を書く（数が出ていれば、抜けが黙って増えたときに気づける）
   if(Array.isArray(g.instructionByRange)){
-    var inCur=figs.some(function(i){ return cur ? (i.no>=cur[0] && i.no<=cur[1]) : true; });
-    return inCur ? "※ 図が要る問題は、アプリでは出ません（本でやってね）。" : "";
+    var inCur=figs.filter(function(i){ return cur ? (i.no>=cur[0] && i.no<=cur[1]) : true; }).length;
+    return inCur ? "※ "+(cur?cur[0]+"〜"+cur[1]+" の":"この組の")+"うち "+inCur+"問は、アプリに出せません（本でやってね）。" : "";
   }
   var fr=rangeOf(g, figs[0].no);
   if(fr && cur && (fr[0]!==cur[0] || fr[1]!==cur[1]))
     return "※ "+fr[0]+"〜"+fr[1]+" の問題は図が要るので、アプリでは出ません（本でやってね）。いまは "+cur[0]+"〜"+cur[1]+" の問題です。";
-  return "※ 図が要る問題は、アプリでは出ません（本でやってね）。";
+  return "※ この組には、アプリに出せない問題が "+figs.length+"問あります（本でやってね）。";
 }
 function exampleText(ex, nos){
   if(!ex) return "";
