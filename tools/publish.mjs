@@ -19,6 +19,7 @@
  *   ② 平文の漏れ走査   … 追跡ファイル全部（`.md` 含む）
  *   ③ 除外フォルダの混入 … `公式資料` `元データ` `情報` `書き起こし`
  *   ④ テスト
+ *   ⑤ 本物の紙（check_real_paper。合言葉が要る。無ければ「飛ばした」と大きく出す）
  *   **全部通ったときだけ commit / push する。**
  */
 import { execSync, execFileSync } from "node:child_process";
@@ -122,6 +123,19 @@ console.log(`OK（追跡 ${tracked.length} 本）`);
 /* ④ テスト */
 run("テスト（smoke-test）", process.execPath, [path.join(HERE, "smoke-test.mjs")]);
 run("テスト（test_gen）", process.execPath, [path.join(HERE, "test_gen.js")]);
+
+/* ⑤ 本物の紙（合言葉が要る。2026-09-11 claude-eb の依頼・司令塔の指示）
+ *   ダミーではテストが通り、本物の紙は折り線を越えていた（1日に4回）。
+ *   ★合言葉が無いときは止めないが、飛ばしたことを大きく出す（黙って通さない）。 */
+if (process.env.KANKEN_PASS) {
+  run("本物の紙（check_real_paper --all-units）", process.execPath, [path.join(HERE, "check_real_paper.mjs"), "--all-units"]);
+} else {
+  console.log("\n★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★");
+  console.log("★ 本物の紙の検査を【飛ばしました】（KANKEN_PASS がありません）");
+  console.log("★ 紙が折り線を越えていないかは、まだ確かめていません");
+  console.log("★ 合言葉を環境変数に入れて、もう一度走らせてください");
+  console.log("★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★\n");
+}
 
 if (dry) { console.log("\n--dry なので、commit も push もしていません。"); process.exit(0); }
 
