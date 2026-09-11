@@ -128,9 +128,12 @@
      タップすると2倍に広げた画面になる（fig-zoom）。 */
   .ap-fig{text-align:center;margin:8px 0;}
   .ap-fig img{width:100%;max-width:380px;height:auto;border:1px solid #e2e8f0;border-radius:8px;cursor:zoom-in;}
-  .ap-fig .ap-fig-hint{font-size:.75rem;color:#64748b;}
+  .ap-fig .ap-fig-hint{font-size:.9rem;font-weight:700;color:#1d4ed8;margin-top:4px;}
   #fig-zoom{position:fixed;inset:0;background:rgba(15,23,42,.92);z-index:50;overflow:auto;display:none;text-align:center;}
-  #fig-zoom img{width:160vw;max-width:none;height:auto;background:#fff;margin:56px 0 20px;}
+  /* ★広げた画面でも、字全体が画面に収まること（claude-e0 No.29: 1.6倍にしたら13問中6問が画面の外に切れ、
+     城は答えの画がある側が切れていた）。画面の幅と高さの小さいほうにぴったり合わせる。もっと大きくは指2本で */
+  #fig-zoom img{display:block;width:min(96vw, calc(100vh - 110px));height:auto;background:#fff;margin:56px auto 8px;}
+  #fig-zoom .fz-note{color:#e2e8f0;font-size:.85rem;}
   #fig-zoom .fz-close{position:fixed;top:10px;right:10px;background:#fff;border:0;border-radius:99px;padding:10px 16px;font-weight:700;}
   .ap-given{display:inline-block;width:1.7em;height:1.7em;line-height:1.7em;text-align:center;
             border:1.5px solid #334155;border-radius:50%;margin-left:.4em;}
@@ -1137,13 +1140,11 @@ function figZoom(src){
   var z=document.getElementById("fig-zoom");
   if(!z){
     z=document.createElement("div"); z.id="fig-zoom";
-    z.innerHTML='<button class="fz-close">とじる</button><img alt="">';
+    z.innerHTML='<button class="fz-close">とじる</button><img alt=""><div class="fz-note">指2本で広げると、もっと大きくなるよ。さわると もどるよ。</div>';
     z.onclick=function(){ z.style.display="none"; };
     document.body.appendChild(z);
   }
-  z.querySelector("img").src=src; z.style.display="block";
-  // 横は字のまん中が見えるように（広げた図は画面より大きいので、左はしから出すと字の半分しか見えない）
-  z.scrollTo((z.scrollWidth-z.clientWidth)/2, 0);
+  z.querySelector("img").src=src; z.style.display="block"; z.scrollTo(0,0);
 }
 
 /* のこり何問（まだ答えていない問題の数。照合が取り下げられた問題は数えない） */
@@ -1215,7 +1216,8 @@ function renderApp(){
     // 漢字1〜2字だけの問題（音訓・画数）は大きく出す
     // ★本から切り出した図（何画目の太い画など）があれば、字の代わりに図を大きく出す
     +(hasFigureImg(it) ? '<div class="ap-fig"><img src="'+it.figureImg+'" alt="" onclick="figZoom(this.src)">'
-        +'<div class="ap-fig-hint">タップすると大きくなります</div></div>' : '')
+        // ★大きくできることが、お子さんに分かるように（械・博・協・倉 は大きくしないと太い画が分からない。司令塔の条件）
+        +'<div class="ap-fig-hint">👆 字をタップすると 大きくなるよ（太いところが 見やすくなるよ）</div></div>' : '')
     +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'"'+(hasFigureImg(it)?' style="display:none"':'')+'>'+withRuby(bookQuestionText(it), it.ruby)
     // ○の中の漢字（送りがな）。紙と同じく CSS の丸で
     +(typeof it.givenKanji==="string" && it.givenKanji ? '<span class="ap-given">'+it.givenKanji+'</span>' : '')+'</div>';

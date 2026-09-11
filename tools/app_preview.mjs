@@ -61,7 +61,8 @@ await p.click('.tab[data-page="kyou"]');
 function figuresFor(u) {
   const dirs = ["漢検書き起こし_ドリル", "漢検書き起こし_ノート"].map(d => path.resolve(ROOT, "..", "司令塔", d, "data", u + ".json"));
   const src = dirs.find(f => fs.existsSync(f));
-  if (!src) return {};
+  // ★見つからなかったら黙って0枚にしない（claude-e0: リポジトリの外に展開したツリーで走らせて空振りした）
+  if (!src) { console.log(`  ★ ${u}: 平文JSONが見つかりません（探した場所: ${dirs.join(" / ")}）。図は入りません`); return null; }
   const out = execFileSync("python", [path.join(HERE, "crop_figures.py"), "--json", src], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return JSON.parse(out || "{}");
 }
@@ -69,6 +70,7 @@ function figuresFor(u) {
 for (const u of want) {
   if (withFigures) {
     const figs = figuresFor(u);
+    if (!figs) { process.exitCode = 1; continue; }
     const n = await p.evaluate((figs) => {
       let n = 0;
       BOOK_UNITS.forEach(un => (un.groups || []).forEach(g => (g.items || []).forEach(it => { if (figs[it.id]) { it.figureImg = figs[it.id]; n++; } })));

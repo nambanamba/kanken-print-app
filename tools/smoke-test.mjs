@@ -682,11 +682,16 @@ const figT = await page.evaluate(() => {
   const ids = appAllItems().map(x => x.it.id);
   const s = todayApp(); s.pos = s.ids.indexOf("q_fig_1"); renderApp();
   const box = document.getElementById("ap-box");
-  return { ids, img: !!box.querySelector(".ap-fig img"), note: figureNote(g, 1) };
+  figZoom(PNG); const zi = document.querySelector("#fig-zoom img").getBoundingClientRect();
+  const zoomFits = zi.width > 100 && zi.left >= 0 && zi.right <= window.innerWidth + 0.5 && zi.bottom <= window.innerHeight + 0.5;
+  document.getElementById("fig-zoom").style.display = "none";
+  return { ids, img: !!box.querySelector(".ap-fig img"), hint: /タップすると 大きくなる/.test(box.innerText), note: figureNote(g, 1), zoomFits, zi: [zi.left, zi.right, zi.bottom, window.innerWidth, window.innerHeight].map(Math.round) };
 });
 ok("★切り出した図がある「図の要る問題」はアプリに出る／図が無い・PNGでないものは出ない",
    figT.ids.join() === "q_fig_1", figT.ids.join());
 ok("★図がある問題は、画面に図を出す", figT.img);
+ok("★図のそばに「タップすると大きくなる」と出る（大きくしないと分からない字があるため）", figT.hint, "");
+ok("★タップして広げた図は、画面の中に字全体が収まる（端が切れない）", figT.zoomFits, JSON.stringify(figT.zi));
 ok("図が入っている問題は「アプリでは出ません」の数に入れない（図の無い no.2 だけが出ない）", /図が要る/.test(figT.note), figT.note);
 // 版の表示（配信のたびに自動で変わる。手で書かない）
 const ver = await page.evaluate(() => document.getElementById("app-version").textContent);
