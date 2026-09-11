@@ -165,7 +165,7 @@
        ★1枚ごとに「問題／折り線／答え」がそろうので、**折り方は毎回同じ。**
           そのページの答えは、そのページの下にある。 */
     .p-sheet{display:flex;flex-direction:column;
-             box-sizing:border-box;height:297mm;padding:10mm 14mm;
+             box-sizing:border-box;height:297mm;padding:8mm 14mm;
              page-break-after:always;break-after:page;}
     .p-sheet:last-child{page-break-after:auto;break-after:auto;}
     /* ⚠️ ここは overflow:hidden にしない。**隠すと「入りきらない」ことに気づけない。**
@@ -207,11 +207,11 @@
     .p-slotlab{position:absolute;top:0.3mm;left:0.6mm;font-size:6.5pt;color:#888;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
-    .p-key{flex:0 0 auto;height:42mm;overflow:hidden;box-sizing:border-box;}
+    .p-key{flex:0 0 auto;height:38mm;overflow:hidden;box-sizing:border-box;}
     @page{size:A4 portrait;margin:0;}
-    .p-title{font-size:13pt;font-weight:700;}
-    .p-sub{font-size:8.5pt;color:#555;margin:0.5mm 0 2mm;}
-    .p-sec{font-size:9.5pt;font-weight:700;background:#eee;padding:0.8mm 2mm;margin:2mm 0 1mm;}
+    .p-title{font-size:13pt;font-weight:700;margin-bottom:1.5mm;}
+    .p-sub{font-size:8.5pt;color:#555;font-weight:400;margin-left:5mm;}
+    .p-sec{font-size:9.5pt;font-weight:700;background:#eee;padding:0.6mm 2mm;margin:1.5mm 0 0.8mm;}
     /* ★分野名と指示文のあいだを空ける（「書き取り次の…」と続けて読めてしまった。claude-e0 の指摘） */
     .p-ask{font-weight:400;font-size:8.5pt;margin-left:3mm;}
     .p-hint{font-size:8.5pt;color:#555;margin-left:1mm;}
@@ -231,7 +231,7 @@
     .p-cite{position:absolute;right:0.8mm;bottom:0.4mm;font-size:5.5pt;color:#999;
             white-space:nowrap;line-height:1;pointer-events:none;}
     .p-ans{width:48%;height:11mm;}
-    .p-key{padding-top:2mm;font-size:8.5pt;line-height:1.75;}
+    .p-key{padding-top:1.5mm;font-size:8.5pt;line-height:1.6;}
     .p-key b{font-size:9pt;}
     .p-key .ans{letter-spacing:.02em;}
     .p-model{text-align:center;font-size:22pt;color:#c9c9c9;width:15%;}
@@ -1508,10 +1508,11 @@ function renderSheet(blocks, page, pages){
   var tight=(rowsPerCol>15)?" p-tight":"";
 
   var html='<div class="p-sheet"><div class="p-body'+tight+'">'
+    // ★見出しと「なまえ・日付」は1行に（送りがなまで5分野が並ぶ日に1枚に収めるため。本物の紙で実測）
     +'<div class="p-title">漢検7級　きょう 書く字'
     +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
-    +'</div>'
-    +'<div class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</div>';
+    +'<span class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</span>'
+    +'</div>';
 
   var keys=[];
   blocks.forEach(function(b){
