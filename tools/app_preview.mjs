@@ -15,6 +15,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { getChromium, launchBrowser } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -24,7 +25,10 @@ const oi = args.indexOf("--out");
 if (oi < 0 || !args[oi + 1]) { console.error("使い方: node tools/app_preview.mjs --out <出力先フォルダ> <単元id> [...]"); process.exit(2); }
 const OUT = path.resolve(args[oi + 1]);
 if (OUT.startsWith(ROOT)) { console.error("★中止: 出力先が kanken-print-app の中です → " + OUT); process.exit(3); }
-const want = args.filter((a, i) => i !== oi && i !== oi + 1);
+// --figures … 本から切り出した図（crop_figures.py）を、この道具の中だけで問題に入れて撮る。
+//             暗号データへの取り込み（build_quiz）より前に、図が画面で見分けられるかを照合するため。端末には保存しない
+const withFigures = args.includes("--figures");
+const want = args.filter((a, i) => i !== oi && i !== oi + 1 && a !== "--figures");
 if (!want.length) { console.error("単元idを1つ以上指定してください（例: dr_20）"); process.exit(2); }
 const pass = process.env.KANKEN_PASS;
 if (!pass) { console.error("★中止: 環境変数 KANKEN_PASS に合言葉を入れてください。"); process.exit(2); }
@@ -53,7 +57,25 @@ try { await p.waitForFunction(() => window.BOOK_UNITS !== null, { timeout: 30000
 catch { console.error("★中止: 合言葉で復号できませんでした。"); await b.close(); srv.close(); process.exit(3); }
 await p.click('.tab[data-page="kyou"]');
 
+/* 図を取ってくる（平文JSON → crop_figures.py --json → {問題id: data URI}）。ファイルは作らない */
+function figuresFor(u) {
+  const dirs = ["漢検書き起こし_ドリル", "漢検書き起こし_ノート"].map(d => path.resolve(ROOT, "..", "司令塔", d, "data", u + ".json"));
+  const src = dirs.find(f => fs.existsSync(f));
+  if (!src) return {};
+  const out = execFileSync("python", [path.join(HERE, "crop_figures.py"), "--json", src], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return JSON.parse(out || "{}");
+}
+
 for (const u of want) {
+  if (withFigures) {
+    const figs = figuresFor(u);
+    const n = await p.evaluate((figs) => {
+      let n = 0;
+      BOOK_UNITS.forEach(un => (un.groups || []).forEach(g => (g.items || []).forEach(it => { if (figs[it.id]) { it.figureImg = figs[it.id]; n++; } })));
+      return n;
+    }, figs);
+    console.log(`  ${u}: 図を ${n} 枚入れました（この道具の中だけ）`);
+  }
   // この道具の中だけ、指定した単元を照合ずみとみなす。★保存はしない（save を止める）
   const ids = await p.evaluate((u) => {
     window.save = () => {};
@@ -72,15 +94,24 @@ for (const u of want) {
   const info = [];
   for (let i = 0; i < ids.length; i++) {
     const row = await p.evaluate((i) => {
-      APP_S.pos = i; renderApp();
+      APP_S.pos = i;
+      // ★アプリの問題は専用の画面（page-app）にある（2026-09-11 から）。開いてから撮る
+      openApp();
       const box = document.getElementById("ap-box");
-      document.getElementById("ap-card").scrollIntoView();
+      window.scrollTo(0, 0);
       const x = appIndex()[APP_S.ids[i]];
       return { no: x.it.no, cite: bookCite(x), screen: box.innerText,
                questionHtml: box.querySelector(".ap-q") ? box.querySelector(".ap-q").innerHTML : "",
                buttons: [...box.querySelectorAll("button")].map(e => e.textContent) };
     }, i);
     await p.screenshot({ path: path.join(OUT, `${u}_${row.no}.png`) });
+    // 図があれば、タップして2倍に広げた画面も撮る（太い画が見分けられるかの照合用）
+    if (await p.$('#ap-box .ap-fig img')) {
+      await p.click('#ap-box .ap-fig img');
+      await p.screenshot({ path: path.join(OUT, `${u}_${row.no}_zoom.png`) });
+      await p.evaluate(() => { document.getElementById("fig-zoom").style.display = "none"; });
+      row.figure = true;
+    }
     if (await p.$('#ap-box [data-act="show"]')) {
       await p.click('#ap-box [data-act="show"]');
       row.afterShow = await p.evaluate(() => document.getElementById("ap-box").innerText);
