@@ -1206,6 +1206,10 @@ function appRecord(id, f, kanji, perKanji, allOk, ord){
    ⚠️ 問数を減らして1枚に収めるとき、行数で高さを決めると「減らす→マスが大きくなる→また溢れる」になる。
       そこで**減らす前の問数で決まる高さ**に固定する（小さくはしない）。SESSION.boxMM に残す。 */
 var BOX_OVERRIDE = null;
+/* ★毎日の紙の書くマスの高さ（mm）。2026-09-11 ユーザー指示「書くところは大きめがいいです。枚数は問いません」。
+   18mm＝小5が鉛筆で漢字1字を窮屈でなく書ける大きさ（前の実測の下限10mmではなく、ゆったり側）。
+   ⚠️ 1枚に収めるために小さくしないこと（入らなければ枚数を増やす）。 */
+var DAILY_BOX_MM = 18;
 function boxHeightFor(rowsPerCol){
   if(BOX_OVERRIDE) return BOX_OVERRIDE;
   if(rowsPerCol<= 8) return 18;
@@ -1579,17 +1583,27 @@ function printSessionPractice(){
   //      （2026-09-11 に本物の紙で起きた。行の高さは中身で変わるので、数では守れない）。
   //   ★枚数を1枚ずつ増やし、**各枚の問数をそろえて**割る（18問＋2問ではなく10問＋10問）。
   //   ⚠️ 書くマスを縮めて詰め込むことはしない（司令塔判断。小さいマスは書きにくい）。
-  //   ★毎日の紙は、組んだ時点（todaySheet）で「1枚に収まる数」に絞ってある（fitTodayIds）。
-  //     ここで2枚以上になるのは、本当に多い日（1単元40問を出す道具など）だけ。
+  //   ★毎日の紙は、書くマスを大きく固定する（DAILY_BOX_MM）。ユーザー指示「書くところは大きめがいいです。枚数は問いません」。
+  //     マスを保ったまま、入らなければ枚数を増やす（20問・大きいマス・枚数は問わない、の順）。
   var region=document.getElementById("print-region");
-  // 毎日の紙は、組んだときに測ったマスの高さで刷る（組んだときと同じ紙になる）
-  BOX_OVERRIDE=(SESSION && SESSION.boxMM && !SESSION._tool) ? SESSION.boxMM : null;
+  var daily=!!(SESSION && !SESSION._tool);
+  BOX_OVERRIDE=daily ? DAILY_BOX_MM : null;
+  if(daily){
+    // ★毎日の紙は「入るだけ詰めて、次の枚へ」。問数でそろえて割ると、1枚目の半分が空く（本物で実測）
+    var ranges=packDaily(blocks, total, region);
+    region.innerHTML=ranges.map(function(r,i){
+      return renderSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length);
+    }).join("");
+    BOX_OVERRIDE=null;
+    window.print();
+    return;
+  }
   for(var N=1; N<=total; N++){
     var sheets=splitSheets(blocks, Math.min(SHEET_MAX, Math.ceil(total/N)));
     region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
     if(sheetsFit(region)) break;
-    // 2枚以上に分けるときは、マスの高さを枚ごとの行数で決め直す
-    BOX_OVERRIDE=null;
+    // 道具（単元ごとの紙）は、2枚以上に分けるときマスの高さを枚ごとの行数で決め直す。毎日の紙は大きいまま
+    if(!daily) BOX_OVERRIDE=null;
   }
   BOX_OVERRIDE=null;
   window.print();
@@ -1613,7 +1627,7 @@ function fitToday(){
   if(!region || !full.length) return full;
   // 減らす前の問数で決まるマスの高さに固定してから減らす（BOX_OVERRIDE の説明）
   var fb=buildPaperBlocks(full);
-  BOX_OVERRIDE=boxHeightFor(fb.reduce(function(a,b){return a+Math.ceil(b.rows.length/2);},0));
+  BOX_OVERRIDE=DAILY_BOX_MM;   // 毎日の紙は大きいマスで測る（fb は使わないが、形の確認のため組んでおく）
   FIT_BOX=BOX_OVERRIDE;
   function fits(list){
     var sheets=splitSheets(buildPaperBlocks(list), SHEET_MAX);
@@ -1648,6 +1662,38 @@ function sheetsFit(region){
   });
   if(keep===null) region.removeAttribute("style"); else region.setAttribute("style",keep);
   return ok;
+}
+
+/* 紙全体の通し番号で [from, to) の問題だけを取り出す（ブロックの途中で切れたら「（つづき）」）。
+   ★元のブロックを丸ごと引き継いでから、変えるところだけ上書きする（splitSheets と同じ理由） */
+function sliceBlocks(blocks, from, to){
+  var out=[];
+  blocks.forEach(function(b){
+    var s=Math.max(from, b.noBase||0), e=Math.min(to, (b.noBase||0)+b.rows.length);
+    if(s>=e) return;
+    var part=Object.assign({}, b), cont=(s>(b.noBase||0));
+    part.title=b.title+(cont?"（つづき）":"");
+    part.ask=cont?"":b.ask;
+    part.example=cont?"":b.example;
+    part.rows=b.rows.slice(s-(b.noBase||0), e-(b.noBase||0));
+    part.noBase=s;
+    out.push(part);
+  });
+  return out;
+}
+/* ★毎日の紙の割り付け: 1枚目から順に「入るだけ」詰める（実際に組んで測る）。 [[from,to],…] を返す */
+function packDaily(blocks, total, region){
+  var ranges=[], from=0;
+  while(from<total){
+    var n=total-from;
+    for(; n>1; n--){
+      region.innerHTML=renderSheet(sliceBlocks(blocks, from, from+n), 1, 2);
+      if(sheetsFit(region)) break;
+    }
+    ranges.push([from, from+n]); from+=n;
+  }
+  region.innerHTML="";
+  return ranges;
 }
 
 /* ブロックの列を、1枚ぶんずつに切る。**ブロックの途中でも切る**（1枚の上限が優先）。
@@ -1711,8 +1757,11 @@ function renderSheet(blocks, page, pages){
     //      行が高くなって20問が1枚に収まらなかった（本物の紙で実測: 46px はみ出し）。
     //   マスが3つ以上（部首）のときは、マスの幅が要るので既定のまま。
     var maxSlots=b.rows.reduce(function(a,r){ return Math.max(a,(r.slots||[]).length||1); },0);
-    var qW=(maxSlots<=2)?"66%":"45%", aW=(maxSlots<=2)?"27%":"48%";
-    html+=twoCols(b.rows, function(row,i){
+    // ★マスが3つ以上（部首）は1段組み（紙の幅いっぱい）にする。2段組みだとマス1つが約10mm幅しかなく、
+    //   漢字を書くには狭い（ユーザー指示「書くところは大きめ」）。1段なら1つ約20mm幅
+    var oneCol=(maxSlots>=3);
+    var qW=(maxSlots<=2)?"66%":(oneCol?"40%":"45%"), aW=(maxSlots<=2)?"27%":(oneCol?"53%":"48%");
+    html+=(oneCol ? function(list,fn){ return '<table class="p-tbl">'+list.map(function(k,j){ return fn(k,j); }).join("")+'</table>'; } : twoCols)(b.rows, function(row,i){
         // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
         //   （複数枚に分かれた日は、続きの枚でも通し番号になる）
         var no=(b.noBase||0)+i+1;

@@ -395,8 +395,13 @@ for (const every of [1, 2, 3, 4]) {
     printSessionPractice();
     const r = document.getElementById("print-region");
     const perSheet = [...r.querySelectorAll(".p-sheet")].map(s => s.querySelectorAll(".p-body tr").length);
-    return { every, composed, ids: SESSION.ids.length, perSheet, rows: perSheet.reduce((a, b) => a + b, 0),
-             boxMM: SESSION.boxMM, slotH: r.querySelector(".p-slot").style.height };
+    const slotHs = [...new Set([...r.querySelectorAll(".p-slot")].map(e => e.style.height))];
+    // 最後の1枚以外は「入るだけ詰まっている」か: その枚に次の1問を足すと入らないこと（測って確かめる）
+    const blocks = buildPaperBlocks(); let from = 0, packedFull = true;
+    BOX_OVERRIDE = DAILY_BOX_MM;
+    perSheet.slice(0, -1).forEach(n => { r.innerHTML = renderSheet(sliceBlocks(blocks, from, from + n + 1), 1, 2); if (sheetsFit(r)) packedFull = false; from += n; });
+    BOX_OVERRIDE = null; r.innerHTML = "";
+    return { every, composed, ids: SESSION.ids.length, perSheet, rows: perSheet.reduce((a, b) => a + b, 0), slotHs, packedFull };
   }, every));
 }
 const desc = scen.map(s => `注意${s.every}問に1つ: ${s.perSheet.join("+")}問/組んだ${s.composed}`).join(" ／ ");
@@ -404,8 +409,10 @@ const desc = scen.map(s => `注意${s.every}問に1つ: ${s.perSheet.join("+")}�
 ok("★20問は削らない（本の問題が足りる日は、いつも20問）", scen.every(s => s.composed === 20 && s.rows === 20), desc);
 ok("検査の前提: 1枚に入らず2枚になる日がある（2枚の組み方を見られる）", scen.some(s => s.perSheet.length === 2), desc);
 ok("空の紙を出さない", scen.every(s => s.perSheet.every(n => n > 0)), desc);
-ok("2枚に分けるときは、枚ごとの問数がそろっている（18＋2 のようにしない）",
-   scen.every(s => s.perSheet.length === 1 || Math.max(...s.perSheet) - Math.min(...s.perSheet) <= 1), desc);
+// ★ユーザー指示「書くところは大きめ・枚数は問わない」→ 毎日の紙はマスを大きく固定し、1枚目から入るだけ詰める
+ok("★毎日の紙の書くマスは、大きいまま（どの日も同じ高さ・小さくして詰め込まない）",
+   scen.every(s => s.slotHs.length === 1 && s.slotHs[0] === "18mm"), scen.map(s => s.slotHs.join("/")).join(" "));
+ok("2枚以上のときは、1枚目から入るだけ詰めている（半分空いた紙を出さない）", scen.every(s => s.packedFull), desc);
 ok("紙と「きろく」の問題数が一致（削った問題は、その日の記録に入らない）", scen.every(s => s.ids === s.rows), desc);
 // ★5分野そろう日に削るときは、配点の比を保ったまま全体を縮める（書き取りから先に削らない。司令塔判断）
 const five = await page.evaluate(() => {

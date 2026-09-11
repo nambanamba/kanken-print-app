@@ -84,7 +84,15 @@ const comp = await p.evaluate(() => {
 // ★ユーザー指示「書き問題20問」→ 本の問題が足りる限り20問。入らなければ2枚（枚ごとにそろえる）
 const dayRows = day.reduce((a, s) => a + s.rows, 0);
 ok("きょうの紙は20問（本の問題が足りる限り）", dayRows === 20, day.map(s => s.rows).join("+"));
-ok("2枚のときは枚ごとの問数がそろっている", day.length === 1 || Math.max(...day.map(s => s.rows)) - Math.min(...day.map(s => s.rows)) <= 1, day.map(s => s.rows).join("+"));
+const pack = await p.evaluate((per) => {
+  const r = document.getElementById("print-region"), blocks = buildPaperBlocks(); let from = 0, full = true;
+  BOX_OVERRIDE = DAILY_BOX_MM;
+  per.slice(0, -1).forEach(n => { r.innerHTML = renderSheet(sliceBlocks(blocks, from, from + n + 1), 1, 2); if (sheetsFit(r)) full = false; from += n; });
+  BOX_OVERRIDE = null; printSessionPractice();
+  return { full, slots: [...new Set([...r.querySelectorAll(".p-slot")].map(e => e.style.height))] };
+}, day.map(s => s.rows));
+ok("書くマスは大きいまま（18mm）", pack.slots.length === 1 && pack.slots[0] === "18mm", pack.slots.join(","));
+ok("2枚以上のときは、1枚目から入るだけ詰めている", pack.full, day.map(s => s.rows).join("+"));
 ok("出せる分野はどれも1問以上", comp.avail.every(f => (comp.c[f] || 0) >= 1), `${JSON.stringify(comp.c)} / 出せる分野 ${comp.avail.join(",")}`);
 ok("書き取りがいちばん多い（書き取りを先に削っていない）", Object.keys(comp.c).every(f => (comp.c.kaki || 0) >= comp.c[f]), JSON.stringify(comp.c));
 console.log(`  （${comp.n}問: ${JSON.stringify(comp.c)}／配点比 ${JSON.stringify(comp.q)}）`);
