@@ -296,7 +296,7 @@ async function measurePaper(label, prep) {
     return sheets.map(s => {
       const top = s.getBoundingClientRect().top;
       const fold = s.querySelector(".p-fold").getBoundingClientRect().top - top;
-      const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool")]
+      const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool, .p-body .p-example")]
         .map(e => e.getBoundingClientRect().bottom - top));
       const key = s.querySelector(".p-key");
       const rows = s.querySelectorAll(".p-body tr").length;
@@ -362,7 +362,7 @@ await measurePaper("✕の問題が5単元から来た日（見出しが多い�
 console.log("\n=== 紙で解けるか（○の中の漢字・組の番号） ===");
 const gv = await page.evaluate(() => {
   const u = { unitId: "dr_23", mat: "dr", srcPages: [23], groups: [
-    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "okuri", instruction: "ダミー（○の中の漢字）", items: [1, 2, 3].map(i => ({
+    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "okuri", instruction: "ダミー（○の中の漢字）", example: { text: "れいのダミー文", answers: ["れいのこたえ"], givenKanji: KANJI_MASTER[0].k }, items: [1, 2, 3].map(i => ({
       id: "q_gv_" + i, no: i, text: "ダミーの文 " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[i].k], givenKanji: KANJI_MASTER[i].k })) },
     { gno: 0, blockNo: 2, blockLabel: "(2)", field: "okuri", instruction: "ダミー（○の中の漢字）", items: [1, 2].map(i => ({
       id: "q_gv2_" + i, no: i, text: "ダミーの文B " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[10 + i].k], givenKanji: KANJI_MASTER[10 + i].k })) }
@@ -370,11 +370,13 @@ const gv = await page.evaluate(() => {
   BOOK_UNITS = [u]; window.isVerifiedUnit = () => true; ITEMS = {}; SESSION = null; window.__day = "2099-06-10";
   printSessionPractice();
   const r = document.getElementById("print-region");
-  return { given: [...r.querySelectorAll(".p-given")].map(e => e.textContent),
+  return { given: [...r.querySelectorAll(".p-body tr .p-given")].map(e => e.textContent),   // 問題の行の○だけ（〈例〉の○は数えない）
            want: u.groups.flatMap(g => g.items.map(i => i.givenKanji)),
-           cites: [...r.querySelectorAll(".p-cite")].map(e => e.textContent) };
+           cites: [...r.querySelectorAll(".p-cite")].map(e => e.textContent),
+           examples: [...r.querySelectorAll(".p-example")].map(e => e.textContent) };
 });
 ok("★○の中の漢字（givenKanji）が、全部の問題で紙に出ている", gv.given.join("") === gv.want.join(""), gv.given.join("") + " / " + gv.want.join(""));
+ok("★本の〈例〉が紙に出ている（〈例〉のある組の数だけ・中身つき）", gv.examples.length === 1 && /れいのダミー文/.test(gv.examples[0]) && /れいのこたえ/.test(gv.examples[0]), JSON.stringify(gv.examples));
 ok("★組が2つある単元は、出典に組の番号が入る（(1)の1 と (2)の1 を区別できる）",
    gv.cites.includes("（ドリル p23 (1) の 1）") && gv.cites.includes("（ドリル p23 (2) の 1）"), gv.cites.join(" "));
 
@@ -461,7 +463,8 @@ await page.evaluate(() => {
     // 画数は、本と同じく「図が要る問題（何画目）」を1問まぜる（アプリには出ない）
     if (field === "kakusu") items.push({ id: "q_app_" + uid + "_fig", no: 99, ruby: [], text: pool[0], needsFigure: true, answers: [{ text: "3" }], kanji: [pool[0]] });
     const ins = field === "onkun" ? "次の漢字の読みは、音読み（ア）ですか、訓読み（イ）ですか。記号で答えなさい。" : "ダミーの指示文（" + uid + "）";
-    return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3))], groups: [{ gno: 0, field, instruction: { text: ins, ruby: [] }, items }] };
+    const example = field === "onkun" ? { text: "れいの字", answers: ["イ"], ruby: [] } : null;
+    return { unitId: uid, mat: "dr", srcPages: [Number(uid.slice(3))], groups: [{ gno: 0, field, instruction: { text: ins, ruby: [] }, example, items }] };
   }
   window.__appUnits = [mkA("dr_01", 15, "yomi"), mkA("dr_17", 10, "erabi"), mkA("dr_19", 10, "kakusu"),
                        mkA("dr_20", 10, "onkun"), mkA("dr_54", 10, "jukugo")];
@@ -537,6 +540,8 @@ ok("★図が要る問題を外した組では「図が要る問題はアプリ�
 ok("図が要る問題の無い組では、その一言を出さない", log.filter(l => l.f !== "kakusu").every(l => !/図が要る問題/.test(l.before)));
 const onLog = log.filter(l => l.f === "onkun");
 ok("★音訓: 選択肢はア（音読み）→イ（訓読み）の順のまま", onLog.every(l => l.labels.join("/") === "ア　音読み/イ　訓読み"), onLog.map(l => l.labels.join("/")).join(" | "));
+ok("★アプリ: 本の〈例〉が画面に出ている（〈例〉のある組）", onLog.every(l => /〈例〉 れいの字 → イ/.test(l.before)), onLog.map(l => l.before.slice(0, 80)).slice(0, 1).join(""));
+ok("アプリ: 〈例〉の無い組には〈例〉を出さない", log.filter(l => l.f !== "onkun").every(l => !/〈例〉/.test(l.before)));
 ok("★音訓: 問題の字にルビ（読み）が出ている", onLog.every(l => /よみ/.test(l.before)));
 ok("画数: 数字（全角でも）で答えられる", log.filter(l => l.f === "kakusu").every(l => l.res));
 const end1 = await page.evaluate(() => document.getElementById("ap-box").innerText);

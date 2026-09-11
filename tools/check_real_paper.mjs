@@ -61,11 +61,13 @@ async function measure(label, prep, arg) {
     return [...document.querySelectorAll("#print-region .p-sheet")].map(s => {
       const top = s.getBoundingClientRect().top;
       const fold = s.querySelector(".p-fold").getBoundingClientRect().top - top;
-      const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool")].map(e => e.getBoundingClientRect().bottom - top));
+      const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool, .p-body .p-example")].map(e => e.getBoundingClientRect().bottom - top));
       const key = s.querySelector(".p-key");
       return { rows: s.querySelectorAll(".p-body tr").length, fold: Math.round(fold), bottom: Math.round(bottom), keyOver: key.scrollHeight - key.clientHeight };
-    });
+    }).concat([{ exWant: buildPaperBlocks().filter(b => b.example).length, exHave: document.querySelectorAll("#print-region .p-example").length }]);
   });
+  const ex = m.pop();
+  ok(`${label}: 本の〈例〉が紙に出ている（${ex.exHave}/${ex.exWant}）`, ex.exHave === ex.exWant);
   await p.emulateMedia({ media: null });
   ok(`${label}: 折り線より上（${m.length}枚・${m.map(s => s.rows).join("+")}問）`, m.length > 0 && m.every(s => s.bottom <= s.fold), m.map(s => `${s.bottom}/${s.fold}`).join(" "));
   ok(`${label}: 答えが欄に収まる`, m.every(s => s.keyOver <= 1), m.map(s => s.keyOver).join(","));

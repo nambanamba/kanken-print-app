@@ -222,6 +222,8 @@
     /* ★出典（ドリル p12 の 3）。問題文より小さく・薄く。p-tight の一律指定に負けないよう !important */
     /* ⚠️ 絶対配置（高さ0）。問題文の中に入れると行が伸びて、折り線を越える（実際に起きた） */
     .p-slots{position:relative;}
+    /* 本の〈例〉。見出しのすぐ下に小さく */
+    .p-example{font-size:8.5pt;color:#333;margin:0 0 1mm 2mm;}
     /* ○の中の漢字（送りがな）。丸は CSS の枠で描く */
     .p-given{display:inline-block;width:1.7em;height:1.7em;line-height:1.7em;text-align:center;
              border:1px solid #333;border-radius:50%;font-size:9.5pt;margin-left:1.5mm;vertical-align:middle;}
@@ -944,6 +946,8 @@ function renderApp(){
     // ★指示文が、アプリに出していない問（図が要る問）を指していることがある（dr_19 の「1〜13」。claude-e0 の指摘）
     +((x.g.items||[]).some(function(i){ return i.needsFigure; })
       ? '<br><b>※ 図が要る問題は、アプリでは出ません（本でやってね）。</b>' : '')
+    // 本の〈例〉（紙と同じ。claude-e0 の指摘 No.25）
+    +(exampleText(x.g.example) ? '<br>'+exampleText(x.g.example) : '')
     +'</div>'
     // 漢字1〜2字だけの問題（音訓・画数）は大きく出す
     +'<div class="ap-q'+(String(it.text||"").length<=2?" big":"")+'">'+withRuby(bookQuestionText(it), it.ruby)+'</div>';
@@ -1302,6 +1306,23 @@ function bookCite(x){
   return (m?m.short:(x.u.mat||""))+(pg?" "+pg:"")+blk+" の "+x.it.no;
 }
 
+/* 本の〈例〉を1行にする。書式は2通り（実データで確認）:
+     {text, answers[], ruby?, givenKanji?}      … dr_20・dr_21・dr_23・dr_25・dr_54
+     [{text, answers[], range}]                  … dr_19（何画目・総画数で〈例〉が2つ）
+   → 「〈例〉 問題 → 答え」。ルビは注意と同じ形で添える。○の漢字は丸で囲む */
+function exampleText(ex){
+  if(!ex) return "";
+  var list=Array.isArray(ex) ? ex : [ex];
+  var parts=list.map(function(e){
+    if(!e || !e.text) return "";
+    var q=bookNote({ text:String(e.text), ruby:e.ruby||[] });
+    if(typeof e.givenKanji==="string" && e.givenKanji) q+="<span class='p-given' style='font-size:8pt'>"+e.givenKanji+"</span>";
+    var a=(e.answers||[]).map(function(x){ return typeof x==="object" ? (x.text||"") : String(x); }).join("・");
+    return q+(a?" → "+a:"");
+  }).filter(Boolean);
+  return parts.length ? "〈例〉 "+parts.join("　／　") : "";
+}
+
 /* 答えページの「注意」。書式v1.5 で {text, ruby[]} になった。
    ⚠️ **ルビを落とすと読めない。**書き起こし側が「小4には読めないから」とルビを付けている。
       落とすなら、そもそも書き起こす意味が無くなる。 */
@@ -1339,6 +1360,9 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
     blocks.push({
       pool:(b.g.pool||[]).slice(),
       poolUseOnce:!!b.g.poolUseOnce,
+      // ★本の〈例〉。**紙に出していなかった**（claude-e0 の指摘 No.25）。
+      //   dr_25（部首）では〈例〉が「□ごとに別の字を入れる」ことを示していて、無いと「同じ字を全部の□に」とも読める
+      example: exampleText(b.g.example),
       title:"■ "+(fd?fd.name:"もんだい"),
       keyTitle:(fd?fd.name:"もんだい")+"の答え",
       // ★書式v1.6 で instruction が {text, ruby[]} になりうる。文字列でもオブジェクトでも読む（ルビも出す）
@@ -1493,6 +1517,7 @@ function splitSheets(blocks, max){
       var part=Object.assign({}, b);
       part.title = b.title + (offset>0 ? "（つづき）" : "");
       part.ask   = (offset>0 ? "" : b.ask);
+      part.example = (offset>0 ? "" : b.example);   // 〈例〉は指示文と同じく、ブロックの先頭にだけ
       part.rows  = b.rows.slice(offset, offset+take);
       part.noBase= (b.noBase||0) + offset;   // ★通し番号（buildPaperBlocks が紙全体で振っている）
       cur.push(part);
@@ -1522,6 +1547,7 @@ function renderSheet(blocks, page, pages){
   blocks.forEach(function(b){
     var ansList=[];
     html+='<div class="p-sec">'+b.title+(b.ask?'<span class="p-ask">'+b.ask+'</span>':'')+'</div>';
+    if(b.example) html+='<div class="p-example">'+b.example+'</div>';
     // ★語群はブロックの先頭に1回だけ出す（各問に繰り返すと紙が埋まる）
     if(b.pool && b.pool.length){
       html+='<div class="p-pool">'
