@@ -116,6 +116,12 @@
   /* アプリでやる問題 */
   .ap-q{font-size:1.25rem;line-height:2.1;margin:8px 0 6px;}
   .ap-q ruby rt{font-size:.6em;}
+  /* 進み具合（専用の画面の上）。「あと何問」が常に見える */
+  .ap-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .ap-count{font-size:1.4rem;font-weight:800;color:#1e293b;}
+  .ap-left{font-size:1.05rem;color:#334155;}
+  .ap-left b{font-size:1.4rem;color:var(--good);}
+  .ap-dots{margin-bottom:10px;flex-wrap:wrap;}
   .ap-q.big{font-size:3rem;text-align:center;line-height:1.6;}
   .ap-given{display:inline-block;width:1.7em;height:1.7em;line-height:1.7em;text-align:center;
             border:1.5px solid #334155;border-radius:50%;margin-left:.4em;}
@@ -328,9 +334,11 @@
          ・読み … 文を出す →「こたえを見る」→ 答えを出してから「読めた／読めなかった」（ユーザー指示）
          ・記号 … タップでその場〇✕（選択肢の並びは毎回変える。音訓だけは並べ替えない）
          ・画数 … 数字を入れて〇✕ -->
-    <div class="card" id="ap-card">
+    <!-- ★2026-09-11 ユーザー指示「アプリでやる、は、別画面にして、あと何問とか、そういう感じにしてほしいです」。
+         きょう画面は入口のボタンだけ（のこり何問）。押すと専用の画面（page-app）で1問ずつ -->
+    <div class="card" id="ap-entry-card">
       <h2>📱 アプリでやる問題</h2>
-      <div id="ap-box"></div>
+      <div id="ap-entry"></div>
     </div>
 
     <div class="card">
@@ -340,6 +348,15 @@
   </div>
 
   <!-- ================= きろく ================= -->
+  <!-- ================= アプリでやる問題（専用の画面。タブには出さない） ================= -->
+  <div class="page" id="page-app">
+    <button class="btn ghost" style="width:auto;padding:8px 16px;margin-bottom:10px" onclick="closeApp()">← きょうにもどる</button>
+    <div class="card" id="ap-card">
+      <div id="ap-box"></div>
+    </div>
+    <div class="muted" id="ap-resume-note" style="font-size:.8rem;text-align:center">とちゅうでやめても、つぎは つづきから はじまります。</div>
+  </div>
+
   <div class="page" id="page-kiroku">
     <div class="card">
       <h2>✏️ きょうの紙を採点する</h2>
@@ -1058,6 +1075,37 @@ function withRuby(html, ruby){
   return html;
 }
 
+/* のこり何問（まだ答えていない問題の数。照合が取り下げられた問題は数えない） */
+function appLeft(s){
+  var idx=appIndex();
+  return s.ids.filter(function(id){ return idx[id] && !s.res[id]; }).length;
+}
+/* きょう画面の入口。「のこり何問」を出すボタンだけ */
+function renderAppEntry(){
+  var box=document.getElementById("ap-entry"); if(!box) return;
+  if(!bookLoaded()){ box.innerHTML='<span class="muted">本の問題を読みこむと出ます。</span>'; return; }
+  var s=todayApp();
+  if(!s){ box.innerHTML='<span class="muted">きょうアプリでやる問題はありません（照合が済んだ単元だけ出しています）。</span>'; return; }
+  var left=appLeft(s), started=s.ids.some(function(id){ return s.res[id]; });
+  box.innerHTML = left
+    ? '<div class="muted" style="margin-bottom:10px">読み・記号で答える問題・画数・送りがな。1問ずつ出ます。</div>'
+      +'<button class="btn" onclick="openApp()">📱 '+(started?'つづきから やる':'アプリの問題をやる')+'（のこり '+left+'問）</button>'
+    : '<div style="font-weight:700;color:var(--good)">✅ きょうのアプリの問題は おわり！</div>'
+      +'<button class="btn ghost" style="margin-top:8px" onclick="openApp()">もう一度 見る</button>';
+}
+/* 専用の画面を開く／閉じる（タブには出さない画面） */
+function openApp(){
+  Array.prototype.forEach.call(document.querySelectorAll(".page"),function(x){x.classList.remove("active");});
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("active");});
+  document.getElementById("page-app").classList.add("active");
+  renderApp();
+  window.scrollTo(0,0);
+}
+function closeApp(){
+  var t=document.querySelector('.tab[data-page="kyou"]'); if(t) t.click();
+  window.scrollTo(0,0);
+}
+
 function renderApp(){
   var box=document.getElementById("ap-box"); if(!box) return;
   if(!bookLoaded()){ box.innerHTML='<span class="muted">本の問題を読みこむと出ます。</span>'; return; }
@@ -1066,19 +1114,27 @@ function renderApp(){
   var idx=appIndex();
   // 途中で照合が取り下げられた問題は飛ばす
   while(s.pos<s.ids.length && !idx[s.ids[s.pos]]) s.pos++;
+  var note=document.getElementById("ap-resume-note");
+  if(note) note.style.display=(s.pos>=s.ids.length)?"none":"";
   if(s.pos>=s.ids.length){
-    var n=0, o=0;
-    s.ids.forEach(function(id){ if(s.res[id]){ n++; if(s.res[id].ok) o++; } });
-    box.innerHTML='<div style="text-align:center;padding:10px 0">'
-      +'<div style="font-size:1.3rem;font-weight:800;color:var(--good)">きょうの アプリの問題 おわり！</div>'
-      +'<div class="muted" style="margin-top:6px">'+n+' 問やって、'+o+' 問 できたよ。'
-      +(n-o? '<br>できなかった問題は、あした もう一回出るよ。' : '')+'</div></div>';
+    // ★正解数は出さない（司令塔・ユーザー。1問ずつ〇✕は出ているので本人は分かっている。「よくがんばったね」と同じ考え方）
+    var anyX=s.ids.some(function(id){ return s.res[id] && !s.res[id].ok; });
+    box.innerHTML='<div style="text-align:center;padding:18px 0">'
+      +'<div style="font-size:1.6rem;font-weight:800;color:var(--good)">おわり！</div>'
+      +'<div style="margin-top:8px">よくがんばったね。</div>'
+      +(anyX? '<div class="muted" style="margin-top:6px">まちがえた字は、あした もう一回出るよ。</div>' : '')
+      +'<button class="btn" style="margin-top:16px" onclick="closeApp()">きょうにもどる</button></div>';
     return;
   }
   var id=s.ids[s.pos], x=idx[id], it=x.it, f=itemFieldOf(it,x.g), fd=fieldOf(f);
   var st=s.step[id]||{}, res=s.res[id];
-  var html='<div class="ky-prog"><span>'+(s.pos+1)+' / '+s.ids.length+'</span>'
-    +'<span class="muted" style="font-size:.75rem">'+(fd?fd.name:"")+'　'+bookCite(x)+'</span></div>'
+  var left=appLeft(s);
+  // ★進み具合は上に大きく。「あと何問」が常に見えること（ユーザー指示）
+  var dots=""; for(var di=0; di<s.ids.length; di++) dots+='<i class="'+(s.res[s.ids[di]]?"on":"")+'"></i>';
+  var html='<div class="ap-top"><span class="ap-count">'+(s.pos+1)+' / '+s.ids.length+'</span>'
+    +'<span class="ap-left">のこり <b>'+left+'</b> 問</span></div>'
+    +'<div class="ky-dots ap-dots">'+dots+'</div>'
+    +'<div class="ky-prog"><span class="muted" style="font-size:.75rem">'+(fd?fd.name:"")+'　'+bookCite(x)+'</span></div>'
     +'<div class="muted" style="font-size:.8rem;margin:6px 0">'+(bookNote(x.g.instruction)||"")
     // ★指示文が、アプリに出していない問（図が要る問）を指していることがある（dr_19 の「1〜13」。claude-e0 の指摘）
     +((x.g.items||[]).some(function(i){ return i.needsFigure; })
@@ -2265,7 +2321,7 @@ function printPractice(){
   window.print();
 }
 
-function renderAll(){ renderOuen(); renderKyou(); renderApp(); renderKiroku(); renderSetei();
+function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderSetei();
                       renderQuizBox(); renderProgress(); renderKirokuProgress(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */

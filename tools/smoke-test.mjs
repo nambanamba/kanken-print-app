@@ -555,7 +555,26 @@ ok("★配点比どおり（読み・漢字えらび・じゅく語作り・音�
 ok("★音訓は選択肢を並べ替えない", a1.ordOnkun.every(o => o === undefined), JSON.stringify(a1.ordOnkun));
 
 const log = [];
-for (let i = 0; i < 20; i++) log.push(await answerCurrent(i % 3 !== 0));   // 3問に1問はまちがえる
+// ★別画面・のこり何問・続きから（ユーザー指示「アプリでやる、は、別画面にして、あと何問とか」）
+const en0 = await page.evaluate(() => ({ entry: document.getElementById("ap-entry").innerText,
+  appVisible: document.getElementById("page-app").classList.contains("active") }));
+ok("★きょう画面には入口のボタンだけ（のこり20問）。問題は出さない", /のこり 20問/.test(en0.entry) && !en0.appVisible, en0.entry.slice(0, 60));
+await page.evaluate(() => openApp());
+const op = await page.evaluate(() => ({ active: document.getElementById("page-app").classList.contains("active"),
+  kyou: document.getElementById("page-kyou").classList.contains("active"), top: document.querySelector("#ap-box .ap-top").innerText }));
+ok("★押すと専用の画面になる（きょう画面は隠れる）", op.active && !op.kyou);
+ok("★上に「1 / 20」と「のこり 20 問」", op.top.includes("1 / 20") && /のこり\s*20\s*問/.test(op.top), op.top);
+for (let i = 0; i < 3; i++) log.push(await answerCurrent(i % 3 !== 0));
+const mid3 = await page.evaluate(() => document.querySelector("#ap-box .ap-top").innerText);
+ok("★答えるたびに「のこり」が減る（3問答えて のこり17）", mid3.includes("4 / 20") && /のこり\s*17\s*問/.test(mid3), mid3);
+await page.evaluate(() => closeApp());
+const back = await page.evaluate(() => ({ entry: document.getElementById("ap-entry").innerText,
+  kyou: document.getElementById("page-kyou").classList.contains("active") }));
+ok("★途中でやめてきょう画面に戻れる。入口は「つづきから・のこり17問」", back.kyou && /つづきから/.test(back.entry) && /のこり 17問/.test(back.entry), back.entry.slice(0, 60));
+await page.evaluate(() => openApp());
+const re = await page.evaluate(() => document.querySelector("#ap-box .ap-top").innerText);
+ok("★もう一度開くと、続きから（4問目）", re.includes("4 / 20"), re);
+for (let i = 3; i < 20; i++) log.push(await answerCurrent(i % 3 !== 0));   // 3問に1問はまちがえる
 const yomiLog = log.filter(l => l.f === "yomi");
 ok("★読み: 答えを見る前に「読めた／読めなかった」は押せない（ボタンが無い）", yomiLog.length > 0 && yomiLog.every(l => !l.hadSelfBeforeShow));
 ok("★読み: 「こたえを見る」で答えが出る", yomiLog.every(l => l.answerShown));
@@ -581,6 +600,10 @@ ok("★音訓: 問題の字にルビ（読み）が出ている", onLog.every(l 
 ok("画数: 数字（全角でも）で答えられる", log.filter(l => l.f === "kakusu").every(l => l.res));
 const end1 = await page.evaluate(() => document.getElementById("ap-box").innerText);
 ok("20問おわると「おわり」になる", /おわり/.test(end1), end1.slice(0, 40));
+ok("★おわりの画面に正解数を出さない", !/\d+\s*問/.test(end1) && !/せいかい\s*\d/.test(end1), end1.slice(0, 80));
+ok("まちがえた問題があった日は「あした もう一回出るよ」", /あした もう一回出るよ/.test(end1), end1.slice(0, 80));
+const en2 = await page.evaluate(() => { closeApp(); return document.getElementById("ap-entry").innerText; });
+ok("おわったあとの入口は「おわり」と出る", /おわり/.test(en2), en2.slice(0, 40));
 ok("★「書ける」「あやしい」は出ていない", !log.some(l => /書ける|あやしい/.test(l.before + l.fb)));
 
 // 2日目
