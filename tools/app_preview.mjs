@@ -61,7 +61,9 @@ for (const u of want) {
     window.isVerifiedUnit = (id) => id === u || keep(id);
     const xs = appAllItems().filter(x => x.u.unitId === u);
     const ord = {};
-    xs.forEach(x => { const f = itemFieldOf(x.it, x.g), ch = x.it.choices || [];
+    // ★選択肢はアプリ本体と同じ appChoicesOf で取る。送りがなは本に選択肢が無く okuriPlan が作るので、
+    //   it.choices を見ると並べ替えが一度も起きず「全問アが正解」に見えていた（claude-e0 の指摘 No.27）
+    xs.forEach(x => { const f = itemFieldOf(x.it, x.g), ch = appChoicesOf(x.it, f);
       if (SHUFFLE_CHOICE_FIELDS.indexOf(f) >= 0 && ch.length > 1) ord[x.it.id] = randPerm(ch.length, null); });
     APP_S = { v: 1, date: todayStr(), ids: xs.map(x => x.it.id), pos: 0, ord, res: {}, step: {} };
     return APP_S.ids;
