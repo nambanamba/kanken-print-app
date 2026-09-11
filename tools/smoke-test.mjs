@@ -344,6 +344,15 @@ await measurePaper("1単元40問（ノート・2ページの回）", () => {
   BOOK_UNITS = window.__longUnits;
   SESSION = { v: SHEET_VERSION, date: todayStr(), ids: bookAllItems().filter(x => x.u.unitId === "tn_08").map(x => x.it.id), results: {}, saved: false };
 });
+await measurePaper("5分野そろった日（書き取り・部首・同じ読み・送りがな・対義語）", () => {
+  const base = JSON.parse(JSON.stringify(window.__longUnits));
+  const mkF = (uid, field, n) => { const u = JSON.parse(JSON.stringify(base[0])); u.unitId = uid; u.srcPages = [Number(uid.slice(3))];
+    u.groups[0].field = field; u.groups[0].pool = field === "taigi" ? ["あさ", "がい", "さ", "ねん", "ぼう", "りょう"] : null;
+    u.groups[0].items = u.groups[0].items.slice(0, n).map((it, i) => Object.assign({}, it, { id: "q_five2_" + uid + "_" + i,
+      givenKanji: field === "okuri" ? KANJI_MASTER[i].k : undefined })); return u; };
+  BOOK_UNITS = base.concat([mkF("dr_26", "onaji", 8), mkF("dr_23", "okuri", 8), mkF("dr_21", "taigi", 8)]);
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; window.__day = "2099-06-03";
+});
 await measurePaper("✕の問題が5単元から来た日（見出しが多い）", () => {
   BOOK_UNITS = window.__longUnits; RECORDS = {}; WEAK = {}; KSTATS = {}; SESSION = null; ITEMS = {};
   ["dr_08", "dr_09", "dr_10", "dr_25", "tn_08"].forEach(u => [1, 2, 3, 4].forEach(i => { ITEMS["q_long_" + u + "_" + i] = { o: 0, x: 1, last: "x" }; }));
@@ -394,6 +403,29 @@ ok("★1枚にしたときに削ったのは5問まで", scen.every(s => s.perSh
 ok("2枚に分けるときは、枚ごとの問数がそろっている（18＋2 のようにしない）",
    scen.every(s => s.perSheet.length === 1 || Math.max(...s.perSheet) - Math.min(...s.perSheet) <= 1), desc);
 ok("紙と「きろく」の問題数が一致（削った問題は、その日の記録に入らない）", scen.every(s => s.ids === s.rows), desc);
+// ★5分野そろう日に削るときは、配点の比を保ったまま全体を縮める（書き取りから先に削らない。司令塔判断）
+const five = await page.evaluate(() => {
+  // ★削り方（比の保ち方）だけを見るため、「1枚に入るのは17問まで」と決めて測る。
+  //   紙の高さで決めると、ダミーの文の長さしだいで「削らずに入る」「6問以上あふれて2枚」になり、場面が作れない。
+  //   紙の高さそのものは、上の「紙のはみ出し」で別に検査している。
+  const base = JSON.parse(JSON.stringify(window.__longUnits));
+  const mkF = (uid, field, n) => { const u = JSON.parse(JSON.stringify(base[0])); u.unitId = uid; u.srcPages = [Number(uid.slice(3))];
+    u.groups[0].field = field; u.groups[0].items = u.groups[0].items.slice(0, n).map((it, i) => Object.assign({}, it, { id: "q_five_" + uid + "_" + i })); return u; };
+  BOOK_UNITS = base.concat([mkF("dr_26", "onaji", 8), mkF("dr_23", "okuri", 8), mkF("dr_21", "taigi", 8)]);
+  window.isVerifiedUnit = () => true; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; window.__day = "2099-06-20";
+  const keepFit = window.sheetsFit;
+  window.sheetsFit = (region) => region.querySelectorAll(".p-sheet").length === 1 && region.querySelectorAll(".p-body tr").length <= 17;
+  const items = todaySheetItems();
+  window.sheetsFit = keepFit;
+  const c = {}; items.forEach(x => { const f = itemFieldOf(x.it, x.g); c[f] = (c[f] || 0) + 1; });
+  const n = SESSION.ids.length;
+  return { c, n, q: paperQuota(n), sheets: 1 };
+});
+ok("検査の前提: 5分野そろった日で、1枚に入る数（17問）まで削っている", five.n === 17, `${five.n}問`);
+ok("★削っても、各分野の数は配点比のまま（書き取りを先に削っていない）",
+   ["kaki", "bushu", "onaji", "okuri", "taigi"].every(f => (five.c[f] || 0) === Math.max(1, five.q[f])) , `${JSON.stringify(five.c)} / 比 ${JSON.stringify(five.q)}`);
+ok("★削っても、どの分野も0問にならない", ["kaki", "bushu", "onaji", "okuri", "taigi"].every(f => (five.c[f] || 0) >= 1), JSON.stringify(five.c));
+ok("★書き取りがいちばん多いまま", ["bushu", "onaji", "okuri", "taigi"].every(f => (five.c.kaki || 0) >= (five.c[f] || 0)), JSON.stringify(five.c));
 const trimmed = scen.filter(s => s.perSheet.length === 1 && s.rows < s.composed);
 ok("★削って1枚にした日も、書くマスは減らす前の問数で決まる高さのまま（小さくして詰め込んでいない）",
    trimmed.every(s => s.slotH === s.boxMM + "mm"), trimmed.map(s => `${s.slotH}/${s.boxMM}`).join(" "));

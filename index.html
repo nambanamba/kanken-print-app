@@ -1234,16 +1234,27 @@ function bookItemsNew(exclude, limit){
       それでも足りなければ20問に満たなくてよい。
       ⚠️ 読み・アプリの分野・自動生成では**絶対に埋めない**（叱責の中心）。
       ★ほかの紙の分野で埋めるのは、ユーザーの「毎日20文字書きます」に合わせるため（私の判断。司令塔に報告ずみ） */
-function composeSheet(){
-  var retry=bookItemsForRetry().slice(0, SHEET_TARGET);
+function composeSheet(target){
+  target=target||SHEET_TARGET;
+  var retry=bookItemsForRetry().slice(0, target);
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
-  var left=SHEET_TARGET-retry.length, cand={};
+  var left=target-retry.length, cand={};
   PAPER_FIELDS.forEach(function(f){ cand[f]=[]; });
   bookAllItems().forEach(function(x){
     if(ex[x.it.id] || ITEMS[x.it.id]) return;
     cand[itemFieldOf(x.it,x.g)].push(x);
   });
   var q=paperQuota(left), take={}, n=0;
+  // ★出せる分野は、少なくとも1問（0にしない。分野が丸ごと消えると、その日その分野に触れない。司令塔判断）。
+  //   足りない1問は、いちばん多い分野（ふつうは書き取り）から回す
+  if(left>=PAPER_FIELDS.length){
+    PAPER_FIELDS.forEach(function(f){
+      if(cand[f].length && !(q[f]>0)){
+        var big=PAPER_FIELDS.slice().sort(function(a,b){ return (q[b]||0)-(q[a]||0); })[0];
+        if((q[big]||0)>1){ q[big]--; q[f]=1; }
+      }
+    });
+  }
   PAPER_FIELDS.forEach(function(f){ take[f]=Math.min(q[f]||0, cand[f].length); n+=take[f]; });
   // 出せない分野の枠を、ほかの紙の分野で埋める（配点の大きい順）
   PAPER_FIELDS.forEach(function(f){
@@ -1266,7 +1277,7 @@ function todaySheet(){
   if(!bookLoaded()) return null;
   if(SESSION && SESSION.date===todayStr()
      && (SESSION.v===SHEET_VERSION || (SESSION.v===3 && SESSION.saved))) return SESSION;   // 記録ずみの紙は作り直さない
-  var ids=fitTodayIds(composeSheet()).map(function(x){ return x.it.id; });
+  var ids=fitToday().map(function(x){ return x.it.id; });
   if(!ids.length) return null;
   SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false, boxMM:FIT_BOX };
   save(K_SESSION,SESSION);
@@ -1416,43 +1427,36 @@ function printSessionPractice(){
 /* ★毎日の紙を「1枚に収まる数」に絞る（2026-09-11 司令塔判断）。
      「20問は目安。1枚に収まることを優先。あふれた2〜3問は翌日に回す」
      「2枚目が5問以下なら1枚に収める。本当に2枚要るときは2枚でよい」
-   ・減らすのは**書き取りの、新しい問題**から（配点が最大で、問数も多い分野。
-     ほかの分野を削ると、その分野が毎日削られて永久に出なくなるおそれがある）。✕の問題は削らない
+   ・★**配点の比を保ったまま、全体の問数を縮める**（20→19→18…）。各分野の数は paperQuota で決め直す。
+     ⚠️ 最初は「書き取りの新しい問題から削る」にしていたが、**逆だった**（司令塔）。
+        書き取りは配点最大で、お子さんの「毎日20文字書く」の中心。5分野の日に書き取りが4問になっていた
+   ・出せる分野は最低1問（composeSheet）。✕の問題は削らない（composeSheet が先に入れる）
    ・削った問題は記録されないので、翌日「次の問題」としてそのまま出る（やる量は変わらない）
    ・実際に紙を組んで測る（sheetsFit）。問数では決めない */
-function fitTodayIds(items){
+var FIT_BOX=null;   // 固定したマスの高さ（todaySheet が SESSION.boxMM に入れる）
+function fitToday(){
+  var full=composeSheet(SHEET_TARGET);
   var region=document.getElementById("print-region");
   FIT_BOX=null;
-  if(!region || !items.length) return items;
+  if(!region || !full.length) return full;
   // 減らす前の問数で決まるマスの高さに固定してから減らす（BOX_OVERRIDE の説明）
-  var full=buildPaperBlocks(items);
-  BOX_OVERRIDE=boxHeightFor(full.reduce(function(a,b){return a+Math.ceil(b.rows.length/2);},0));
+  var fb=buildPaperBlocks(full);
+  BOX_OVERRIDE=boxHeightFor(fb.reduce(function(a,b){return a+Math.ceil(b.rows.length/2);},0));
   FIT_BOX=BOX_OVERRIDE;
-  try{ return fitTodayIdsInner(items, region); } finally { BOX_OVERRIDE=null; }
-}
-var FIT_BOX=null;   // fitTodayIds が固定したマスの高さ（todaySheet が SESSION.boxMM に入れる）
-function fitTodayIdsInner(items, region){
   function fits(list){
     var sheets=splitSheets(buildPaperBlocks(list), SHEET_MAX);
     if(sheets.length>1) return false;
     region.innerHTML=renderSheet(sheets[0],1,1);
     return sheetsFit(region);
   }
-  var list=items.slice(), dropped=0;
-  while(list.length && !fits(list)){
-    // 書き取りの新しい問題を、うしろから1つ減らす（無ければ、うしろから）
-    var i=-1;
-    for(var j=list.length-1;j>=0;j--){
-      var y=list[j];
-      if(itemFieldOf(y.it,y.g)==="kaki" && !ITEMS[y.it.id]){ i=j; break; }
+  try{
+    // 2枚目が5問以下になる程度なら、1枚に収める（6問以上あふれる日は2枚）
+    for(var t=full.length; t>=full.length-5 && t>0; t--){
+      var list=(t===full.length) ? full : composeSheet(t);
+      if(fits(list)) return list;
     }
-    if(i<0) i=list.length-1;
-    list.splice(i,1); dropped++;
-  }
-  region.innerHTML="";
-  // 減らしても1枚に収まらない／6問以上あふれる日は、2枚にする（本当に多い日）
-  if(!list.length || dropped>5) return items;
-  return list;
+    return full;
+  }finally{ BOX_OVERRIDE=null; region.innerHTML=""; }
 }
 
 /* ★紙が1枚の中に収まっているかを、実際に組んだもので測る。
