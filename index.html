@@ -376,6 +376,15 @@
       <button class="btn" style="margin-top:12px" onclick="saveSheetResult()">記録する</button>
     </div>
 
+    <!-- ★やった問題の一覧と〇✕の訂正（ユーザー指示 2026-09-11）。紙もアプリも。字をタップすると〇✕が入れかわる -->
+    <div class="card">
+      <h2>📋 やった問題（〇✕の訂正）</h2>
+      <div class="muted" style="margin-bottom:8px;font-size:.8rem">
+        まちがえて押したときは、字をタップすると〇✕が入れかわります。<b>直した結果は、次の日の問題に反映されます。</b>
+      </div>
+      <div class="marks" id="log-box"></div>
+    </div>
+
     <!-- ★進み具合（短く）。父親が毎日いるのは「きろく」。詳しくは「せってい」に同じ数字がある -->
     <div class="card">
       <div id="k-progress"></div>
@@ -472,6 +481,17 @@
         本の問題は暗号化して置いてあります。合言葉を入れると読みこめます。<br>
         ※ この仕組みは、検索やクローラに問題文が拾われないようにするためのものです。
       </div>
+    </div>
+
+    <!-- ★記録を消す（ユーザー指示 2026-09-11「結果のリセットがしたいです」）。押しまちがい防止に確認を1回 -->
+    <div class="card">
+      <h2>🗑 記録を消す（おうちの方）</h2>
+      <div class="muted" style="margin-bottom:10px;font-size:.8rem">
+        まちがえて押しただけなら、「きろく」の「やった問題」で〇✕を直せます。消すのは、やり直したいときだけにしてください。
+      </div>
+      <button class="btn ghost" onclick="resetToday()">きょうの分だけ消す</button>
+      <button class="btn ghost" style="margin-top:8px;color:#b91c1c;border-color:#fecaca" onclick="resetAll()">ぜんぶ消す</button>
+      <div class="muted" style="margin-top:6px;font-size:.75rem">受検日・合言葉・本の目次は消えません。</div>
     </div>
 
     <!-- ★版（いま見ているのが新しいものか）。司令塔の依頼 2026-09-11。
@@ -1307,8 +1327,139 @@ function appRecord(id, f, kanji, perKanji, allOk, ord){
   if(allOk) r.o++; else r.x++;
   r.last=allOk?"o":"x"; r.date=todayStr();
   if(ord) r.ord=ord.slice();   // ★次に出すとき、同じ並びにしないため
+  var x=appIndex()[id];
+  logAnswer("app", id, f, x?bookCite(x):"", kanji.map(function(k,i){ return { k:k, ok:!!perKanji[i] }; }));
   SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
   save(K_ITEMS,ITEMS); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET);
+}
+
+/* =========================================================================
+   ★やった問題の記録（一覧と〇✕の訂正）。2026-09-11 ユーザー指示
+     「終わった問題の一覧と、マルバツ、マルバツの訂正がしたいです」
+   LOG = [{ t:時刻(ms), date, src:"paper"|"app", id:問題id, f:分野, cite:出典, kanji:[{k, ok}] }]
+   ・紙の採点（saveSheetResult）とアプリ（appRecord）の両方が1問ごとに書く
+   ・訂正は「字ごと」。直した分だけ KSTATS・ITEMS・WEAK を動かすので、**翌日の出題に反映される**
+     （✕に直したら翌日出る／〇に直したら出ない。ITEMS[id].last は、その問題のいちばん新しい記録で決め直す）
+   ⚠️ この仕組みより前の記録は一覧に出ない（記録の中身は残っている）
+   ========================================================================= */
+var K_LOG="kanken7_log_v1";
+var LOG=load(K_LOG,[]);
+function logAnswer(src, id, f, cite, kanji){
+  LOG.push({ t:Date.now(), date:todayStr(), src:src, id:id, f:f, cite:cite, kanji:kanji });
+  save(K_LOG,LOG);
+}
+/* その問題の、いちばん新しい記録で ITEMS[id].last を決め直す（無ければ ITEMS[id] を消す） */
+function relastItem(id){
+  var es=LOG.filter(function(e){ return e.id===id; });
+  if(!es.length){ return; }
+  var last=es.reduce(function(a,b){ return (b.t>=a.t)?b:a; });
+  var r=ITEMS[id]||(ITEMS[id]={o:0,x:0});
+  r.last=last.kanji.every(function(q){ return q.ok; })?"o":"x";
+}
+/* 1字の〇✕を入れかえる（訂正） */
+function toggleLogMark(idx, ki){
+  var e=LOG[idx]; if(!e || !e.kanji[ki]) return;
+  var q=e.kanji[ki], was=q.ok, wasItemOk=e.kanji.every(function(z){ return z.ok; });
+  q.ok=!was;
+  var nowItemOk=e.kanji.every(function(z){ return z.ok; });
+  // 字ごとの記録
+  var k=q.k; if(!KSTATS[k]) KSTATS[k]={};
+  var st=KSTATS[k][e.f]||(KSTATS[k][e.f]={o:0,x:0});
+  if(was){ st.o=Math.max(0,(st.o||0)-1); st.x=(st.x||0)+1; st.run=0; }
+  else   { st.x=Math.max(0,(st.x||0)-1); st.o=(st.o||0)+1; }
+  // もうすこしの字（WEAK）
+  if(!q.ok){
+    if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
+    WEAK[k].wrong=(WEAK[k].wrong||0)+1; WEAK[k].got=false; WEAK[k].lastAt=Date.now();
+  }else if(WEAK[k]){
+    WEAK[k].wrong=Math.max(0,(WEAK[k].wrong||0)-1);
+    if(!WEAK[k].wrong && !WEAK[k].must){ delete WEAK[k]; }
+  }
+  // 問題ごとの記録
+  if(wasItemOk!==nowItemOk){
+    var r=ITEMS[e.id]||(ITEMS[e.id]={o:0,x:0});
+    if(nowItemOk){ r.x=Math.max(0,(r.x||0)-1); r.o=(r.o||0)+1; }
+    else         { r.o=Math.max(0,(r.o||0)-1); r.x=(r.x||0)+1; }
+  }
+  relastItem(e.id);
+  // その日の紙・アプリの画面の表示もそろえる
+  if(e.src==="paper" && SESSION && SESSION.date===e.date && SESSION.results) SESSION.results[markKey(e.id,k)]=q.ok?"o":"x";
+  if(e.src==="app" && APP_S && APP_S.date===e.date && APP_S.res && APP_S.res[e.id]) APP_S.res[e.id].ok=nowItemOk;
+  save(K_LOG,LOG); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_ITEMS,ITEMS);
+  if(SESSION) save(K_SESSION,SESSION); if(APP_S) save(K_APP,APP_S);
+  renderAll();
+}
+/* ★きょうの分だけ消す。きょうの記録（LOG）を1つずつ取り消して、字ごと・問題ごとの記録を戻す。
+   きょうの紙・アプリの問題は組み直しになる（未記録の状態に戻る）。
+   ⚠️ 「きょうは本でやった」で入れた「できなかった字」は LOG に無いので戻らない（日割りの記録だけ消す） */
+function resetToday(){
+  if(!confirm("きょうの記録を消します。よろしいですか？（受検日などは消えません）")) return;
+  var d=todayStr();
+  LOG.forEach(function(e){
+    if(e.date!==d) return;
+    e.kanji.forEach(function(q){
+      var st=KSTATS[q.k] && KSTATS[q.k][e.f];
+      if(st){ if(q.ok) st.o=Math.max(0,(st.o||0)-1); else st.x=Math.max(0,(st.x||0)-1); st.run=0; }
+      var w=WEAK[q.k];
+      if(w){
+        if(!q.ok) w.wrong=Math.max(0,(w.wrong||0)-1);
+        if(q.ok && w.got && w.gotAt && ymd(new Date(w.gotAt))===d) w.got=false;
+        if(!w.wrong && !w.must && !w.got) delete WEAK[q.k];
+      }
+    });
+    var r=ITEMS[e.id], itemOk=e.kanji.every(function(q){ return q.ok; });
+    if(r){ if(itemOk) r.o=Math.max(0,(r.o||0)-1); else r.x=Math.max(0,(r.x||0)-1); }
+  });
+  var touched={}; LOG.forEach(function(e){ if(e.date===d) touched[e.id]=1; });
+  LOG=LOG.filter(function(e){ return e.date!==d; });
+  Object.keys(touched).forEach(function(id){
+    if(LOG.some(function(e){ return e.id===id; })) relastItem(id);
+    else delete ITEMS[id];
+  });
+  Object.keys(RECORDS).forEach(function(id){ if(RECORDS[id] && RECORDS[id].date===d) delete RECORDS[id]; });
+  if(SESSION && SESSION.date===d) SESSION=null;
+  if(APP_S && APP_S.date===d) APP_S=null;
+  SET.doneDays=(SET.doneDays||[]).filter(function(v){ return v!==d; });
+  save(K_LOG,LOG); save(K_ITEMS,ITEMS); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_REC,RECORDS);
+  save(K_SESSION,SESSION); save(K_APP,APP_S); save(K_SET,SET);
+  renderAll(); alert("きょうの記録を消しました。");
+}
+/* ★ぜんぶ消す。受検日・合言葉の鍵・本の目次（人が直した分野・ページ）は残す */
+function resetAll(){
+  if(!confirm("これまでの記録を、ぜんぶ消します。元にはもどせません。よろしいですか？")) return;
+  RECORDS={}; WEAK={}; KSTATS={}; ITEMS={}; LOG=[]; SESSION=null; APP_S=null;
+  SET.doneDays=[];
+  save(K_REC,RECORDS); save(K_WEAK,WEAK); save(K_KSTAT,KSTATS); save(K_ITEMS,ITEMS); save(K_LOG,LOG);
+  save(K_SESSION,SESSION); save(K_APP,APP_S); save(K_SET,SET);
+  renderAll(); alert("記録をぜんぶ消しました。");
+}
+
+/* 一覧（きろく画面）。新しい日から。1日ぶんずつ見出し */
+var LOG_SHOW_DAYS=7;
+function renderLog(){
+  var box=document.getElementById("log-box"); if(!box) return;
+  if(!LOG.length){ box.innerHTML='<span class="muted">まだありません。紙を採点するか、アプリで問題をやると、ここに並びます。</span>'; return; }
+  var byDate={}, order=[];
+  LOG.forEach(function(e,i){ if(!byDate[e.date]){ byDate[e.date]=[]; order.push(e.date); } byDate[e.date].push(i); });
+  order.sort().reverse();
+  var FN={}; FIELDS.forEach(function(f){ FN[f.key]=f.name; });
+  var html="";
+  order.slice(0, LOG_SHOW_DAYS).forEach(function(d){
+    html+='<div class="mark-head">'+d+'（'+byDate[d].length+'問）</div>';
+    // 新しい記録が上。ただし同じときに記録したもの（紙1枚）は、紙の番号の順のまま
+    byDate[d].slice().sort(function(a,b){ return (LOG[b].t-LOG[a].t) || (a-b); }).forEach(function(i){
+      var e=LOG[i], tm=new Date(e.t), hh=String(tm.getHours()).padStart(2,"0")+":"+String(tm.getMinutes()).padStart(2,"0");
+      html+='<div class="mark-row log-row"><span class="mark-no" style="min-width:3.2em">'+hh+'</span>'
+        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":"アプリ")+'・'+(FN[e.f]||e.f)+'</span>'
+        +e.kanji.map(function(q,ki){
+          return '<div class="mark'+(q.ok?"":" x")+'" data-i="'+i+'" data-ki="'+ki+'" onclick="toggleLogMark(+this.dataset.i,+this.dataset.ki)">'
+            +q.k+(q.ok?" ○":" ✕")+'</div>';
+        }).join("")
+        +'<span class="muted" style="font-size:.72rem;margin-left:4px">'+(e.cite||"")+'</span></div>';
+    });
+  });
+  if(order.length>LOG_SHOW_DAYS) html+='<div class="muted" style="margin-top:6px">（'+LOG_SHOW_DAYS+'日より前の記録は、ここには出していません）</div>';
+  box.innerHTML=html;
 }
 
 /* BOX_OVERRIDE … 毎日の紙で、書くマスの高さを固定するとき（mm）。
@@ -2078,6 +2229,7 @@ function saveSheetResult(){
     var it=ITEMS[r.id]||(ITEMS[r.id]={o:0,x:0});
     if(anyX) it.x++; else it.o++;
     it.last=anyX?"x":"o"; it.date=todayStr();
+    logAnswer("paper", r.id, r.field||"kaki", r.cite||"", r.kanji.map(function(k){ return { k:k, ok:res[markKey(r.id,k)]!=="x" }; }));
   });
   // ★日割りを進める。かたまりの（照合ずみ・紙に出せる）問題が全部記録されたら「おわり」。
   //   ⚠️ 点は KSTATS 側で数えているので、ここでは total:0（予想得点に二重に入れない）
@@ -2430,7 +2582,7 @@ function renderVersion(){
   el.textContent="版 "+d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())
     +"（古いときは、アドレスの最後に ?数字 を付けて開き直してください）";
 }
-function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderSetei(); renderVersion();
+function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderLog(); renderSetei(); renderVersion();
                       renderQuizBox(); renderProgress(); renderKirokuProgress(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */

@@ -719,6 +719,58 @@ ok("★20問＋20問の日も、点数を出さない（130点のような数を
 ok("★「測った点」が、実際にやった数に釣り合っている（配点×やった数÷本番の問数）", sc.day.e.coveredPoints === sc.want, `${sc.day.e.coveredPoints} / 計算 ${sc.want}`);
 ok("★1問も解いていない分野は「測った」に入らない", sc.day.e.measuredByField.erabi === undefined && sc.day.e.measuredByField.kakusu === undefined, JSON.stringify(sc.day.e.measuredByField));
 ok("本番1回ぶん以上やれば、点数が出る", /\d+/.test(sc.full.score) && !/—/.test(sc.full.score), sc.full.score + " / " + sc.full.cap);
+console.log("");
+console.log("=== やった問題の一覧・〇✕の訂正・記録を消す ===");
+const lg = await page.evaluate(() => {
+  BOOK_UNITS = window.__longUnits; window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+  window.__day = "2099-10-01";
+  const ids = todaySheetItems().map(x => x.it.id);
+  saveSheetResult();                                   // 全部〇で記録
+  const n1 = LOG.length, src1 = LOG.every(e => e.src === "paper" && e.date === "2099-10-01");
+  renderLog();
+  const rows = document.querySelectorAll("#log-box .log-row").length;
+  // 3問目の字を ✕ に訂正（一覧のボタンを押す）
+  const target = LOG[2];
+  document.querySelector('#log-box .mark[data-i="2"][data-ki="0"]').click();
+  const afterX = { last: ITEMS[target.id].last, weak: !!WEAK[target.kanji[0].k] };
+  window.__day = "2099-10-02"; SESSION = null;
+  const next1 = todaySheetItems().map(x => x.it.id);
+  // もう一度押して 〇 に戻す
+  document.querySelector('#log-box .mark[data-i="2"][data-ki="0"]').click();
+  const afterO = ITEMS[target.id].last;
+  SESSION = null;
+  const next2 = todaySheetItems().map(x => x.it.id);
+  return { n: ids.length, n1, src1, rows, afterX, inNext1: next1.includes(target.id), firstNext1: next1[0] === target.id,
+           afterO, inNext2: next2.includes(target.id) };
+});
+ok("紙を記録すると、1問ずつ一覧に残る（紙・日付つき）", lg.n1 === lg.n && lg.src1 && lg.rows === lg.n, `${lg.n1}/${lg.n} 行${lg.rows}`);
+ok("★〇を✕に直すと、その問題は✕になる（もうすこしの字にも入る）", lg.afterX.last === "x" && lg.afterX.weak, JSON.stringify(lg.afterX));
+ok("★✕に直した問題は、翌日の紙に出る（先頭に）", lg.inNext1 && lg.firstNext1);
+ok("★✕を〇に直し戻すと、翌日の紙には出ない", lg.afterO === "o" && !lg.inNext2, lg.afterO);
+const lg2 = await page.evaluate(() => {
+  // アプリで1問まちがえる → 一覧に出る → 〇に直す
+  window.__day = "2099-10-03"; APP_S = null;
+  const before = LOG.length;
+  appRecord("q_app_x1", "yomi", ["愛"], [false], false, null);
+  const e = LOG[LOG.length - 1];
+  const i = LOG.length - 1;
+  renderLog();
+  document.querySelector('#log-box .mark[data-i="' + i + '"][data-ki="0"]').click();
+  const fixed = ITEMS["q_app_x1"].last;
+  // きょうの分だけ消す（2099-10-03 の記録だけ）
+  const beforeReset = LOG.length;
+  resetToday();
+  const r1 = { gone: !LOG.some(x => x.date === "2099-10-03"), item: ITEMS["q_app_x1"] === undefined, kept: LOG.length === beforeReset - 1 };
+  // ぜんぶ消す
+  const exam = SET.examDate;
+  resetAll();
+  return { added: LOG.length, appSrc: e.src === "app", fixed, r1, all: { log: LOG.length, items: Object.keys(ITEMS).length, kstats: Object.keys(KSTATS).length, exam: SET.examDate === exam } };
+});
+ok("アプリで解いた問題も一覧に残る", lg2.appSrc);
+ok("★アプリの問題も〇✕を直せる", lg2.fixed === "o", lg2.fixed);
+ok("★「きょうの分だけ消す」は、きょうの記録だけを消す（前の日は残る）", lg2.r1.gone && lg2.r1.item && lg2.r1.kept, JSON.stringify(lg2.r1));
+ok("★「ぜんぶ消す」は記録を全部消し、受検日は残す", lg2.all.log === 0 && lg2.all.items === 0 && lg2.all.kstats === 0 && lg2.all.exam, JSON.stringify(lg2.all));
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 
