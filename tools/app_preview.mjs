@@ -89,7 +89,7 @@ for (const u of want) {
     //   it.choices を見ると並べ替えが一度も起きず「全問アが正解」に見えていた（claude-e0 の指摘 No.27）
     xs.forEach(x => { const f = itemFieldOf(x.it, x.g), ch = appChoicesOf(x.it, f);
       if (SHUFFLE_CHOICE_FIELDS.indexOf(f) >= 0 && ch.length > 1) ord[x.it.id] = randPerm(ch.length, null); });
-    APP_S = { v: 1, date: todayStr(), ids: xs.map(x => x.it.id), pos: 0, ord, res: {}, step: {} };
+    APP_S = { v: APP_VERSION, date: todayStr(), ids: xs.map(x => x.it.id), pos: 0, ord, res: {}, step: {} };
     return APP_S.ids;
   }, u);
   if (!ids.length) { console.log(`  ${u}: アプリで出す問題がありません（紙の分野か、図が要る問題だけ）`); continue; }

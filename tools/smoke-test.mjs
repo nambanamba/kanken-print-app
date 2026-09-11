@@ -147,15 +147,17 @@ const d1 = await page.evaluate(() => {
   };
 });
 ok("紙が出た（印刷が呼ばれた）", d1.printed === 1 && d1.n > 0, `${d1.printed} / ${d1.n}行`);
-ok("★1日の紙は20問", d1.n === 20, String(d1.n));
+// ★照合ずみが書き取り・部首の2分野だけの日（司令塔の「失敗とみなすもの」の場面）。分野の上限（配点比＋1問）で止まる
+const CAP = await page.evaluate(() => fieldCaps(PAPER_FIELDS, SHEET_TARGET));
+ok("★照合ずみが2分野だけの日は、上限で止まる（書き取り11＋部首6＝17問。20問に埋めない）", d1.n === CAP.kaki + CAP.bushu && d1.n < 20, `${d1.n} / 上限 ${JSON.stringify(CAP)}`);
 ok("★紙の問題は全部、本の問題（アプリが作った問題が無い）", d1.allBook);
 ok("★アプリの問題生成が1回も呼ばれていない", d1.gen.length === 0, d1.gen.join(","));
 ok("★照合の通っていない単元の問題が出ていない", d1.fromUnverified === 0, String(d1.fromUnverified));
 ok("★読みの問題が紙に1問も出ていない（読みはアプリ側）", d1.yomiOnPaper === 0, String(d1.yomiOnPaper));
 ok("★紙は手で書く分野だけ（書き取り・部首・同じ読み・対義語。送りがなは2026-09-11にアプリへ）",
    d1.fields.every(f => ["kaki", "bushu", "onaji", "taigi"].includes(f)), [...new Set(d1.fields)].join(","));
-ok("出せない分野の枠は、ほかの紙の分野で埋まっている（書き取り15＋部首5）",
-   d1.fields.filter(f => f === "kaki").length === 15 && d1.fields.filter(f => f === "bushu").length === 5,
+ok("★どの分野も上限を超えない（書き取り11・部首6）",
+   d1.fields.filter(f => f === "kaki").length === CAP.kaki && d1.fields.filter(f => f === "bushu").length === CAP.bushu,
    `kaki ${d1.fields.filter(f => f === "kaki").length} / bushu ${d1.fields.filter(f => f === "bushu").length}`);
 
 console.log("\n=== 配点比で混ぜる ===");
@@ -202,7 +204,7 @@ const fix = await page.evaluate(() => {
            citeInKiroku: /ドリル p\d+/.test(document.getElementById("mark-box").textContent) };
 });
 ok("✕を押しても、その日の紙の中身が変わらない", fix.same);
-ok("「きろく」に紙と同じ数の〇が並ぶ", fix.nMarks === 20, String(fix.nMarks));
+ok("「きろく」に紙と同じ数の〇が並ぶ", fix.nMarks === d1.n, String(fix.nMarks));
 ok("✕が2つ付いた", fix.xShown === 2, String(fix.xShown));
 ok("「きろく」にも出典が出ている（本と照らせる）", fix.citeInKiroku);
 
@@ -212,9 +214,9 @@ const saved = await page.evaluate(() => ({
   saved: SESSION.saved, again: (() => { const n = Object.keys(ITEMS).length; saveSheetResult();
     return Object.values(ITEMS).reduce((a, r) => a + r.o + r.x, 0); })()
 }));
-ok("記録: 20問ぶん問題ごとに残った", saved.items === 20, String(saved.items));
+ok("記録: 紙の問題ぶん、問題ごとに残った", saved.items === d1.n, String(saved.items));
 ok("記録: ✕の問題は2つ", saved.x.length === 2 && saved.x.every(id => fix.xIds.includes(id)), saved.x.join(","));
-ok("同じ日に2回押しても二重に数えない", saved.again === 20, String(saved.again));
+ok("同じ日に2回押しても二重に数えない", saved.again === d1.n, String(saved.again));
 
 console.log("\n=== 2日目の紙 ===");
 const d2 = await page.evaluate(() => {
@@ -227,7 +229,7 @@ ok("★前日に✕にした問題が、翌日の紙に出ている", fix.xIds.e
 ok("★✕の問題が紙の先頭に来ている（できていない問題が優先）",
    d2.ids.slice(0, 2).sort().join() === fix.xIds.slice().sort().join(), d2.ids.slice(0, 2).join(","));
 ok("★〇にした問題が、翌日また出ていない", !fix.oIds.some(id => d2.ids.includes(id)));
-ok("2日目も、あれば20問まで出る（✕2＋次の問題）", d2.n === Math.min(20, 2 + (setup.n0 + setup.n1 - 20)), String(d2.n));
+ok("2日目: ✕2＋残りの本の問題（上限以内）", d2.n === Math.min(20, 2 + (setup.n0 + setup.n1 - d1.n)), String(d2.n));
 
 // 2日目: ✕の問題を〇にして記録 → 3日目には出ない
 const d3 = await page.evaluate(() => {
@@ -363,9 +365,9 @@ await measurePaper("✕の問題が5単元から来た日（見出しが多い�
 console.log("\n=== 紙で解けるか（○の中の漢字・組の番号） ===");
 const gv = await page.evaluate(() => {
   const u = { unitId: "dr_23", mat: "dr", srcPages: [23], groups: [
-    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "taigi", instruction: "ダミー（○の中の漢字）", example: { text: "れいのダミー文", answers: ["れいのこたえ"], givenKanji: KANJI_MASTER[0].k }, items: [1, 2, 3].map(i => ({
+    { gno: 0, blockNo: 1, blockLabel: "(1)", field: "kaki", instruction: "ダミー（○の中の漢字）", example: { text: "れいのダミー文", answers: ["れいのこたえ"], givenKanji: KANJI_MASTER[0].k }, items: [1, 2, 3].map(i => ({
       id: "q_gv_" + i, no: i, text: "ダミーの文 " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[i].k], givenKanji: KANJI_MASTER[i].k })) },
-    { gno: 0, blockNo: 2, blockLabel: "(2)", field: "taigi", instruction: "ダミー（○の中の漢字）", items: [1, 2].map(i => ({
+    { gno: 0, blockNo: 2, blockLabel: "(2)", field: "kaki", instruction: "ダミー（○の中の漢字）", items: [1, 2].map(i => ({
       id: "q_gv2_" + i, no: i, text: "ダミーの文B " + i, target: "文", answers: [{ text: "こたえ" }], kanji: [KANJI_MASTER[10 + i].k], givenKanji: KANJI_MASTER[10 + i].k })) }
   ] };
   BOOK_UNITS = [u]; window.isVerifiedUnit = () => true; ITEMS = {}; SESSION = null; window.__day = "2099-06-10";
@@ -406,7 +408,7 @@ for (const every of [1, 2, 3, 4]) {
 }
 const desc = scen.map(s => `注意${s.every}問に1つ: ${s.perSheet.join("+")}問/組んだ${s.composed}`).join(" ／ ");
 // ★2026-09-11 ユーザー指示「書き問題20問、なければそこまで」→ 20問は削らない。入らなければ2枚（司令塔の「1枚に収める」より優先）
-ok("★20問は削らない（本の問題が足りる日は、いつも20問）", scen.every(s => s.composed === 20 && s.rows === 20), desc);
+ok("★1枚に収めるために削らない（組んだ数＝紙の問数）。組む数は分野の上限まで", scen.every(s => s.rows === s.composed && s.composed <= 20), desc);
 ok("検査の前提: 1枚に入らず2枚になる日がある（2枚の組み方を見られる）", scen.some(s => s.perSheet.length === 2), desc);
 ok("空の紙を出さない", scen.every(s => s.perSheet.every(n => n > 0)), desc);
 // ★ユーザー指示「書くところは大きめ・枚数は問わない」→ 毎日の紙はマスを大きく固定し、1枚目から入るだけ詰める
@@ -444,13 +446,14 @@ const rebuild = await page.evaluate(() => {
   BOOK_UNITS = window.__longUnits; window.isVerifiedUnit = () => true; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {};
   window.__day = "2099-06-30";
   const some = bookAllItems().slice(0, 12).map(x => x.it.id);
+  SESSION = null; const fresh = composeSheet().length;
   SESSION = { v: 4, date: todayStr(), ids: some, results: {}, saved: false };
   const a = todaySheetItems().length;
   SESSION = { v: 4, date: todayStr(), ids: some, results: {}, saved: true };
   const b = todaySheetItems().length;
-  return { a, b };
+  return { a, b, fresh };
 });
-ok("★前の版の、まだ記録していないきょうの紙は作り直す（20問になる）", rebuild.a === 20, String(rebuild.a));
+ok("★前の版の、まだ記録していないきょうの紙は作り直す（いまの決まりで組んだ数になる）", rebuild.a === rebuild.fresh && rebuild.a !== 12, `${rebuild.a} / ${rebuild.fresh}`);
 ok("前の版でも、記録ずみのきょうの紙は作り直さない", rebuild.b === 12, String(rebuild.b));
 
 console.log("\n=== アプリでやる問題（読み・記号・画数） ===");
@@ -776,6 +779,24 @@ ok("アプリで解いた問題も一覧に残る", lg2.appSrc);
 ok("★アプリの問題も〇✕を直せる", lg2.fixed === "o", lg2.fixed);
 ok("★「きょうの分だけ消す」は、きょうの記録だけを消す（前の日は残る）", lg2.r1.gone && lg2.r1.item && lg2.r1.kept, JSON.stringify(lg2.r1));
 ok("★「ぜんぶ消す」は記録を全部消し、受検日は残す", lg2.all.log === 0 && lg2.all.items === 0 && lg2.all.kstats === 0 && lg2.all.exam, JSON.stringify(lg2.all));
+// ★照合ずみが「読み」と「じゅく語作り」だけの日（ユーザーの端末で起きたと思われる形）。上限で止まり、20問に埋めない
+const two = await page.evaluate(() => {
+  BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = (id) => id === "dr_01" || id === "dr_54";
+  ITEMS = {}; APP_S = null; window.__day = "2099-11-01";
+  const s = todayApp(); const c = {}; s.ids.forEach(id => { const y = appIndex()[id]; const f = itemFieldOf(y.it, y.g); c[f] = (c[f] || 0) + 1; });
+  const cap = fieldCaps(APP_FIELDS, APP_TARGET);
+  // 前の版（v1）の未回答の分は組み直される／答えた分はそのまま
+  APP_S = { v: 1, date: todayStr(), ids: ["q_app_dr_54_1"], pos: 0, ord: {}, res: {}, step: {} };
+  const rebuilt = todayApp().ids.length;
+  APP_S = { v: 1, date: todayStr(), ids: ["q_app_dr_54_1"], pos: 0, ord: {}, res: { q_app_dr_54_1: { ok: true } }, step: {} };
+  const kept = todayApp().ids.length;
+  window.isVerifiedUnit = () => true;
+  return { c, n: s.ids.length, cap, rebuilt, kept };
+});
+ok("★照合ずみが読みとじゅく語作りだけの日は、上限で止まる（20問に埋めない）", two.n === two.cap.yomi + two.cap.jukugo && two.n < 20, `${JSON.stringify(two.c)} / 上限 ${two.cap.yomi}+${two.cap.jukugo}`);
+ok("★じゅく語作りは上限を超えない", (two.c.jukugo || 0) <= two.cap.jukugo, JSON.stringify(two.c));
+ok("★前の版で組んだ未回答のアプリの分は、組み直す", two.rebuilt === two.n, String(two.rebuilt));
+ok("1問でも答えたアプリの分は、組み直さない", two.kept === 1, String(two.kept));
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 

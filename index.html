@@ -891,6 +891,7 @@ function printToday(){ printSessionPractice(); }
 var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu","okuri"];   // ★送りがなは 2026-09-11 に紙からアプリへ（下の okuriChoices）
 var SHUFFLE_CHOICE_FIELDS = ["erabi","jukugo","okuri"];
 var APP_TARGET = 20;
+var APP_VERSION = 2;   // 2: 分野ごとの上限を入れた（2026-09-11）。前の版の未回答の分は組み直す
 var K_APP="kanken7_app_v1";
 var APP_S=load(K_APP,null);
 
@@ -934,9 +935,11 @@ function composeApp(){
   APP_FIELDS.forEach(function(f){ cand[f]=[]; });
   all.forEach(function(x){ if(!ex[x.it.id] && !ITEMS[x.it.id]) cand[itemFieldOf(x.it,x.g)].push(x); });
   var q=appQuota(left), take={}, n=0;
-  APP_FIELDS.forEach(function(f){ take[f]=Math.min(q[f]||0, cand[f].length); n+=take[f]; });
+  // ★分野ごとの上限（配点比＋1問）。上限で止まれば20問に満たなくてよい（fieldCaps の説明）
+  var cap=fieldCaps(APP_FIELDS, APP_TARGET), rc=countByField(retry);
+  APP_FIELDS.forEach(function(f){ take[f]=Math.max(0, Math.min(q[f]||0, cand[f].length, cap[f]-(rc[f]||0))); n+=take[f]; });
   APP_FIELDS.forEach(function(f){
-    var more=Math.min(left-n, cand[f].length-take[f]);
+    var more=Math.min(left-n, cand[f].length-take[f], cap[f]-(rc[f]||0)-take[f]);
     if(more>0){ take[f]+=more; n+=more; }
   });
   var out=retry.slice();
@@ -957,7 +960,10 @@ function randPerm(n, avoid){
 /* きょうのアプリの問題（その日のうちは固定） */
 function todayApp(){
   if(!bookLoaded()) return null;
-  if(APP_S && APP_S.v===1 && APP_S.date===todayStr()) return APP_S;
+  // ★前の版で組んだ「まだ1問も答えていない」きょうの分は組み直す（分野の上限を入れる前に組んだ偏りを残さない）。
+  //   1問でも答えていれば、そのまま（答えた記録と画面がずれるため）
+  if(APP_S && APP_S.date===todayStr()
+     && (APP_S.v===APP_VERSION || Object.keys(APP_S.res||{}).length)) return APP_S;
   var xs=composeApp();
   if(!xs.length) return null;
   var ids=shuffle(xs.map(function(x){ return x.it.id; }), Math.random);   // ★出題順を並べ替える
@@ -968,7 +974,7 @@ function todayApp(){
       ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);   // ★前回と同じ並びにしない
     }
   });
-  APP_S={ v:1, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{} };
+  APP_S={ v:APP_VERSION, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{} };
   save(K_APP,APP_S);
   return APP_S;
 }
@@ -1664,10 +1670,12 @@ function composeSheet(target){
       }
     });
   }
-  PAPER_FIELDS.forEach(function(f){ take[f]=Math.min(q[f]||0, cand[f].length); n+=take[f]; });
-  // 出せない分野の枠を、ほかの紙の分野で埋める（配点の大きい順）
+  var cap=fieldCaps(PAPER_FIELDS, target), rc=countByField(retry);
+  PAPER_FIELDS.forEach(function(f){ take[f]=Math.max(0, Math.min(q[f]||0, cand[f].length, cap[f]-(rc[f]||0))); n+=take[f]; });
+  // 出せない分野の枠を、ほかの紙の分野で埋める（配点の大きい順）。
+  // ★ただし分野ごとの上限（配点比＋1問）を超えない。上限で止まったら20問に満たなくてよい（ユーザー指示「ルールベースで数をコントロール」）
   PAPER_FIELDS.forEach(function(f){
-    var more=Math.min(left-n, cand[f].length-take[f]);
+    var more=Math.min(left-n, cand[f].length-take[f], cap[f]-(rc[f]||0)-take[f]);
     if(more>0){ take[f]+=more; n+=more; }
   });
   var out=retry.slice();
@@ -1675,13 +1683,26 @@ function composeSheet(target){
   return out;
 }
 
+/* ★分野ごとの上限（2026-09-11 ユーザー指示「ルールベースで数をコントロールしてほしいです」）。
+   上限 ＝ 配点比で計算した数（切り上げ）＋ 1問。例: じゅく語作り 20点／アプリ114点・20問 → 3.5 → 上限5問
+   ・「足りないから他で埋める」より上限が優先。上限で止まれば20問に満たなくてよい（翌日に回る）
+   ・⚠️ 前日に✕だった問題は、上限に関係なく必ず出す（✕は翌日また出す、が本人の希望）。✕の数は上限に数えるので、
+     その分野の新しい問題が減る。✕だけで上限を超える日は、✕をぜんぶ出す（上限を超えるのは✕のときだけ） */
+function fieldCaps(fields, n){
+  var fs=FIELDS.filter(function(f){ return fields.indexOf(f.key)>=0; });
+  var tot=fs.reduce(function(a,f){ return a+f.points; },0), cap={};
+  fs.forEach(function(f){ cap[f.key]=Math.ceil(n*f.points/tot)+1; });
+  return cap;
+}
+function countByField(xs){ var c={}; xs.forEach(function(x){ var f=itemFieldOf(x.it,x.g); c[f]=(c[f]||0)+1; }); return c; }
+
 /* ★きょうの紙は**その日のうちは固定**する。
    ⚠️ 毎回組み直すと、採点を入れた瞬間に「×の問題」が変わり、
       **印刷した紙と「きろく」の並びがずれる。**（紙は1回刷ったら変わらない）
    SESSION = { v:3, date, ids:[問題id], results:{ "問題id|字": "x" }, saved }
    ⚠️ 旧形式は、同じ日付でも作り直す。
       v2 は読みが紙に乗っていた（紙とアプリの分離前）ので、v3 に上げて作り直させている。 */
-var SHEET_VERSION = 5;   // 5: 送りがなを紙から外した＋20問を削らない（2026-09-11）。4 以前の「まだ記録していない紙」は作り直す
+var SHEET_VERSION = 6;   // 6: 分野ごとの上限（2026-09-11）。   // 5: 送りがなを紙から外した＋20問を削らない（2026-09-11）。4 以前の「まだ記録していない紙」は作り直す
 function todaySheet(){
   if(!bookLoaded()) return null;
   if(SESSION && SESSION.date===todayStr()
