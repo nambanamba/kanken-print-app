@@ -122,6 +122,10 @@
   .ap-left{font-size:1.05rem;color:#334155;}
   .ap-left b{font-size:1.4rem;color:var(--good);}
   .ap-dots{margin-bottom:10px;flex-wrap:wrap;}
+  /* 1回の問題数（5/10/20/30/40） */
+  .ap-count-pick{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .ap-cnt{min-width:44px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:99px;background:#fff;font-weight:700;color:#334155;}
+  .ap-cnt.on{background:#2563eb;border-color:#2563eb;color:#fff;}
   .ap-q.big{font-size:3rem;text-align:center;line-height:1.6;}
   /* 本から切り出した図。太い画が見えるように大きく（縦横比はそのまま） */
   /* ★字1つを画面いっぱいに（書き起こし担当の実測: 小さいと 械・博・協・倉 の太い画が見分けられない）。
@@ -922,7 +926,17 @@ function printToday(){ printSessionPractice(); }
    ========================================================================= */
 var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu","okuri"];   // ★送りがなは 2026-09-11 に紙からアプリへ（下の okuriChoices）
 var SHUFFLE_CHOICE_FIELDS = ["erabi","jukugo","okuri"];
-var APP_TARGET = 20;
+var APP_TARGET = 20;   // 既定の数。ユーザーが選んだ数は SET.appCount（appTarget）
+/* ★アプリの問題の数（2026-09-11 ユーザー指示「アプリ問題ですが数を選べるようにしてほしいです」）。
+   選べる数は APP_COUNTS。選んだ数は SET に覚える（毎日選び直さない）。配点比・分野の上限は、選んだ数で計算する */
+var APP_COUNTS = [5, 10, 20, 30, 40];
+function appTarget(){ var n=parseInt(SET.appCount,10); return APP_COUNTS.indexOf(n)>=0 ? n : APP_TARGET; }
+function setAppCount(n){
+  SET.appCount=n; save(K_SET,SET);
+  // まだ1問も答えていない今日の分は、選んだ数で組み直す。答えていれば、次の「もっとやる」かあしたから
+  if(APP_S && APP_S.date===todayStr() && !Object.keys(APP_S.res||{}).length){ APP_S=null; save(K_APP,APP_S); }
+  renderAll();
+}
 var APP_VERSION = 2;   // 2: 分野ごとの上限を入れた（2026-09-11）。前の版の未回答の分は組み直す
 var K_APP="kanken7_app_v1";
 var APP_S=load(K_APP,null);
@@ -961,14 +975,15 @@ function appQuota(n){
 
 function composeApp(){
   var all=appAllItems();
-  var retry=all.filter(function(x){ return isRetryItem(x.it.id); }).slice(0,APP_TARGET);
+  var N=appTarget();
+  var retry=all.filter(function(x){ return isRetryItem(x.it.id); }).slice(0,N);   // ✕が選んだ数より多い日は、✕だけでその数になる
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
-  var left=APP_TARGET-retry.length, cand={};
+  var left=N-retry.length, cand={};
   APP_FIELDS.forEach(function(f){ cand[f]=[]; });
   all.forEach(function(x){ if(!ex[x.it.id] && !ITEMS[x.it.id]) cand[itemFieldOf(x.it,x.g)].push(x); });
   var q=appQuota(left), take={}, n=0;
   // ★分野ごとの上限（配点比＋1問）。上限で止まれば20問に満たなくてよい（fieldCaps の説明）
-  var cap=fieldCaps(APP_FIELDS, APP_TARGET), rc=countByField(retry);
+  var cap=fieldCaps(APP_FIELDS, N), rc=countByField(retry);
   APP_FIELDS.forEach(function(f){ take[f]=Math.max(0, Math.min(q[f]||0, cand[f].length, cap[f]-(rc[f]||0))); n+=take[f]; });
   APP_FIELDS.forEach(function(f){
     var more=Math.min(left-n, cand[f].length-take[f], cap[f]-(rc[f]||0)-take[f]);
@@ -1197,12 +1212,19 @@ function renderAppEntry(){
   var s=todayApp();
   if(!s){ box.innerHTML='<span class="muted">きょうアプリでやる問題はありません（照合が済んだ単元だけ出しています）。</span>'; return; }
   var left=appLeft(s), started=s.ids.some(function(id){ return s.res[id]; });
-  box.innerHTML = left
+  // ★1回の問題数を選べる（選んだ数は覚える）
+  var cur=appTarget();
+  var picker='<div class="ap-count-pick"><span class="muted" style="font-size:.8rem">1回の問題数</span>'
+    +APP_COUNTS.map(function(n){
+      return '<button class="ap-cnt'+(n===cur?' on':'')+'" onclick="setAppCount('+n+')">'+n+'</button>';
+    }).join("")+'</div>'
+    +(started && s.ids.length!==cur ? '<div class="muted" style="font-size:.75rem;margin-bottom:6px">いまの分はそのまま。つぎの分（もっとやる・あした）から '+cur+'問になります。</div>' : '');
+  box.innerHTML = picker + (left
     ? '<div class="muted" style="margin-bottom:10px">読み・記号で答える問題・画数・送りがな。1問ずつ出ます。</div>'
       +'<button class="btn" onclick="openApp()">📱 '+(started?'つづきから やる':'アプリの問題をやる')+'（のこり '+left+'問）</button>'
     : '<div style="font-weight:700;color:var(--good)">✅ '+(s.extra?'おかわり '+s.extra+' 回目も':'きょうのアプリの問題は')+' おわり！</div>'
       +'<button class="btn sec" style="margin-top:8px" onclick="moreApp()">📱 もっとやる（おかわり）</button>'
-      +'<button class="btn ghost" style="margin-top:8px" onclick="openApp()">いまの分を もう一度 見る</button>';
+      +'<button class="btn ghost" style="margin-top:8px" onclick="openApp()">いまの分を もう一度 見る</button>');
 }
 /* 専用の画面を開く／閉じる（タブには出さない画面） */
 function openApp(){

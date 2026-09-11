@@ -890,6 +890,37 @@ ok("★語のまま貼っても漢字だけ取り出す（入れた字の数が�
 ok("★入れた字の本の問題は、次の日の紙に出ない", dw.ids.every(id => !dw.next.includes(id)), dw.ids.join(","));
 ok("★一覧に「本」の記録として出る", dw.ids.every(id => dw.logBook.includes(id)), dw.logBook.join(","));
 ok("★一覧で✕に直すと、その問題はまた出る", dw.next2.includes(dw.ids[0]), dw.ids[0]);
+console.log("");
+console.log("=== アプリの問題の数を選ぶ ===");
+const cnt = await page.evaluate(() => {
+  BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = () => true;
+  ITEMS = {}; APP_S = null; LOG = []; delete SET.appCount; window.__day = "2100-02-01";
+  const def = todayApp().ids.length;
+  renderAppEntry();
+  const chips = [...document.querySelectorAll("#ap-entry .ap-cnt")].map(b => b.textContent + (b.classList.contains("on") ? "*" : ""));
+  setAppCount(10);   // まだ答えていない → 組み直される
+  const s10 = todayApp(); const c = {}; s10.ids.forEach(id => { const y = appIndex()[id]; const f = itemFieldOf(y.it, y.g); c[f] = (c[f] || 0) + 1; });
+  const cap10 = fieldCaps(APP_FIELDS, 10), q10 = appQuota(10);
+  const remembered = JSON.parse(localStorage.getItem("kanken7_settings_v1")).appCount === 10;
+  // 1問答えてから数を変えると、いまの分はそのまま
+  APP_S.res[APP_S.ids[0]] = { ok: true };
+  setAppCount(5);
+  const kept = todayApp().ids.length;
+  // ✕が選んだ数より多い日は、✕だけでその数になる
+  window.__day = "2100-02-02"; APP_S = null; ITEMS = {};
+  appAllItems().slice(0, 8).forEach(x => { ITEMS[x.it.id] = { o: 0, x: 1, last: "x", date: "2100-02-01" }; });
+  const sx = todayApp(); const allX = sx.ids.every(id => ITEMS[id] && ITEMS[id].last === "x");
+  const nx = sx.ids.length;
+  delete SET.appCount; save(K_SET, SET); APP_S = null;
+  return { def, chips, n10: s10.ids.length, c, cap10, q10, remembered, kept, nx, allX };
+});
+ok("アプリの問題は、既定で20問", cnt.def === 20, String(cnt.def));
+ok("入口に 5/10/20/30/40 の選択があり、いまの数がえらばれている", cnt.chips.join(",") === "5,10,20*,30,40", cnt.chips.join(","));
+ok("★10問をえらぶと10問になり、配点比のとおり（1分野に偏らない）", cnt.n10 === 10 && Object.keys(cnt.q10).every(f => (cnt.c[f] || 0) === cnt.q10[f]), JSON.stringify(cnt.c) + " / 比 " + JSON.stringify(cnt.q10));
+ok("★えらんだ数でも、分野の上限を超えない", Object.keys(cnt.c).every(f => cnt.c[f] <= cnt.cap10[f]), JSON.stringify(cnt.cap10));
+ok("えらんだ数は覚えておく", cnt.remembered);
+ok("1問でも答えた分は、数を変えても組み直さない", cnt.kept === 10, String(cnt.kept));
+ok("★✕が選んだ数より多い日は、✕だけでその数になる（5問・ぜんぶ✕）", cnt.nx === 5 && cnt.allX, cnt.nx + " / " + cnt.allX);
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 
