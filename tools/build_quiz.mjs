@@ -50,6 +50,7 @@ if (!dirs.length) {
 /* 平文を読む。★このリポジトリの中を読ませない（事故防止） */
 const REPO = path.resolve(HERE, "..");
 const units = [];
+const unitFiles = [];   // 図の切り出しに渡す
 for (const d of dirs) {
   const abs = path.resolve(d);
   if (abs.startsWith(REPO)) {
@@ -60,6 +61,7 @@ for (const d of dirs) {
   if (!fs.existsSync(abs)) { console.error("フォルダがありません: " + abs); process.exit(2); }
   for (const f of fs.readdirSync(abs).filter(x => x.endsWith(".json")).sort()) {
     units.push(JSON.parse(fs.readFileSync(path.join(abs, f), "utf8")));
+    unitFiles.push(path.join(abs, f));
   }
   console.log(`読みました: ${abs} (${fs.readdirSync(abs).filter(x => x.endsWith(".json")).length} ファイル)`);
 }
@@ -67,6 +69,42 @@ if (!units.length) { console.error("★中止: 単元が0件です。"); process
 
 const items = units.reduce((a, u) => a + ((u.groups || []).reduce((b, g) => b + (g.items || []).length, 0) || (u.items || []).length), 0);
 console.log(`単元 ${units.length} 件 / 設問 ${items} 件`);
+
+/* ★図（items[].figure = {page, box}）を本のPDFから切り出し、figureImg（data URI）として入れる
+   （2026-09-11 ユーザー承認「おねがいします、いれて」・司令塔決定。切り出しは tools/crop_figures.py＝claude-eb）
+   ⚠️ 画像は本の複製。**暗号文の中にだけ入れる。**ファイルは作らない（crop_figures.py は標準出力に JSON を出すだけ）。
+   ⚠️ **黙って落とさない。**figure があるのに画像が来なかった問・頼んでいない画像が来た問があれば止める。
+      アプリは figureImg がある問題だけを出すので、落ちると「図が要る問が静かに消える」ことになる。 */
+const figItems = new Map(), figFiles = [];
+units.forEach((u, i) => {
+  let has = false;
+  for (const g of u.groups || []) for (const it of g.items || []) if (it.figure) { figItems.set(it.id, it); has = true; }
+  if (has) figFiles.push(unitFiles[i]);
+});
+if (figItems.size) {
+  let out;
+  try {
+    // ⚠️ 図を持つ単元のファイルだけ渡す（crop_figures.py は PDF を知らない教材＝ノートが来ると止まる）
+    out = execFileSync("python", [path.join(HERE, "crop_figures.py"), "--json", ...figFiles],
+                       { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "inherit"] });
+  } catch (e) {
+    console.error("★中止: 図の切り出し（crop_figures.py）が失敗しました。本のPDFの場所（リポジトリの1つ上の 情報\\）を確かめてください。");
+    process.exit(3);
+  }
+  const figs = JSON.parse(out);
+  const missing = [...figItems.keys()].filter(id => !(typeof figs[id] === "string" && figs[id].startsWith("data:" + "image/png;base64,") && figs[id].length > 1000));
+  const extra = Object.keys(figs).filter(id => !figItems.has(id));
+  if (missing.length || extra.length) {
+    console.error(`★中止: 図の数が合いません。figure ${figItems.size} 問／切り出し ${Object.keys(figs).length} 枚`);
+    missing.forEach(id => console.error("  画像が来ない: " + id));
+    extra.forEach(id => console.error("  頼んでいない画像: " + id));
+    process.exit(3);
+  }
+  for (const [id, it] of figItems) it.figureImg = figs[id];
+  console.log(`図: figure ${figItems.size} 問 → 切り出し ${figItems.size} 枚を入れました（${[...new Set([...figItems.keys()].map(id => id.split("_").slice(0, 2).join("_")))].join("・")}）`);
+} else {
+  console.log("図: figure を持つ問題はありません");
+}
 
 /* 合言葉を標準入力から。★履歴に残さない */
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
