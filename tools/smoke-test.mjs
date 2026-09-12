@@ -28,6 +28,8 @@ import { getChromium, launchBrowser } from "./browser.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SHOT = process.argv.includes("--shot");   // 画面と紙を撮る（出力は一時領域）
+// ★出し直し（正解するまで）の画面を撮る。B-12「実機で、わざと間違えて、目で見る」ため
+const SHOT_RETRY = process.argv.includes("--shot-retry");
 
 let chromium;
 try { chromium = await getChromium(); }
@@ -568,16 +570,24 @@ const op = await page.evaluate(() => ({ active: document.getElementById("page-ap
 ok("★押すと専用の画面になる（きょう画面は隠れる）", op.active && !op.kyou);
 ok("★上に「1 / 20」と「のこり 20 問」", op.top.includes("1 / 20") && /のこり\s*20\s*問/.test(op.top), op.top);
 for (let i = 0; i < 3; i++) log.push(await answerCurrent(i % 3 !== 0));
-const mid3 = await page.evaluate(() => document.querySelector("#ap-box .ap-top").innerText);
-ok("★答えるたびに「のこり」が減る（3問答えて のこり17）", mid3.includes("4 / 20") && /のこり\s*17\s*問/.test(mid3), mid3);
+const mid3o = await page.evaluate(() => ({ top: document.querySelector("#ap-box .ap-top").innerText, n: APP_S.ids.length, pos: APP_S.pos }));
+const mid3 = mid3o.top;
+// ★3問のうち1問をまちがえたので、その1問が列にもどって 20→21 問になる（2026-09-12「正解するまで出し直す」）
+ok("★答えるたびに「のこり」が減る（3問答えて、まちがえた1問がもどるので 21問中のこり18）",
+   mid3o.n === 21 && mid3.includes("4 / 21") && /のこり\s*18\s*問/.test(mid3), mid3 + " / n=" + mid3o.n);
 await page.evaluate(() => closeApp());
 const back = await page.evaluate(() => ({ entry: document.getElementById("ap-entry").innerText,
   kyou: document.getElementById("page-kyou").classList.contains("active") }));
-ok("★途中でやめてきょう画面に戻れる。入口は「つづきから・のこり17問」", back.kyou && /つづきから/.test(back.entry) && /のこり 17問/.test(back.entry), back.entry.slice(0, 60));
+ok("★途中でやめてきょう画面に戻れる。入口は「つづきから・のこり18問」", back.kyou && /つづきから/.test(back.entry) && /のこり 18問/.test(back.entry), back.entry.slice(0, 60));
 await page.evaluate(() => openApp());
 const re = await page.evaluate(() => document.querySelector("#ap-box .ap-top").innerText);
-ok("★もう一度開くと、続きから（4問目）", re.includes("4 / 20"), re);
-for (let i = 3; i < 20; i++) log.push(await answerCurrent(i % 3 !== 0));   // 3問に1問はまちがえる
+ok("★もう一度開くと、続きから（4問目）", re.includes("4 / 21"), re);
+// ★おわりまで答える。3問に1問はまちがえるので、まちがえた分は列にもどって出し直しになる。
+//   「20回」ではなく **列が尽きるまで** 回す（出し直しで列が伸びるため）。i は通しの番号（まちがえる位置は変えない）
+let rtGuard = 0;
+while (await page.evaluate(() => APP_S.pos < APP_S.ids.length) && rtGuard++ < 200) {
+  log.push(await answerCurrent(log.length % 3 !== 0));
+}
 const yomiLog = log.filter(l => l.f === "yomi");
 ok("★読み: 答えを見る前に「読めた／読めなかった」は押せない（ボタンが無い）", yomiLog.length > 0 && yomiLog.every(l => !l.hadSelfBeforeShow));
 ok("★読み: 「こたえを見る」で答えが出る", yomiLog.every(l => l.answerShown));
@@ -616,7 +626,7 @@ ok("★アプリ: 〈例〉が2つある組では、出している問の range 
 ok("★音訓: 問題の字にルビ（読み）が出ている", onLog.every(l => /よみ/.test(l.before)));
 ok("画数: 数字（全角でも）で答えられる", log.filter(l => l.f === "kakusu").every(l => l.res));
 const end1 = await page.evaluate(() => document.getElementById("ap-box").innerText);
-ok("20問おわると「おわり」になる", /おわり/.test(end1), end1.slice(0, 40));
+ok("★やり直しもふくめて ぜんぶ おわると「おわり」になる", /おわり/.test(end1), end1.slice(0, 40));
 ok("★おわりの画面に正解数を出さない", !/\d+\s*問/.test(end1) && !/せいかい\s*\d/.test(end1), end1.slice(0, 80));
 ok("まちがえた問題があった日は「あした もう一回出るよ」", /あした もう一回出るよ/.test(end1), end1.slice(0, 80));
 const en2 = await page.evaluate(() => { closeApp(); return document.getElementById("ap-entry").innerText; });
@@ -624,7 +634,9 @@ ok("おわったあとの入口は「おわり」と出る", /おわり/.test(en
 ok("★「書ける」「あやしい」は出ていない", !log.some(l => /書ける|あやしい/.test(l.before + l.fb)));
 
 // 2日目
-const xIds = log.filter(l => l.res && !l.res.ok).map(l => l.id), oIds = log.filter(l => l.res && l.res.ok).map(l => l.id);
+// ★出し直しで同じ id が log に何度も出る。「〇の問題」は **一度も✕になっていない** ものだけ（2026-09-12）
+const xIds = [...new Set(log.filter(l => l.res && !l.res.ok).map(l => l.id))];
+const oIds = [...new Set(log.filter(l => l.res && l.res.ok).map(l => l.id))].filter(id => !xIds.includes(id));
 const a2 = await page.evaluate((xIds) => {
   const before = {}; xIds.forEach(id => { before[id] = (APP_S.ord[id] || []).join(""); });
   window.__day = "2099-07-02"; renderAll();
@@ -924,6 +936,94 @@ ok("★✕が選んだ数より多い日は、✕だけでその数になる（5
 const gen3 = await page.evaluate(() => window.__genCalls.slice());
 ok("★アプリの問題でも、問題生成が1回も呼ばれていない", gen3.length === 0, gen3.join(","));
 
+console.log("");
+console.log("=== 正解するまで出し直す（2026-09-12 ユーザー指示）===");
+// ★上限なし。正解するまで出し直す。記録に入れるのは1回目だけ（estimate が甘くならないように）
+await page.evaluate(() => {
+  BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+  window.__day = "2099-11-01"; APP_S = null; todayApp(); openApp();
+});
+const rt0 = await page.evaluate(() => ({ n: APP_S.ids.length, id0: APP_S.ids[0] }));
+const rtW1 = await answerCurrent(false);              // 1問目をわざと まちがえる
+const rt1 = await page.evaluate(() => {
+  const s = APP_S, id = s.ids[0];
+  return { n: s.ids.length, at: s.ids.indexOf(id, 1),
+           kstat: JSON.stringify(KSTATS), item: JSON.stringify(ITEMS[id] || null),
+           logN: LOG.filter(e => e.id === id).length };
+});
+ok("★まちがえた問題は、もう一度ならぶ", rt1.n === rt0.n + 1 && rt1.at > 0, `${rt0.n}→${rt1.n} 位置${rt1.at}`);
+ok("★2問はさんでから戻す（すぐ次には出さない）", rt1.at === 3, `位置 ${rt1.at}`);
+ok("★まちがえたら「このあと もう一回 出るよ」と出る", /もう一回 出るよ/.test(rtW1.fb), rtW1.fb.slice(0, 60));
+
+await answerCurrent(true); await answerCurrent(true);   // あいだの2問
+const rt2 = await page.evaluate(() => {
+  const s = APP_S, box = document.getElementById("ap-box");
+  return { cur: s.ids[s.pos], pos: s.pos, hasNext: /つぎへ/.test(box.innerText), res: !!s.res[s.ids[s.pos]],
+           kstat: JSON.stringify(KSTATS) };
+});
+ok("★3問目のあとに、まちがえた問題が また出る", rt2.cur === rt0.id0, `${rt2.cur} / pos ${rt2.pos}`);
+ok("★やり直しの回は、前の答えが消えて もう一度 答えられる", !rt2.res && !rt2.hasNext);
+
+const rtW2 = await answerCurrent(true);                 // やり直しで正解
+const rt3 = await page.evaluate(() => {
+  const id = APP_S.ids[0];
+  return { kstat: JSON.stringify(KSTATS), item: JSON.stringify(ITEMS[id] || null),
+           logN: LOG.filter(e => e.id === id).length, last: (ITEMS[id] || {}).last };
+});
+// ⚠️ あいだの2問でも KSTATS は動くので、**やり直しの直前**と比べること（rt1 と比べると必ず落ちる）
+ok("★やり直して正解しても、字ごとの記録（estimate の元）は動かない", rt3.kstat === rt2.kstat);
+ok("★やり直して正解しても、問題の記録は 1回目のまま", rt3.item === rt1.item);
+ok("★やり直しは「やった問題」の一覧に二重に出ない（LOG は1回目だけ）", rt3.logN === 1 && rt1.logN === 1, String(rt3.logN));
+ok("★1回目が✕なら last は \"x\" のまま ＝ あしたも出る", rt3.last === "x", String(rt3.last));
+ok("★やり直しで正解したら「（2回目）」と「あしたも もう一回 出るよ」", /2回目/.test(rtW2.fb) && /あしたも/.test(rtW2.fb), rtW2.fb.slice(0, 70));
+
+// ★上限なし: 4回つづけて まちがえても、そのつど また出る
+const cap = await page.evaluate(() => ({ n: APP_S.ids.length, id: APP_S.ids[APP_S.pos] }));
+let grew = 0;
+for (let i = 0; i < 4; i++) {
+  const before = await page.evaluate(() => APP_S.ids.length);
+  await answerCurrent(false);
+  const after = await page.evaluate(() => APP_S.ids.length);
+  if (after === before + 1) grew++;
+  // はさんだ2問を片づけて、やり直しの回まで進む
+  await answerCurrent(true); await answerCurrent(true);
+}
+ok("★上限なし: 4回つづけて まちがえても、そのつど また出る（3回で打ち切らない）", grew === 4, `${grew}/4`);
+
+// ★読み: 2回目に「こたえ」が最初から見えていないか（ここが壊れていると出し直す意味がない）
+const ym = await page.evaluate(() => {
+  BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = (id) => id === "dr_01";   // 読みだけ
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; APP_S = null;
+  window.__day = "2099-11-02"; todayApp(); openApp();
+  const s = APP_S, id = s.ids[0], it = appIndex()[id].it, ansText = it.answers[0].text;
+  const box = () => document.getElementById("ap-box");
+  const r = { f: itemFieldOf(it, appIndex()[id].g) };
+  // 1回目: こたえを見る →「読めなかった」
+  r.shownBtn1 = !!box().querySelector('[data-act="show"]');
+  box().querySelector('[data-act="show"]').click();
+  box().querySelector('[data-act="yomi-x"]').click();
+  box().querySelector('[data-act="next"]').click();
+  // あいだの2問
+  for (let i = 0; i < 2; i++) {
+    box().querySelector('[data-act="show"]').click();
+    box().querySelector('[data-act="yomi-o"]').click();
+    box().querySelector('[data-act="next"]').click();
+  }
+  // 2回目（やり直しの回）
+  r.sameItem = s.ids[s.pos] === id;
+  r.text2 = box().innerText;
+  r.shownBtn2 = !!box().querySelector('[data-act="show"]');
+  r.answerHidden = !r.text2.includes(ansText);
+  r.noSelfBtn = !box().querySelector('[data-act="yomi-o"]');
+  return r;
+});
+ok("★読み: やり直しの回も、同じ問題が出る", ym.sameItem);
+ok("★読み: やり直しの回は「こたえを見る」から始まる（答えが最初から見えていない）",
+   ym.shownBtn2 && ym.answerHidden, ym.text2.slice(0, 70));
+ok("★読み: 答えを見る前に「読めた」は押せない（やり直しの回でも）", ym.noSelfBtn);
+console.log("");
+
 if (SHOT) {
   const out = path.join(os.tmpdir(), "kanken_shot");
   await page.setViewportSize({ width: 420, height: 900 });
@@ -961,5 +1061,50 @@ if (SHOT) {
 }
 
 console.log(`\n${pass}/${pass + fail} 通過`);
+if (SHOT_RETRY) {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "kanken-retry-"));
+  await page.setViewportSize({ width: 420, height: 900 });
+  const shot = async (name) => { await page.screenshot({ path: path.join(out, name + ".png"), fullPage: true }); };
+  await page.evaluate(() => {
+    BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = (id) => id === "dr_01";   // 読みだけにする
+    RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+    window.__day = "2099-11-03"; todayApp(); openApp(); renderApp();
+  });
+  await shot("1_1問目");
+  await page.evaluate(() => document.querySelector('#ap-box [data-act="show"]').click());
+  await shot("2_こたえを見た");
+  await page.evaluate(() => document.querySelector('#ap-box [data-act="yomi-x"]').click());
+  await shot("3_読めなかった");
+  await page.evaluate(() => {
+    const b = () => document.getElementById("ap-box");
+    b().querySelector('[data-act="next"]').click();
+    for (let i = 0; i < 2; i++) {
+      b().querySelector('[data-act="show"]').click();
+      b().querySelector('[data-act="yomi-o"]').click();
+      b().querySelector('[data-act="next"]').click();
+    }
+  });
+  await shot("4_やり直しの回");
+  await page.evaluate(() => {
+    const b = () => document.getElementById("ap-box");
+    b().querySelector('[data-act="show"]').click();
+    b().querySelector('[data-act="yomi-o"]').click();
+  });
+  await shot("5_やり直して正解");
+  await page.evaluate(() => {
+    const b = () => document.getElementById("ap-box");
+    let g = 0;
+    while (APP_S.pos < APP_S.ids.length && g++ < 200) {
+      const nx = b().querySelector('[data-act="next"]');
+      if (nx) { nx.click(); continue; }
+      const sh = b().querySelector('[data-act="show"]'); if (sh) { sh.click(); continue; }
+      b().querySelector('[data-act="yomi-o"]').click();
+    }
+    renderApp();
+  });
+  await shot("6_おわり");
+  console.log("出し直しの撮影: " + out);
+}
+
 await browser.close(); server.close();
 process.exit(fail ? 1 : 0);

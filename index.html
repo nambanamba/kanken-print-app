@@ -937,7 +937,10 @@ function setAppCount(n){
   if(APP_S && APP_S.date===todayStr() && !Object.keys(APP_S.res||{}).length){ APP_S=null; save(K_APP,APP_S); }
   renderAll();
 }
-var APP_VERSION = 2;   // 2: 分野ごとの上限を入れた（2026-09-11）。前の版の未回答の分は組み直す
+var APP_VERSION = 3;   // 3: 正解するまで出し直す（2026-09-12）。2: 分野ごとの上限（2026-09-11）。前の版の未回答の分は組み直す
+/* ★やり直しのとき、何問はさんでから戻すか（直後だと答えを覚えているだけで通ってしまう）。
+   3 なら「2問はさんで3問目」。残りがそれより少ない日は、列の最後に付く（はさむ問題がそもそも無いため） */
+var APP_RETRY_GAP = 3;
 var K_APP="kanken7_app_v1";
 var APP_S=load(K_APP,null);
 
@@ -1021,7 +1024,7 @@ function todayApp(){
       ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);   // ★前回と同じ並びにしない
     }
   });
-  APP_S={ v:APP_VERSION, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{} };
+  APP_S={ v:APP_VERSION, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{}, tries:{} };
   save(K_APP,APP_S);
   return APP_S;
 }
@@ -1201,9 +1204,22 @@ function figZoom(src){
 }
 
 /* のこり何問（まだ答えていない問題の数。照合が取り下げられた問題は数えない） */
+/* ★のこり問数。**位置で数える**（同じ id がやり直しで2回以上並ぶため、id で数えると数え落とす）。
+   いまの位置は「まだ答えていなければ1問」、その先は全部これからやる分。 */
 function appLeft(s){
-  var idx=appIndex();
-  return s.ids.filter(function(id){ return idx[id] && !s.res[id]; }).length;
+  var idx=appIndex(), n=0;
+  for(var i=s.pos||0; i<s.ids.length; i++){
+    var id=s.ids[i]; if(!idx[id]) continue;
+    if(i>s.pos || !s.res[id]) n++;
+  }
+  return n;
+}
+/* ★やり直しの回に入ったら、前の回の答えを消して、もう一度答えられるようにする。
+   見分け方は「同じ id が、いまより前にも並んでいるか」。**splice で位置がずれても効く**。
+   ⚠️ 位置を進めた瞬間に1回だけ呼ぶこと。描画のたびに呼ぶと、答えた直後に消えて結果が出ない。 */
+function appEnterPos(s){
+  var id=s.ids[s.pos];
+  if(id && s.ids.indexOf(id) < s.pos){ delete s.res[id]; delete s.step[id]; }
 }
 /* きょう画面の入口。「のこり何問」を出すボタンだけ */
 function renderAppEntry(){
@@ -1246,12 +1262,18 @@ function renderApp(){
   if(!s){ box.innerHTML='<span class="muted">きょうアプリでやる問題はありません（照合が済んだ単元だけ出しています）。</span>'; return; }
   var idx=appIndex();
   // 途中で照合が取り下げられた問題は飛ばす
+  var posWas=s.pos;
   while(s.pos<s.ids.length && !idx[s.ids[s.pos]]) s.pos++;
+  if(s.pos!==posWas) appEnterPos(s);   // 飛ばした先がやり直しの回のことがある
   var note=document.getElementById("ap-resume-note");
   if(note) note.style.display=(s.pos>=s.ids.length)?"none":"";
   if(s.pos>=s.ids.length){
     // ★正解数は出さない（司令塔・ユーザー。1問ずつ〇✕は出ているので本人は分かっている。「よくがんばったね」と同じ考え方）
-    var anyX=s.ids.some(function(id){ return s.res[id] && !s.res[id].ok; });
+    // ★「まちがえた」は **1回目でまちがえたか** で見る（2026-09-12）。
+    //   ⚠️ 出し直しで最後は必ず〇になるので、res だけ見ると「あした もう一回出るよ」が出なくなる。
+    //   tries>1 ＝ 1回目が✕だった問題。ITEMS[id].last も "x" のままなので、ほんとうに あした出る。
+    var tries0=s.tries||{};
+    var anyX=s.ids.some(function(id){ return tries0[id]>1 || (s.res[id] && !s.res[id].ok); });
     box.innerHTML='<div style="text-align:center;padding:18px 0">'
       +'<div style="font-size:1.6rem;font-weight:800;color:var(--good)">おわり！</div>'
       +'<div style="margin-top:8px">よくがんばったね。</div>'
@@ -1265,7 +1287,8 @@ function renderApp(){
   var st=s.step[id]||{}, res=s.res[id];
   var left=appLeft(s);
   // ★進み具合は上に大きく。「あと何問」が常に見えること（ユーザー指示）
-  var dots=""; for(var di=0; di<s.ids.length; di++) dots+='<i class="'+(s.res[s.ids[di]]?"on":"")+'"></i>';
+  // ★ドットは**位置**で塗る（やり直しで同じ id が並ぶため、res で塗ると済んだ分まで消える）
+  var dots=""; for(var di=0; di<s.ids.length; di++) dots+='<i class="'+(di<s.pos?"on":"")+'"></i>';
   var html='<div class="ap-top"><span class="ap-count">'+(s.pos+1)+' / '+s.ids.length+'</span>'
     +'<span class="ap-left">のこり <b>'+left+'</b> 問</span></div>'
     +'<div class="ky-dots ap-dots">'+dots+'</div>'
@@ -1327,7 +1350,12 @@ function renderApp(){
       var ci=ch2.map(choiceBody).indexOf(choiceBody(a.text));
       return ci>=0 ? appChoiceLabel(f,ch2,ord2,ci,x.g) : choiceBody(a.text);
     }).join("・");
-    html+='<div class="ky-fb '+(res.ok?"ok":"ng")+'">'+(res.ok?"◯ せいかい！":"✕ こたえは "+right)+'</div>'
+    var nth2=res.nth||1;
+    html+='<div class="ky-fb '+(res.ok?"ok":"ng")+'">'
+      +(res.ok?("◯ せいかい！"+(nth2>1?"（"+nth2+"回目）":"")):("✕ こたえは "+right))+'</div>'
+      // ★正解するまで出し直す。いまの気持ちが切れないよう、次にどうなるかを必ず書く
+      +(!res.ok ? '<div class="muted" style="font-size:.8rem;margin-top:4px">このあと もう一回 出るよ。こたえを おぼえてね。</div>'
+        : (nth2>1 ? '<div class="muted" style="font-size:.8rem;margin-top:4px">あしたも もう一回 出るよ。</div>' : ''))
       +'<button class="btn" data-act="next">つぎへ</button>';
   }
   box.innerHTML=html;
@@ -1343,7 +1371,7 @@ function appAct(act, ci){
   var idx=appIndex(), id=s.ids[s.pos], x=idx[id]; if(!x) return;
   var it=x.it, f=itemFieldOf(it,x.g), ans=it.answers||[];
   var st=s.step[id]||(s.step[id]={});
-  if(act==="next"){ s.pos++; save(K_APP,s); renderApp(); return; }
+  if(act==="next"){ s.pos++; appEnterPos(s); save(K_APP,s); renderApp(); return; }
   if(s.res[id]) return;   // 1問に1回だけ
   var perKanji=null;      // 字ごとの正誤（じゅく語作りは空らんごと）
   if(act==="show"){ st.shown=true; save(K_APP,s); renderApp(); return; }
@@ -1367,8 +1395,21 @@ function appAct(act, ci){
   }
   if(!perKanji) return;
   var allOk=perKanji.every(function(v){return v;}) && perKanji.length>0;
-  s.res[id]={ ok:allOk };
-  appRecord(id, f, it.kanji||[], perKanji, allOk, s.ord[id]);
+  /* ★正解するまで出し直す（2026-09-12 ユーザー指示「正解を選ぶまで繰り返し出してください」）。
+     ・記録（KSTATS・ITEMS・WEAK・LOG）に入れるのは **1回目の答えだけ**。
+       ⚠️ 2回目以降も入れると、同じ字に ✕ と 〇 が両方積まれて estimate() が実力より甘く出る。
+     ・1回目が ✕ なら ITEMS[id].last は "x" のまま ＝ **あしたも出る**（「今日一回でできなかったのは明日も」）。
+     ・やり直しは LOG に入れない。LOG は「やった問題の一覧と〇✕の訂正」の台帳で、
+       同じ問題が何行も並ぶと、訂正のたびに KSTATS を二重に動かしてしまう（toggleLogMark）。 */
+  s.tries=s.tries||{};
+  s.tries[id]=(s.tries[id]||0)+1;
+  var nth=s.tries[id];
+  s.res[id]={ ok:allOk, nth:nth };
+  if(nth===1) appRecord(id, f, it.kanji||[], perKanji, allOk, s.ord[id]);
+  if(!allOk){
+    // ★上限なし。正解するまで戻す（ユーザーが明示的に上限を外した）
+    s.ids.splice(Math.min(s.pos+APP_RETRY_GAP, s.ids.length), 0, id);
+  }
   save(K_APP,s);
   renderApp();
 }
@@ -1506,7 +1547,7 @@ function moreApp(){
     var f=itemFieldOf(x.it,x.g), ch=appChoicesOf(x.it,f);
     if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0 && ch.length>1) ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);
   });
-  APP_S={ v:APP_VERSION, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{}, extra:(s.extra||0)+1 };
+  APP_S={ v:APP_VERSION, date:todayStr(), ids:ids, pos:0, ord:ord, res:{}, step:{}, tries:{}, extra:(s.extra||0)+1 };
   save(K_APP,APP_S);
   openApp();
 }
