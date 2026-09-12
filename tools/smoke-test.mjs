@@ -132,7 +132,7 @@ console.log("\n=== 1日目の紙 ===");
 const d1 = await page.evaluate(() => {
   printSessionPractice();
   const region = document.getElementById("print-region");
-  const trs = [...region.querySelectorAll(".p-body tr")];
+  const trs = [...region.querySelectorAll(".p-sheet:not(.p-ansheet) .p-body tr")];   // ★答えの紙(.p-ansheet)は数えない
   const blocks = buildPaperBlocks();
   const rows = blocks.flatMap(b => b.rows);
   return {
@@ -292,29 +292,35 @@ console.log("\n=== 紙のはみ出し（★本物と同じくらい長い文で�
 // ⚠️ 2026-09-11、ダミーの短い文ではテストが通り、本物の紙は折り線を越えていた。
 //    長さは本物の平文から測った値に合わせる（書き取り 中央15字・最大19字／部首 最大23字・答え4つ／注意 最大35字）。
 //    ★測り方はアプリの sheetsFit とは別（D-13）: 印刷用CSSで組んだ紙の、行の下端と折り線の位置を比べる。
-async function measurePaper(label, prep) {
-  await page.evaluate(prep);
+async function measurePaper(label, prep, arg) {
+  await page.evaluate(prep, arg);
   await page.evaluate(() => printSessionPractice());
   await page.emulateMedia({ media: "print" });
   await page.setViewportSize({ width: 794, height: 1123 });
+  // ★2026-09-12: 答えを別紙にしたので、もんだいの紙に折り線も答え欄も無い。
+  //   「折り線を越えていないか」は成立しないので、**「紙の中に収まっているか」**に書き換えた。
+  //   ⚠️ ゆるめたのではない: 折り線が無い＝「折っても答えが見える」という失敗そのものが起きなくなった。
+  //      代わりに「もんだいの紙に答えが1文字も載っていないこと」を新しく固定している（下の ok）。
   const m = await page.evaluate(() => {
-    const sheets = [...document.querySelectorAll("#print-region .p-sheet")];
+    const sheets = [...document.querySelectorAll("#print-region .p-sheet:not(.p-ansheet)")];
     return sheets.map(s => {
       const top = s.getBoundingClientRect().top;
-      const fold = s.querySelector(".p-fold").getBoundingClientRect().top - top;
+      const body = s.querySelector(".p-body");
+      const limit = body.getBoundingClientRect().bottom - top;
       const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool, .p-body .p-example")]
         .map(e => e.getBoundingClientRect().bottom - top));
-      const key = s.querySelector(".p-key");
       const rows = s.querySelectorAll(".p-body tr").length;
       const cites = s.querySelectorAll(".p-body .p-cite").length;
-      return { h: Math.round(s.getBoundingClientRect().height), fold: Math.round(fold), bottom: Math.round(bottom),
-               keyOver: key.scrollHeight - key.clientHeight, rows, cites };
+      return { h: Math.round(s.getBoundingClientRect().height), fold: Math.round(limit), bottom: Math.round(bottom),
+               keyOver: (s.querySelector(".p-key") ? 1 : 0), rows, cites };
     });
   });
   await page.emulateMedia({ media: null });
   const total = m.reduce((a, s) => a + s.rows, 0);
-  ok(`${label}: 問題が折り線より上に収まっている（${m.length}枚・${total}問）`,
-     m.every(s => s.bottom <= s.fold), m.map(s => `下端${s.bottom}/折り線${s.fold}`).join(" "));
+  ok(`${label}: 問題が紙に収まっている（${m.length}枚・${total}問）`,
+     m.every(s => s.bottom <= s.fold), m.map(s => `下端${s.bottom}/紙の下端${s.fold}`).join(" "));
+  // ★もんだいの紙に答えが1文字も載っていない（別紙にした意味そのもの）
+  ok(`${label}: ★もんだいの紙に答え欄が無い`, m.every(s => s.keyOver === 0));
   ok(`${label}: 1枚の高さがA4のまま（重なっていない）`, m.every(s => Math.abs(s.h - 1123) <= 2), m.map(s => s.h).join(","));
   ok(`${label}: 答えが答えの欄からはみ出していない`, m.every(s => s.keyOver <= 1), m.map(s => s.keyOver).join(","));
   ok(`${label}: どの行にも出典がある`, m.every(s => s.cites === s.rows), m.map(s => `${s.cites}/${s.rows}`).join(" "));
@@ -340,6 +346,7 @@ await page.evaluate(() => {
     mkL("dr_10", "dr", [10], 15, "kaki", 19, 1, 0), mkL("dr_25", "dr", [25], 10, "bushu", 23, 4, 27),
     mkL("tn_08", "tn", [16, 17], 40, "kaki", 19, 1, 35)
   ];
+  window.__mkL = mkL;   // ★最悪ケースの検査で使い回す
   window.isVerifiedUnit = () => true;
 });
 await measurePaper("きょうの20問（書き取り16＋部首4）", () => {
@@ -376,7 +383,7 @@ const gv = await page.evaluate(() => {
   BOOK_UNITS = [u]; window.isVerifiedUnit = () => true; ITEMS = {}; SESSION = null; window.__day = "2099-06-10";
   printSessionPractice();
   const r = document.getElementById("print-region");
-  return { given: [...r.querySelectorAll(".p-body tr .p-given")].map(e => e.textContent),   // 問題の行の○だけ（〈例〉の○は数えない）
+  return { given: [...r.querySelectorAll(".p-sheet:not(.p-ansheet) .p-body tr .p-given")].map(e => e.textContent),   // 問題の行の○だけ（〈例〉の○は数えない）
            want: u.groups.flatMap(g => g.items.map(i => i.givenKanji)),
            cites: [...r.querySelectorAll(".p-cite")].map(e => e.textContent),
            examples: [...r.querySelectorAll(".p-example")].map(e => e.textContent) };
@@ -399,7 +406,7 @@ for (const every of [1, 2, 3, 4]) {
     const composed = composeSheet().length;
     printSessionPractice();
     const r = document.getElementById("print-region");
-    const perSheet = [...r.querySelectorAll(".p-sheet")].map(s => s.querySelectorAll(".p-body tr").length);
+    const perSheet = [...r.querySelectorAll(".p-sheet:not(.p-ansheet)")].map(s => s.querySelectorAll(".p-body tr").length);
     const slotHs = [...new Set([...r.querySelectorAll(".p-slot")].map(e => e.style.height))];
     // 最後の1枚以外は「入るだけ詰まっている」か: その枚に次の1問を足すと入らないこと（測って確かめる）
     const blocks = buildPaperBlocks(); let from = 0, packedFull = true;
@@ -430,7 +437,7 @@ const five = await page.evaluate(() => {
   BOOK_UNITS = base.concat([mkF("dr_26", "onaji", 8), mkF("dr_23", "okuri", 8), mkF("dr_21", "taigi", 8)]);
   window.isVerifiedUnit = () => true; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; window.__day = "2099-06-20";
   const keepFit = window.sheetsFit;
-  window.sheetsFit = (region) => region.querySelectorAll(".p-sheet").length === 1 && region.querySelectorAll(".p-body tr").length <= 17;
+  window.sheetsFit = (region) => region.querySelectorAll(".p-sheet:not(.p-ansheet)").length === 1 && region.querySelectorAll(".p-sheet:not(.p-ansheet) .p-body tr").length <= 17;
   const items = todaySheetItems();
   window.sheetsFit = keepFit;
   const c = {}; items.forEach(x => { const f = itemFieldOf(x.it, x.g); c[f] = (c[f] || 0) + 1; });
@@ -459,6 +466,38 @@ const rebuild = await page.evaluate(() => {
 ok("★前の版の、まだ記録していないきょうの紙は作り直す（いまの決まりで組んだ数になる）", rebuild.a === rebuild.fresh && rebuild.a !== 12, `${rebuild.a} / ${rebuild.fresh}`);
 ok("前の版でも、記録ずみのきょうの紙は作り直さない", rebuild.b === 12, String(rebuild.b));
 
+console.log("");
+console.log("=== ★最悪ケース（本物より厳しいダミー）で 5/13/20/30/40問 ===");
+/* ★なぜ要るか（2026-09-12）
+   本物のデータでの検査（tools/check_real_paper.mjs ＝ 配信の関門⑤）は KANKEN_PASS が要る。
+   ユーザーが PC を使えず設定できないため、**本物では測れていない。**
+   → 代わりに **本物より厳しい長さ** のダミーで測る。
+   ★成り立つ理屈: 行の高さは字数に対して**単調に増える**（字が増えれば折り返しは増えるか同じ）。
+     だから「本物より長いもので収まる」なら「本物でも収まる」。
+   ★本物の実測値（上の mkL の説明にある記録）: 書き取り 最大19字／部首 最大23字・答え4つ／注意 最大35字。
+     ここは **48字／答え6つ／注意60字** で組む。どれも本物の2倍前後。
+   ⚠️ **これは「本物の紙を見た」ことにはならない。**PC が空いたら本物で1枚出して見てもらうこと。 */
+await page.evaluate(() => {
+  const mkL = window.__mkL;
+  window.__worstUnits = [
+    mkL("dr_31", "dr", [31], 20, "kaki",  48, 1, 60),
+    mkL("dr_32", "dr", [32], 20, "bushu", 48, 6, 60),
+    mkL("dr_33", "dr", [33], 20, "onaji", 48, 2, 60),
+    mkL("dr_34", "dr", [34], 20, "taigi", 48, 2, 60),
+  ];
+});
+for (const wn of [5, 13, 20, 30, 40]) {
+  await measurePaper("★最悪ケース " + wn + "問（48字・答え6つ・注意60字）", (n) => {
+    BOOK_UNITS = window.__worstUnits; window.isVerifiedUnit = () => true;
+    RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
+    window.__day = "2099-08-" + String(n).padStart(2, "0");
+    const all = bookAllItems(), per = Math.ceil(n / 4), ids = [];
+    ["dr_31", "dr_32", "dr_33", "dr_34"].forEach(u => {
+      all.filter(x => x.u.unitId === u).slice(0, per).forEach(x => { if (ids.length < n) ids.push(x.it.id); });
+    });
+    SESSION = { v: SHEET_VERSION, date: todayStr(), ids: ids, results: {}, saved: false };
+  }, wn);
+}
 console.log("\n=== アプリでやる問題（読み・記号・画数） ===");
 // ダミー: 読み15・漢字えらび10・じゅく語作り10・音訓10・画数10（すべて本の形式どおりの形）
 await page.evaluate(() => {

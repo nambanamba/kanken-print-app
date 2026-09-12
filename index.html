@@ -230,6 +230,12 @@
     .p-slots{display:flex;gap:1mm;align-items:flex-start;}
     .p-slot{flex:1 1 0;border:1px solid #999;position:relative;min-width:8mm;}
     .p-slotlab{position:absolute;top:0.3mm;left:0.6mm;font-size:6.5pt;color:#888;}
+    /* ★答えとなおしの紙（別紙・2026-09-12 ユーザー指示「答えと直しようのなぞりの紙を別紙に」）。
+       なぞる字は、もとからある `.p-model`（22pt・薄い灰色 #c9c9c9）と同じ濃さ。**新しく作らない。**
+       ⚠️ 濃くすると「なぞり」ではなく「答えが印刷されているだけ」になる。薄さがこの紙の要。 */
+    .p-trace{display:flex;align-items:center;justify-content:center;color:#c9c9c9;
+             font-size:19pt;line-height:1;letter-spacing:.05em;height:100%;}
+    .p-fixhead{font-size:8.5pt;color:#333;margin:0 0 2mm;line-height:1.5;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
     .p-key{flex:0 0 auto;height:38mm;overflow:hidden;box-sizing:border-box;}
@@ -2177,16 +2183,23 @@ function printSessionPractice(){
   if(daily){
     // ★毎日の紙は「入るだけ詰めて、次の枚へ」。問数でそろえて割ると、1枚目の半分が空く（本物で実測）
     var ranges=packDaily(blocks, total, region);
+    // ★答えは別紙。もんだいの紙を全部出したあとに、同じ枚数ぶんの「答えとなおし」を続ける
     region.innerHTML=ranges.map(function(r,i){
       return renderSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length);
-    }).join("");
+    }).join("")
+      + (SEPARATE_ANS ? ranges.map(function(r,i){
+          return renderAnswerSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length, ansLabel(i, ranges.length));
+        }).join("") : "");
     BOX_OVERRIDE=null;
     window.print();
     return;
   }
   for(var N=1; N<=total; N++){
     var sheets=splitSheets(blocks, Math.min(SHEET_MAX, Math.ceil(total/N)));
-    region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
+    region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("")
+      + (SEPARATE_ANS ? sheets.map(function(bs,i){
+          return renderAnswerSheet(bs, i+1, sheets.length, ansLabel(i, sheets.length));
+        }).join("") : "");
     if(sheetsFit(region)) break;
     // 道具（単元ごとの紙）は、2枚以上に分けるときマスの高さを枚ごとの行数で決め直す。毎日の紙は大きいまま
     if(!daily) BOX_OVERRIDE=null;
@@ -2311,6 +2324,51 @@ function splitSheets(blocks, max){
   return sheets;
 }
 
+/* ★答えは別紙にする（2026-09-12 ユーザー指示）。false に戻すと、もとの「折り線＋答え欄」に戻る */
+var SEPARATE_ANS = true;
+
+/* ★どのもんだいの紙の分かを示す見出し。
+   もとは「そのページの答えはそのページの下」で自明だった。別紙にすると、その自明さが失われる */
+function ansLabel(i, n){
+  return n>1 ? ("もんだいの紙 "+(i+1)+"まいめ の分") : "きょうの もんだいの分";
+}
+
+/* ★「答えとなおし」の紙（別紙）。
+   ・1問ごとに **なぞる字（薄い）** と **自分で書くマス（空）** を並べる
+     （ユーザー指示 2026-09-12「なぞり書き、戻してください。なぞりと普通に書く欄で」）
+   ・★**全問ぶん出す。**紙は答える前に刷るので、印刷の時点では何を間違えるか分からない。
+     間違えた番号だけ、お子さんがなぞる（丸付けのあと）
+   ・★どの問題の紙の分かが分かるよう、見出しに「◯まいめの分」と書く
+     （もとは「そのページの答えはそのページの下」で自明だった。別紙にすると、その自明さが失われる）
+   ⚠️ なぞりは 2026-09-10 に**お子さん本人の希望で廃止**されたもの。
+      2026-09-12 にユーザーの明示の承認で戻した。経緯は 作業メモ.md。**理由を消さないこと。** */
+function renderAnswerSheet(blocks, page, pages, forLabel){
+  var rowsPerCol=blocks.reduce(function(a,b){ return a+Math.ceil(b.rows.length/2); },0);
+  var boxH=boxHeightFor(rowsPerCol)+"mm";
+  var tight=(rowsPerCol>15)?" p-tight":"";
+  var html='<div class="p-sheet p-ansheet"><div class="p-body'+tight+'">'
+    +'<div class="p-title">漢検7級　答えとなおし'
+    +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
+    +'<span class="p-sub">'+forLabel+'　'+todayStr()+'</span></div>'
+    +'<div class="p-fixhead"><b>おうちの方へ</b>　丸つけに使ってください。'
+    +'まちがえた番号だけ、うすい字を <b>なぞって</b>、となりのマスに <b>もう一度じぶんで</b> 書きます。<br>'
+    +'できたかどうかは「きろく」画面で入れてください。できなかった字は、次の日にまた出ます。</div>';
+  blocks.forEach(function(b){
+    html+='<div class="p-sec">'+(b.keyTitle||b.title.replace(/^■\s*/,""))+'</div>';
+    html+=twoCols(b.rows, function(row,i){
+      var no=(b.noBase||0)+i+1;
+      return "<tr><td class='p-no'>"+no+"</td>"
+        +"<td class='p-ansbox' style='padding:0;width:38%'><div class='p-slots'>"
+        +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>なぞる</span>"
+        +"<div class='p-trace'>"+(row.a||"")+"</div></div></div></td>"
+        +"<td class='p-ansbox' style='padding:0;width:38%'><div class='p-slots'>"
+        +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>じぶんで</span></div>"
+        +"</div></td></tr>";
+    });
+  });
+  return html+'</div></div>';
+}
+
 function renderSheet(blocks, page, pages){
 
   // 段あたりの行数から、書くマスの高さを決める
@@ -2394,6 +2452,12 @@ function renderSheet(blocks, page, pages){
     keys.push({ title:b.keyTitle||b.title.replace(/^■\s*/,"").replace(/。$/,""), list:ansList });
   });
   html+='</div>';
+
+  // ★2026-09-12〜: 答えは別紙（SEPARATE_ANS）。折り線と答え欄は問題の紙に出さない。
+  //   ⚠️ もとは「折ると答えが裏になる」仕組みだった（ユーザー指示 2026-09-10）。
+  //      別紙にすると**その保護が「仕組み」から「親が答えの紙を持つ」という運用に変わる。**
+  //      ユーザー了承ずみ（2026-09-12「答えの紙の運用でいいです」）。戻すときはここを false に。
+  if(SEPARATE_ANS) return html+'</div>';   // p-body は直前で閉じているので、ここは p-sheet の分だけ
 
   // ★折り線。子ども向けの文字を入れる（ここで折るのは本人なので）
   html+='<div class="p-fold">✂ ‑ ‑ ‑ ‑ ‑ ここで おってね ‑ ‑ ‑ ‑ ‑ ✂</div>';
