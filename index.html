@@ -501,6 +501,18 @@
       <button class="btn" style="margin-top:10px" onclick="saveUnits()">目次を保存</button>
     </div>
 
+    <!-- ★きょうのアプリの問題の下見（おうちの方）。2026-09-12 ユーザー指示。
+         「きょう」ではなく「せってい」に置く＝お子さんが間違って踏まない場所 -->
+    <div class="card">
+      <h2>👀 きょうのアプリの問題（おうちの方）</h2>
+      <div class="muted" style="margin-bottom:10px;font-size:.82rem">
+        お子さんがやる前に、中身を確かめられます。<b>見ても、出る問題は変わりません。</b><br>
+        「きろく」の<b>「きょうは本でやった」を入れるなら、先にどうぞ</b>（あとから入れても、きょうの分には残ります）。
+      </div>
+      <button class="btn ghost" id="peek-btn" onclick="toggleAppPeek()">きょうの問題を見る</button>
+      <div id="peek-box"></div>
+    </div>
+
     <!-- ★本の問題の合言葉。親御さんが1回だけ入れるもの（お子さんは触らない） -->
     <div class="card">
       <h2>🔑 本の問題（おうちの方）</h2>
@@ -1255,6 +1267,55 @@ function closeApp(){
   window.scrollTo(0,0);
 }
 
+/* ★答えの見せ方を1か所に。**〇✕のあとの画面**と**おうちの方の下見**で、同じ文字列が出るようにするため。
+   ⚠️ 別々に書くと、下見で見た答えと、お子さんの画面に出る答えが食いちがう */
+function appRightText(x, it, f, s){
+  return (it.answers||[]).map(function(a){
+    if(f==="onkun") return onkunLabel(a.text,x.g);
+    var ch2=appChoicesOf(it,f), ord2=(s&&s.ord&&s.ord[it.id])||ch2.map(function(_,i){return i;});
+    var ci=ch2.map(choiceBody).indexOf(choiceBody(a.text));
+    return ci>=0 ? appChoiceLabel(f,ch2,ord2,ci,x.g) : choiceBody(a.text);
+  }).join("・");
+}
+
+/* ★きょうのアプリの問題を、おうちの方が先に見る（2026-09-12 ユーザー指示
+     「今日のアプリの問題を確認できる手段が欲しいです。まだアプリが安定していないので、
+       私が、子供がやる前に確認したいので。」）
+   ⚠️⚠️ **読むだけ。** pos・res・step には**絶対に書かない**。書くとお子さんの問題が消える。
+   ・選択肢は APP_S.ord の並びで出す。**並びまで同じでないと「お子さんが見る画面」の下見にならない**
+   ・その日の分がまだ組まれていなければ、ここで組む（todayApp）。
+     **下見したものが、そのままお子さんに出る**ようにするため（司令塔決定 2026-09-12）。
+     副作用: 「きょうは本でやった」を後から入れても、その字の問題は**きょうの分には残る**
+     → 画面に「本でやった分を入れるなら、先にどうぞ」と書いてある */
+var PEEK_OPEN=false;
+function toggleAppPeek(){ PEEK_OPEN=!PEEK_OPEN; renderAppPeek(); }
+function renderAppPeek(){
+  var box=document.getElementById("peek-box"); if(!box) return;
+  var btn=document.getElementById("peek-btn");
+  if(btn) btn.textContent = PEEK_OPEN ? "とじる" : "きょうの問題を見る";
+  if(!PEEK_OPEN){ box.innerHTML=""; return; }
+  if(!bookLoaded()){ box.innerHTML='<span class="muted">本の問題を読みこむと見られます。</span>'; return; }
+  var s=todayApp();
+  if(!s){ box.innerHTML='<span class="muted">きょうアプリでやる問題はありません（照合が済んだ単元だけ出しています）。</span>'; return; }
+  var idx=appIndex();
+  var rows=s.ids.map(function(id,i){
+    var x=idx[id]; if(!x) return "";
+    var it=x.it, f=itemFieldOf(it,x.g), fd=fieldOf(f);
+    var ch=appChoicesOf(it,f), ord=s.ord[id]||ch.map(function(_,j){ return j; });
+    var choices=(ch.length>1) ? ord.map(function(ci){ return appChoiceLabel(f,ch,ord,ci,x.g); }).join("　") : "";
+    var r=s.res[id], done=r ? (r.ok?"　済 ◯":"　済 ✕") : "";
+    return '<tr><td style="width:2.2em;color:#64748b;vertical-align:top">'+(i+1)+'</td><td>'
+      +'<div style="font-size:.72rem;color:#64748b">'+(fd?fd.name:f)+'　'+bookCite(x)+done+'</div>'
+      +'<div>'+withRuby(bookQuestionText(it), it.ruby)+'</div>'
+      +(choices?'<div style="font-size:.82rem;color:#334155">'+choices+'</div>':'')
+      +'<div style="font-size:.82rem;color:var(--good);font-weight:700">こたえ：'+appRightText(x,it,f,s)+'</div>'
+      +'</td></tr>';
+  }).join("");
+  box.innerHTML='<div class="muted" style="font-size:.78rem;margin:10px 0 6px">全 <b>'+s.ids.length+'</b> 問。'
+    +'選択肢の並びも、お子さんが見るものと同じです。</div>'
+    +'<table>'+rows+'</table>';
+}
+
 function renderApp(){
   var box=document.getElementById("ap-box"); if(!box) return;
   if(!bookLoaded()){ box.innerHTML='<span class="muted">本の問題を読みこむと出ます。</span>'; return; }
@@ -1344,12 +1405,7 @@ function renderApp(){
     }
   }
   if(res){
-    var right=ans.map(function(a){
-      if(f==="onkun") return onkunLabel(a.text,x.g);
-      var ch2=appChoicesOf(it,f), ord2=s.ord[id]||ch2.map(function(_,i){return i;});
-      var ci=ch2.map(choiceBody).indexOf(choiceBody(a.text));
-      return ci>=0 ? appChoiceLabel(f,ch2,ord2,ci,x.g) : choiceBody(a.text);
-    }).join("・");
+    var right=appRightText(x,it,f,s);
     var nth2=res.nth||1;
     html+='<div class="ky-fb '+(res.ok?"ok":"ng")+'">'
       +(res.ok?("◯ せいかい！"+(nth2>1?"（"+nth2+"回目）":"")):("✕ こたえは "+right))+'</div>'
@@ -2820,7 +2876,7 @@ function renderVersion(){
   el.textContent="版 "+d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())
     +"（古いときは、アドレスの最後に ?数字 を付けて開き直してください）";
 }
-function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderLog(); renderSetei(); renderVersion();
+function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderLog(); renderSetei(); renderVersion(); renderAppPeek();
                       renderQuizBox(); renderProgress(); renderKirokuProgress(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */

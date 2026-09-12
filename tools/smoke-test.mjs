@@ -30,6 +30,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SHOT = process.argv.includes("--shot");   // 画面と紙を撮る（出力は一時領域）
 // ★出し直し（正解するまで）の画面を撮る。B-12「実機で、わざと間違えて、目で見る」ため
 const SHOT_RETRY = process.argv.includes("--shot-retry");
+const SHOT_PEEK = process.argv.includes("--shot-peek");   // 下見の画面を撮る
 
 let chromium;
 try { chromium = await getChromium(); }
@@ -1060,7 +1061,96 @@ if (SHOT) {
   console.log("\n撮影: " + out);
 }
 
+console.log("=== きょうのアプリの問題を、おうちの方が先に見る ===");
+const pk = await page.evaluate(() => {
+  BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+  window.__day = "2099-11-10";
+  const r = {};
+  // ① まだ組まれていない時点で下見すると、その場で組まれる（(A) 司令塔決定）
+  r.noneBefore = APP_S === null;
+  PEEK_OPEN = false; toggleAppPeek();
+  r.made = !!APP_S && APP_S.ids.length > 0;
+  r.peekIds = APP_S.ids.slice();
+  // ② 下見したものが、そのままお子さんに出る
+  r.childIds = todayApp().ids.slice();
+  // ③ ★読むだけ: pos・res・step に書いていない
+  r.posAfter = APP_S.pos; r.resAfter = Object.keys(APP_S.res).length; r.stepAfter = Object.keys(APP_S.step).length;
+  // ④ 途中まで進めた状態でも、下見で1文字も動かない
+  openApp();
+  const box = () => document.getElementById("ap-box");
+  for (let i = 0; i < 2; i++) {   // 2問だけ答える（形式によらず「つぎへ」まで）
+    const sh = box().querySelector('[data-act="show"]');
+    if (sh) { sh.click(); box().querySelector('[data-act="yomi-o"]').click(); }
+    else if (document.getElementById("ap-num")) {
+      const id = APP_S.ids[APP_S.pos], it = appIndex()[id].it;
+      document.getElementById("ap-num").value = it.answers[0].text;
+      box().querySelector('[data-act="num"]').click();
+    } else {
+      const id = APP_S.ids[APP_S.pos], x = appIndex()[id], it = x.it, f = itemFieldOf(it, x.g), CH = appChoicesOf(it, f);
+      it.answers.forEach(a => {
+        const btns = [...box().querySelectorAll('[data-act="pick"]')];
+        (btns.find(b => choiceBody(CH[+b.dataset.ci]) === choiceBody(a.text)) || btns[0]).click();
+      });
+    }
+    box().querySelector('[data-act="next"]').click();
+  }
+  const snap = () => JSON.stringify({ pos: APP_S.pos, res: APP_S.res, step: APP_S.step, ids: APP_S.ids, ord: APP_S.ord });
+  const before = snap();
+  PEEK_OPEN = false; toggleAppPeek();   // もう一度ひらく
+  r.untouched = snap() === before;
+  r.peekText = document.getElementById("peek-box").innerText;
+  // ⑤ 済のしるしが出る（読むだけなので「済」と書くだけ）
+  r.hasDone = /済/.test(r.peekText);
+  // ⑥ ★選択肢の並びが、お子さんの画面と同じか（実際にその問題を描いて突き合わせる）
+  const idx = appIndex();
+  const ci = APP_S.ids.findIndex(id => idx[id] && appChoicesOf(idx[id].it, itemFieldOf(idx[id].it, idx[id].g)).length > 1);
+  const cid = APP_S.ids[ci], cx = idx[cid], cf = itemFieldOf(cx.it, cx.g);
+  const keepPos = APP_S.pos;
+  APP_S.pos = ci; delete APP_S.res[cid]; renderApp();
+  r.childBtns = [...document.querySelectorAll('#ap-box [data-act="pick"]')].map(b => b.textContent).join("　");
+  APP_S.pos = keepPos;
+  const rows = [...document.querySelectorAll("#peek-box tr")];
+  r.peekRow = (rows[ci] ? rows[ci].innerText : "");
+  r.orderSame = r.childBtns.length > 0 && r.peekRow.includes(r.childBtns);
+  // ⑦ 正解が出ている
+  r.hasAnswer = /こたえ：/.test(r.peekText);
+  r.field = cf;
+  return r;
+});
+ok("★まだ組まれていない時点で下見すると、その場で組まれる", pk.noneBefore && pk.made);
+ok("★下見したものが、そのままお子さんに出る（同じ問題・同じ順）", pk.peekIds.join() === pk.childIds.join());
+ok("★下見は pos を動かさない・res も step も立てない", pk.posAfter === 0 && pk.resAfter === 0 && pk.stepAfter === 0,
+   `pos=${pk.posAfter} res=${pk.resAfter} step=${pk.stepAfter}`);
+ok("★★途中まで進めた状態で下見しても、pos・res・step・ids・ord が1文字も動かない", pk.untouched);
+ok("★選択肢の並びが、お子さんの画面と同じ", pk.orderSame, `${pk.field}: 画面[${pk.childBtns}] / 下見[${pk.peekRow.replace(/\n/g, " / ")}]`);
+ok("★正解が出ている（解けるかを見るため）", pk.hasAnswer);
+ok("すでに答えた問題は「済」と出るだけ", pk.hasDone);
+console.log("");
+
 console.log(`\n${pass}/${pass + fail} 通過`);
+if (SHOT_PEEK) {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "kanken-peek-"));
+  await page.setViewportSize({ width: 420, height: 1400 });
+  await page.evaluate(() => {
+    BOOK_UNITS = window.__appUnits; window.isVerifiedUnit = (id) => id === "dr_17" || id === "dr_20";
+    RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null;
+    window.__day = "2099-11-11"; SET.appCount = 5; save(K_SET, SET);
+    renderAll();
+  });
+  await page.click('.tab[data-page="setei"]');
+  await page.evaluate(() => { PEEK_OPEN = false; toggleAppPeek();
+    document.getElementById("peek-box").scrollIntoView(); });
+  // ★カードだけ撮る（せってい全体は6000px超で読めない）
+  await page.locator("#peek-box").evaluate(el => el.closest(".card").id = "peek-card");
+  await page.locator("#peek-card").screenshot({ path: path.join(out, "1_下見.png") });
+  // 同じ1問目を、お子さんの画面で出す
+  await page.evaluate(() => { openApp(); renderApp(); });
+  await page.setViewportSize({ width: 420, height: 900 });
+  await page.screenshot({ path: path.join(out, "2_お子さんの画面_1問目.png"), fullPage: true });
+  console.log("下見の撮影: " + out);
+}
+
 if (SHOT_RETRY) {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "kanken-retry-"));
   await page.setViewportSize({ width: 420, height: 900 });
