@@ -311,7 +311,8 @@ async function measurePaper(label, prep, arg) {
         .map(e => e.getBoundingClientRect().bottom - top));
       const rows = s.querySelectorAll(".p-body tr").length;
       const cites = s.querySelectorAll(".p-body .p-cite").length;
-      return { h: Math.round(s.getBoundingClientRect().height), fold: Math.round(limit), bottom: Math.round(bottom),
+      return { nos: [...s.querySelectorAll(".p-body td.p-no")].map(e => +e.textContent),
+               h: Math.round(s.getBoundingClientRect().height), fold: Math.round(limit), bottom: Math.round(bottom),
                keyOver: (s.querySelector(".p-key") ? 1 : 0), rows, cites };
     });
   });
@@ -326,7 +327,16 @@ async function measurePaper(label, prep, arg) {
       const els = [...s.querySelectorAll(".p-body tr, .p-body .p-sec")];
       const bottom = els.length ? Math.max(...els.map(e => e.getBoundingClientRect().bottom - top)) : 0;
       const firstRow = s.querySelector(".p-body tbody tr");
-      return { h: Math.round(s.getBoundingClientRect().height), limit: Math.round(limit), bottom: Math.round(bottom),
+      // ★マスの高さは固定なので、中身があふれても tr は伸びない。字そのものの外形をマスと比べる（2026-09-13 部首の答えで崩れた）
+      const spill = [...s.querySelectorAll(".p-sample, .p-trace")].filter(el => {
+        const slot = el.closest(".p-slot").getBoundingClientRect(), rg = document.createRange();
+        rg.selectNodeContents(el);
+        return [...rg.getClientRects()].some(r => r.width > 0 &&
+          (r.left < slot.left - 1 || r.right > slot.right + 1 || r.top < slot.top - 1 || r.bottom > slot.bottom + 1));
+      }).map(el => el.textContent);
+      return { spill, nos: [...s.querySelectorAll(".p-body td.p-no")].map(e => +e.textContent),
+               label: (s.querySelector(".p-sub") || {}).textContent || "",
+               h: Math.round(s.getBoundingClientRect().height), limit: Math.round(limit), bottom: Math.round(bottom),
                rows: s.querySelectorAll(".p-body tbody tr").length,
                slots: firstRow ? firstRow.querySelectorAll(".p-slot").length : 0,
                labels: firstRow ? [...firstRow.querySelectorAll(".p-slotlab")].map(e => e.textContent).join("/") : "",
@@ -341,10 +351,21 @@ async function measurePaper(label, prep, arg) {
   ok(`${label}: ★答えの紙は1問3マス（おてほん／なぞる／じぶんで）`,
      am.every(s => s.slots === 3 && s.labels === "おてほん/なぞる/じぶんで"),
      am.map(s => s.slots + ":" + s.labels).join(" "));
+  ok(`${label}: ★おてほん・なぞりの字がマスからはみ出していない`,
+     am.every(s => s.spill.length === 0), am.flatMap(s => s.spill).slice(0, 3).join(" | "));
   ok(`${label}: ★おてほんと なぞり が同じ数だけある`,
      am.every(s => s.samples === s.rows && s.traces === s.rows),
      am.map(s => `見本${s.samples}/なぞり${s.traces}/行${s.rows}`).join(" "));
-  ok(`${label}: ★もんだいの紙と答えの紙が同じ枚数`, am.length === m.length, `${m.length}枚 / ${am.length}枚`);
+  // ★答えの紙は、もんだいの紙とは別に詰めて送る（2026-09-13）。枚数が同じとは限らないので、番号と見出しで突き合わせる
+  const pNos = m.flatMap(s => s.nos), aNos = am.flatMap(s => s.nos);
+  ok(`${label}: ★答えの紙に、もんだいの番号がもれなく同じ順で並ぶ（もんだい${m.length}枚／答え${am.length}枚）`,
+     am.length >= m.length && JSON.stringify(aNos) === JSON.stringify(pNos), `${pNos.length}問 / ${aNos.length}問`);
+  const labelOk = am.every(s => {
+    const idx = m.findIndex(ps => ps.nos.includes(s.nos[0]));
+    const want = m.length > 1 ? `もんだいの紙 ${idx + 1}まいめ の分` : "きょうの もんだいの分";
+    return idx >= 0 && s.nos.every(n => m[idx].nos.includes(n)) && s.label.startsWith(want);
+  });
+  ok(`${label}: ★答えの紙の見出しが、どのもんだいの紙の分かと合っている`, labelOk, am.map(s => s.label.split("　")[0]).join(" | "));
   ok(`${label}: 問題が紙に収まっている（${m.length}枚・${total}問）`,
      m.every(s => s.bottom <= s.fold), m.map(s => `下端${s.bottom}/紙の下端${s.fold}`).join(" "));
   // ★もんだいの紙に答えが1文字も載っていない（別紙にした意味そのもの）
@@ -352,17 +373,18 @@ async function measurePaper(label, prep, arg) {
   ok(`${label}: 1枚の高さがA4のまま（重なっていない）`, m.every(s => Math.abs(s.h - 1123) <= 2), m.map(s => s.h).join(","));
   ok(`${label}: 答えが答えの欄からはみ出していない`, m.every(s => s.keyOver <= 1), m.map(s => s.keyOver).join(","));
   ok(`${label}: どの行にも出典がある`, m.every(s => s.cites === s.rows), m.map(s => `${s.cites}/${s.rows}`).join(" "));
-  return { m, total };
+  return { m, am, total };
 }
 await page.evaluate(() => {
   const pool = KANJI_MASTER.map(r => r.k); let ki = 0;
   const long = (n) => "ながいぶんのダミー".repeat(4).slice(0, n);
-  function mkL(uid, mat, pages, n, field, len, nAns, noteLen) {
+  // kanjiAns: 答えを漢字1字にする（本物の部首の形「利・前・列」）
+  function mkL(uid, mat, pages, n, field, len, nAns, noteLen, kanjiAns) {
     const items = [];
     for (let i = 1; i <= n; i++) {
       const ks = Array.from({ length: nAns }, () => pool[ki++ % pool.length]);
       items.push({ id: "q_long_" + uid + "_" + i, no: i, text: long(len - (i % 3)),
-                   answers: ks.map((k, j) => ({ text: "こたえ" + j, around: nAns > 1 ? "□" : null })),
+                   answers: ks.map((k, j) => ({ text: kanjiAns ? k : "こたえ" + j, around: nAns > 1 ? "□" : null })),
                    ruby: nAns > 1 ? ks.map(() => ({ yomi: "よみ" })) : [],
                    kanji: ks, note: (noteLen && i % 5 === 0) ? long(noteLen) : null });
     }
@@ -399,6 +421,52 @@ await measurePaper("✕の問題が5単元から来た日（見出しが多い�
   ["dr_08", "dr_09", "dr_10", "dr_25", "tn_08"].forEach(u => [1, 2, 3, 4].forEach(i => { ITEMS["q_long_" + u + "_" + i] = { o: 0, x: 1, last: "x" }; }));
   window.__day = "2099-06-02";
 });
+// ★2026-09-13 本物で崩れた形の再現: 書き取り9＋部首5（答えが漢字3〜4字「利・前・列」）＋同じ読み4
+await measurePaper("★部首の答えが3〜4字の日（09-13 本物で崩れた形）", () => {
+  const mkL = window.__mkL;
+  BOOK_UNITS = [mkL("dr_40", "dr", [40], 9, "kaki", 19, 1, 0, true), mkL("dr_41", "dr", [41], 3, "bushu", 23, 3, 0, true),
+                mkL("dr_43", "dr", [43], 2, "bushu", 23, 4, 0, true), mkL("dr_42", "dr", [42], 4, "onaji", 19, 1, 0, true)];
+  window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
+  SESSION = { v: SHEET_VERSION, date: todayStr(), ids: bookAllItems().map(x => x.it.id), results: {}, saved: false };
+});
+// ★部首の行を高くしたので、答えの紙はもんだいの紙より長くなる → 次の枚へ送られること
+const tallAns = await measurePaper("★部首（答え4個）が多い日（答えの紙が次の枚へ送られる）", () => {
+  const mkL = window.__mkL;
+  BOOK_UNITS = [mkL("dr_46", "dr", [46], 30, "bushu", 23, 4, 0, true), mkL("dr_47", "dr", [47], 10, "kaki", 19, 1, 0, true)];
+  window.isVerifiedUnit = () => true;
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
+  SESSION = { v: SHEET_VERSION, date: todayStr(), ids: bookAllItems().map(x => x.it.id), results: {}, saved: false };
+});
+await page.emulateMedia({ media: "print" });
+const tallRow = await page.evaluate(() => {
+  const h = sel => [...document.querySelectorAll("#print-region .p-ansheet " + sel)].map(e => Math.round(e.getBoundingClientRect().height));
+  const secs = [...document.querySelectorAll("#print-region .p-sec")].map(e => e.textContent);
+  return { multi: [...new Set(h("tr:has(.p-multi) .p-slot"))], single: [...new Set(h("tr:not(:has(.p-multi)) .p-slot"))],
+           dup: secs.filter(t => /（つづき）（つづき）/.test(t)).length };
+});
+// ★もんだいの紙1枚ぶんの答えが1枚に入らないとき、次の枚へ送る（部首30問＝答えの紙だけで2枚以上）
+const paged = await page.evaluate(() => {
+  const region = document.getElementById("print-region");
+  const list = todaySheetItems().filter(x => itemFieldOf(x.it, x.g) === "bushu");
+  const blocks = buildPaperBlocks(list);
+  region.innerHTML = renderAnswers([blocks], region);
+  const sheets = [...region.querySelectorAll(".p-ansheet")];
+  const r = { n: sheets.length, rows: list.length, fit: ansFits(region),
+    nos: sheets.flatMap(s => [...s.querySelectorAll("td.p-no")].map(e => +e.textContent)),
+    labels: sheets.map(s => s.querySelector(".p-sub").textContent.split("　")[0]),
+    secs: sheets.map(s => [...s.querySelectorAll(".p-sec")].map(e => e.textContent).join("/")) };
+  region.innerHTML = "";
+  return r;
+});
+await page.emulateMedia({ media: null });
+ok("★答えが複数の行だけマスが高い（1字の行は18mm＝68px のまま）",
+   tallRow.single.length === 1 && tallRow.single[0] === 68 && tallRow.multi.length > 0 && tallRow.multi.every(v => v > 68), JSON.stringify(tallRow));
+ok("★「（つづき）」が二重に付いていない", tallRow.dup === 0 && paged.secs.every(t => !/（つづき）（つづき）/.test(t)), paged.secs.join(" | "));
+ok("★答えが1枚に入らないときは次の枚へ送り、どの枚も紙に収まる", paged.n >= 2 && paged.fit, `${paged.rows}問 → ${paged.n}枚`);
+ok("★次の枚へ送っても、番号がもれなく同じ順", JSON.stringify(paged.nos) === JSON.stringify(Array.from({ length: paged.rows }, (_, i) => i + 1)), paged.nos.join(","));
+ok("★送った枚の見出しは「（1/2）（2/2）」で、2枚目の見出しに（つづき）", paged.labels.every((l, i) => l.endsWith(`（${i + 1}/${paged.n}）`)) && /（つづき）/.test(paged.secs[1] || ""),
+   paged.labels.join(" | ") + " / " + paged.secs.join(" | "));
 
 console.log("\n=== 紙で解けるか（○の中の漢字・組の番号） ===");
 const gv = await page.evaluate(() => {
@@ -435,7 +503,8 @@ for (const every of [1, 2, 3, 4]) {
     printSessionPractice();
     const r = document.getElementById("print-region");
     const perSheet = [...r.querySelectorAll(".p-sheet:not(.p-ansheet)")].map(s => s.querySelectorAll(".p-body tr").length);
-    const slotHs = [...new Set([...r.querySelectorAll(".p-slot")].map(e => e.style.height))];
+    // もんだいの紙の書くマスだけ（答えの紙の部首の行は、わざと高くしてある。答えの紙の1字の行は「答えが複数の行だけマスが高い」で見る）
+    const slotHs = [...new Set([...r.querySelectorAll(".p-sheet:not(.p-ansheet) .p-slot")].map(e => e.style.height))];
     // 最後の1枚以外は「入るだけ詰まっている」か: その枚に次の1問を足すと入らないこと（測って確かめる）
     const blocks = buildPaperBlocks(); let from = 0, packedFull = true;
     BOX_OVERRIDE = DAILY_BOX_MM;

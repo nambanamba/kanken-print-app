@@ -241,6 +241,18 @@
        ⚠️ ここを薄くすると、丸つけのとき大人が読めなくなる（依頼一覧の確認項目③はこのマスが引き受ける）。 */
     .p-sample{display:flex;align-items:center;justify-content:center;color:#222;
               font-size:38pt;line-height:1;letter-spacing:.05em;height:100%;}
+    /* ★答えが複数（部首「利・前・列」）でもマスに収まるよう、答え1個＝1区画の格子にして、字の大きさはマスから決める。
+       ⚠️ 38pt 固定のままだと、5〜7字が折り返してマスの外へ流れ、上下の行に重なる（2026-09-13 本物の紙で発生）。
+       38pt が上限なので、1字の答え（書き取り・同じ読み）は大きさが変わらない。
+       ★cq 単位が使えないブラウザは上の 38pt に戻る（今までと同じ見え方） */
+    .p-ansheet .p-slot{container-type:size;}
+    .p-ansheet .p-sample, .p-ansheet .p-trace{display:grid;grid-template-columns:repeat(var(--c,1),1fr);
+              grid-template-rows:repeat(var(--r,1),1fr);}
+    .p-acell{display:flex;align-items:center;justify-content:center;white-space:nowrap;letter-spacing:0;
+             font-size:38pt;font-size:min(38pt, calc(90cqw / var(--c,1) / var(--len,1)), calc(80cqh / var(--r,1)));}
+    /* 答えが複数のときだけ、左上の「おてほん／なぞる」の札の下から並べる（1字の答えは位置も大きさも今までどおり） */
+    .p-ansheet .p-multi{box-sizing:border-box;padding:2.6mm 0.5mm 0.3mm;}
+    .p-multi .p-acell{font-size:min(38pt, calc(90cqw / var(--c,1) / var(--len,1)), calc((100cqh - 2.9mm) * .9 / var(--r,1)));}
     .p-fixhead{font-size:8.5pt;color:#333;margin:0 0 2mm;line-height:1.5;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
@@ -2130,6 +2142,7 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
             return { yomi:(ruby[i]||{}).yomi||"", around:a.around||"" };
           }),
           a: ans.map(function(a){return a.text;}).join("・"),
+          aList: ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
           kanji: it.kanji||[], field: f, id: it.id
         };
       })
@@ -2190,26 +2203,25 @@ function printSessionPractice(){
     // ★毎日の紙は「入るだけ詰めて、次の枚へ」。問数でそろえて割ると、1枚目の半分が空く（本物で実測）
     var ranges=packDaily(blocks, total, region);
     // ★答えは別紙。もんだいの紙を全部出したあとに、同じ枚数ぶんの「答えとなおし」を続ける
-    region.innerHTML=ranges.map(function(r,i){
+    var probHtml=ranges.map(function(r,i){
       return renderSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length);
-    }).join("")
-      + (SEPARATE_ANS ? ranges.map(function(r,i){
-          return renderAnswerSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length, ansLabel(i, ranges.length));
-        }).join("") : "");
+    }).join("");
+    var ansHtml=SEPARATE_ANS ? renderAnswers(ranges.map(function(r){ return sliceBlocks(blocks, r[0], r[1]); }), region) : "";
+    region.innerHTML=probHtml+ansHtml;
     BOX_OVERRIDE=null;
     window.print();
     return;
   }
   for(var N=1; N<=total; N++){
     var sheets=splitSheets(blocks, Math.min(SHEET_MAX, Math.ceil(total/N)));
-    region.innerHTML=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("")
-      + (SEPARATE_ANS ? sheets.map(function(bs,i){
-          return renderAnswerSheet(bs, i+1, sheets.length, ansLabel(i, sheets.length));
-        }).join("") : "");
+    var probHtml=sheets.map(function(bs,i){ return renderSheet(bs, i+1, sheets.length); }).join("");
+    region.innerHTML=probHtml;
     if(sheetsFit(region)) break;
     // 道具（単元ごとの紙）は、2枚以上に分けるときマスの高さを枚ごとの行数で決め直す。毎日の紙は大きいまま
     if(!daily) BOX_OVERRIDE=null;
   }
+  // 答えの紙は、もんだいの紙が決まってから、別に詰めて送る（renderAnswers）
+  if(SEPARATE_ANS) region.innerHTML=probHtml+renderAnswers(sheets, region);
   BOX_OVERRIDE=null;
   window.print();
 }
@@ -2277,7 +2289,7 @@ function sliceBlocks(blocks, from, to){
     var s=Math.max(from, b.noBase||0), e=Math.min(to, (b.noBase||0)+b.rows.length);
     if(s>=e) return;
     var part=Object.assign({}, b), cont=(s>(b.noBase||0));
-    part.title=b.title+(cont?"（つづき）":"");
+    part.title=cont ? b.title.replace(/（つづき）$/,"")+"（つづき）" : b.title;   // 答えの紙は切り出した物をもう一度切るので、二重に付けない
     part.ask=cont?"":b.ask;
     part.example=cont?"":b.example;
     part.rows=b.rows.slice(s-(b.noBase||0), e-(b.noBase||0));
@@ -2348,9 +2360,67 @@ function ansLabel(i, n){
      （もとは「そのページの答えはそのページの下」で自明だった。別紙にすると、その自明さが失われる）
    ⚠️ なぞりは 2026-09-10 に**お子さん本人の希望で廃止**されたもの。
       2026-09-12 にユーザーの明示の承認で戻した。経緯は 作業メモ.md。**理由を消さないこと。** */
+/* ★答えが複数（部首）の行だけ、マスを高くする（2026-09-13 ユーザー判断「部首の行だけマスを高くする」）。
+   18mm のままだと答え4個で字が約9mm角になり、なぞるには小さい。32mm にすると 3〜4個で約12mm角（1字の38pt≒13.4mm に近い）。
+   ⚠️ 1字の行は、高さも38ptも変えない。 */
+var ANS_MULTI_MM = 32;
+function ansList(row){ return (row.aList&&row.aList.length)?row.aList:(row.a?[row.a]:[]); }
+function ansRowMM(row, boxMM){ return ansList(row).length>1 ? Math.max(ANS_MULTI_MM, boxMM) : boxMM; }
+/* 答え1個＝1区画の格子。並べ方は「字がいちばん大きくなる段数」を選ぶ（マスの横 ≒ 26.6mm と行の高さで見積もる。大きさそのものは CSS がマスから決める） */
+function ansGlyphs(row, cls, hmm){
+  var list=ansList(row);
+  var n=Math.max(1,list.length), len=Math.max.apply(null,[1].concat(list.map(function(s){ return String(s).length; })));
+  var best=1, bestSize=0;
+  for(var r=1;r<=n;r++){
+    var c=Math.ceil(n/r), size=Math.min(26.6/c/len, (hmm-2.9)/r);
+    if(size>bestSize*1.1){ best=r; bestSize=size; }   // 段を増やすのは、字がはっきり大きくなるときだけ
+  }
+  var cols=Math.ceil(n/best);
+  return "<div class='"+cls+(n>1?" p-multi":"")+"' style='--c:"+cols+";--r:"+best+";--len:"+len+"'>"
+    +list.map(function(s){ return "<span class='p-acell'>"+s+"</span>"; }).join("")+"</div>";
+}
+/* ★答えの紙は、もんだいの紙とは別に「入るだけ詰めて、次の枚へ」送る。
+   ⚠️ もんだいの紙の区切りのまま作ると、見出し（おうちの方へ）の分だけ高く、
+      もんだいを目いっぱい詰めた日は紙の下を 25px はみ出していた（2026-09-13 本物で実測。部首の行を高くする前から）。
+   ⚠️ sheetsFit ではなく専用の ansFits で測る（sheetsFit はもんだいの紙の判定。検査で差しかえられることもある） */
+function ansFits(region){
+  var keep=region.getAttribute("style");
+  region.setAttribute("style","display:block;position:absolute;left:-10000px;top:0;width:210mm;visibility:hidden;");
+  var ok=Array.prototype.every.call(region.querySelectorAll(".p-ansheet"), function(s){
+    var b=s.querySelector(".p-body");
+    return b && b.clientHeight>0 && b.scrollHeight<=b.clientHeight+1;
+  });
+  if(keep===null) region.removeAttribute("style"); else region.setAttribute("style",keep);
+  return ok;
+}
+function answerPages(bs, region){
+  var last=bs[bs.length-1], from=bs[0].noBase||0, to=(last.noBase||0)+last.rows.length, out=[];
+  while(from<to){
+    var n=to-from;
+    for(; n>1; n--){
+      region.innerHTML=renderAnswerSheet(sliceBlocks(bs, from, from+n), 1, 2, ansLabel(0, 2)+"（1/2）");
+      if(ansFits(region)) break;
+    }
+    out.push(sliceBlocks(bs, from, from+n)); from+=n;
+  }
+  region.innerHTML="";
+  return out;
+}
+/* groups … もんだいの紙1枚ごとのブロック。見出しは「もんだいの紙 ◯まいめ の分（1/2）」のように、どの紙の分かを保つ */
+function renderAnswers(groups, region){
+  var pages=[];
+  groups.forEach(function(bs, i){
+    if(!bs.length) return;
+    var ps=answerPages(bs, region);
+    ps.forEach(function(p, j){
+      pages.push({ blocks:p, label: ansLabel(i, groups.length)+(ps.length>1?"（"+(j+1)+"/"+ps.length+"）":"") });
+    });
+  });
+  return pages.map(function(p, k){ return renderAnswerSheet(p.blocks, k+1, pages.length, p.label); }).join("");
+}
 function renderAnswerSheet(blocks, page, pages, forLabel){
   var rowsPerCol=blocks.reduce(function(a,b){ return a+Math.ceil(b.rows.length/2); },0);
-  var boxH=boxHeightFor(rowsPerCol)+"mm";
+  var boxMM=boxHeightFor(rowsPerCol);
   var tight=(rowsPerCol>15)?" p-tight":"";
   var html='<div class="p-sheet p-ansheet"><div class="p-body'+tight+'">'
     +'<div class="p-title">漢検7級　答えとなおし'
@@ -2361,17 +2431,18 @@ function renderAnswerSheet(blocks, page, pages, forLabel){
     +'いちばん右に<b>もう一度じぶんで</b>書きます。<br>'
     +'できたかどうかは「きろく」画面で入れてください。できなかった字は、次の日にまた出ます。</div>';
   blocks.forEach(function(b){
-    html+='<div class="p-sec">'+(b.keyTitle||b.title.replace(/^■\s*/,""))+'</div>';
+    var cont=/（つづき）$/.test(b.title);
+    html+='<div class="p-sec">'+(b.keyTitle ? b.keyTitle+(cont?"（つづき）":"") : b.title.replace(/^■\s*/,""))+'</div>';
     html+=twoCols(b.rows, function(row,i){
-      var no=(b.noBase||0)+i+1;
+      var no=(b.noBase||0)+i+1, hmm=ansRowMM(row, boxMM), h=hmm+"mm";
       // ★3マス（2026-09-13 ユーザー指示「お手本、なぞり、空欄でお願いします」）
       return "<tr><td class='p-no'>"+no+"</td>"
         +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"
-        +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>おてほん</span>"
-        +"<div class='p-sample'>"+(row.a||"")+"</div></div>"
-        +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>なぞる</span>"
-        +"<div class='p-trace'>"+(row.a||"")+"</div></div>"
-        +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>じぶんで</span></div>"
+        +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>おてほん</span>"
+        +ansGlyphs(row,"p-sample",hmm)+"</div>"
+        +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>なぞる</span>"
+        +ansGlyphs(row,"p-trace",hmm)+"</div>"
+        +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>じぶんで</span></div>"
         +"</div></td></tr>";
     });
   });
