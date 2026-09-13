@@ -315,8 +315,36 @@ async function measurePaper(label, prep, arg) {
                keyOver: (s.querySelector(".p-key") ? 1 : 0), rows, cites };
     });
   });
+  // ★答えの紙も、同じように「紙に収まっているか」を見る（2026-09-13）。
+  //   ⚠️ ここが抜けていた: 上の m は もんだいの紙だけを測っている。
+  //      答えの紙は 3マス（おてほん／なぞる／じぶんで）になったので、こちらも溢れうる。
+  const am = await page.evaluate(() => {
+    return [...document.querySelectorAll("#print-region .p-sheet.p-ansheet")].map(s => {
+      const top = s.getBoundingClientRect().top;
+      const body = s.querySelector(".p-body");
+      const limit = body.getBoundingClientRect().bottom - top;
+      const els = [...s.querySelectorAll(".p-body tr, .p-body .p-sec")];
+      const bottom = els.length ? Math.max(...els.map(e => e.getBoundingClientRect().bottom - top)) : 0;
+      const firstRow = s.querySelector(".p-body tbody tr");
+      return { h: Math.round(s.getBoundingClientRect().height), limit: Math.round(limit), bottom: Math.round(bottom),
+               rows: s.querySelectorAll(".p-body tbody tr").length,
+               slots: firstRow ? firstRow.querySelectorAll(".p-slot").length : 0,
+               labels: firstRow ? [...firstRow.querySelectorAll(".p-slotlab")].map(e => e.textContent).join("/") : "",
+               samples: s.querySelectorAll(".p-sample").length, traces: s.querySelectorAll(".p-trace").length };
+    });
+  });
   await page.emulateMedia({ media: null });
   const total = m.reduce((a, s) => a + s.rows, 0);
+  ok(`${label}: ★答えの紙も紙に収まっている（${am.length}枚）`,
+     am.length > 0 && am.every(s => s.bottom <= s.limit && Math.abs(s.h - 1123) <= 2),
+     am.map(s => `下端${s.bottom}/紙${s.limit}`).join(" "));
+  ok(`${label}: ★答えの紙は1問3マス（おてほん／なぞる／じぶんで）`,
+     am.every(s => s.slots === 3 && s.labels === "おてほん/なぞる/じぶんで"),
+     am.map(s => s.slots + ":" + s.labels).join(" "));
+  ok(`${label}: ★おてほんと なぞり が同じ数だけある`,
+     am.every(s => s.samples === s.rows && s.traces === s.rows),
+     am.map(s => `見本${s.samples}/なぞり${s.traces}/行${s.rows}`).join(" "));
+  ok(`${label}: ★もんだいの紙と答えの紙が同じ枚数`, am.length === m.length, `${m.length}枚 / ${am.length}枚`);
   ok(`${label}: 問題が紙に収まっている（${m.length}枚・${total}問）`,
      m.every(s => s.bottom <= s.fold), m.map(s => `下端${s.bottom}/紙の下端${s.fold}`).join(" "));
   // ★もんだいの紙に答えが1文字も載っていない（別紙にした意味そのもの）

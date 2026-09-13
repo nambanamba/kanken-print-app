@@ -231,10 +231,16 @@
     .p-slot{flex:1 1 0;border:1px solid #999;position:relative;min-width:8mm;}
     .p-slotlab{position:absolute;top:0.3mm;left:0.6mm;font-size:6.5pt;color:#888;}
     /* ★答えとなおしの紙（別紙・2026-09-12 ユーザー指示「答えと直しようのなぞりの紙を別紙に」）。
-       なぞる字は、もとからある `.p-model`（22pt・薄い灰色 #c9c9c9）と同じ濃さ。**新しく作らない。**
+       なぞる字の濃さは `.p-model` と同じ #c9c9c9 だが、**CSSは共有していない**（`.p-model` は printPractice 専用）。
        ⚠️ 濃くすると「なぞり」ではなく「答えが印刷されているだけ」になる。薄さがこの紙の要。 */
     .p-trace{display:flex;align-items:center;justify-content:center;color:#c9c9c9;
-             font-size:19pt;line-height:1;letter-spacing:.05em;height:100%;}
+             font-size:38pt;line-height:1;letter-spacing:.05em;height:100%;}
+    /* ★お手本（2026-09-13 ユーザー指示）。**なぞり字とは別のマス・別の濃さ。**
+       「なぞり字を濃くしてお手本も兼ねる」ではない——**一番濃い設定でも、お手本としては薄い**
+       というのがユーザーの判断。だから読める濃さで別に出す。
+       ⚠️ ここを薄くすると、丸つけのとき大人が読めなくなる（依頼一覧の確認項目③はこのマスが引き受ける）。 */
+    .p-sample{display:flex;align-items:center;justify-content:center;color:#222;
+              font-size:38pt;line-height:1;letter-spacing:.05em;height:100%;}
     .p-fixhead{font-size:8.5pt;color:#333;margin:0 0 2mm;line-height:1.5;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
@@ -2351,17 +2357,20 @@ function renderAnswerSheet(blocks, page, pages, forLabel){
     +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
     +'<span class="p-sub">'+forLabel+'　'+todayStr()+'</span></div>'
     +'<div class="p-fixhead"><b>おうちの方へ</b>　丸つけに使ってください。'
-    +'まちがえた番号だけ、うすい字を <b>なぞって</b>、となりのマスに <b>もう一度じぶんで</b> 書きます。<br>'
+    +'まちがえた番号だけ、<b>おてほん</b>を見て、まん中の<b>うすい字をなぞって</b>、'
+    +'いちばん右に<b>もう一度じぶんで</b>書きます。<br>'
     +'できたかどうかは「きろく」画面で入れてください。できなかった字は、次の日にまた出ます。</div>';
   blocks.forEach(function(b){
     html+='<div class="p-sec">'+(b.keyTitle||b.title.replace(/^■\s*/,""))+'</div>';
     html+=twoCols(b.rows, function(row,i){
       var no=(b.noBase||0)+i+1;
+      // ★3マス（2026-09-13 ユーザー指示「お手本、なぞり、空欄でお願いします」）
       return "<tr><td class='p-no'>"+no+"</td>"
-        +"<td class='p-ansbox' style='padding:0;width:38%'><div class='p-slots'>"
+        +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"
+        +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>おてほん</span>"
+        +"<div class='p-sample'>"+(row.a||"")+"</div></div>"
         +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>なぞる</span>"
-        +"<div class='p-trace'>"+(row.a||"")+"</div></div></div></td>"
-        +"<td class='p-ansbox' style='padding:0;width:38%'><div class='p-slots'>"
+        +"<div class='p-trace'>"+(row.a||"")+"</div></div>"
         +"<div class='p-slot' style='height:"+boxH+"'><span class='p-slotlab'>じぶんで</span></div>"
         +"</div></td></tr>";
     });
