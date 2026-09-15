@@ -748,6 +748,40 @@ ok("★配点比どおり（読み・漢字えらび・じゅく語作り・音�
    Object.keys(a1.q).every(f => (a1.c[f] || 0) === a1.q[f]) && a1.c.okuri >= 1, JSON.stringify(a1.c) + " / " + JSON.stringify(a1.q));
 ok("★音訓は選択肢を並べ替えない", a1.ordOnkun.every(o => o === undefined), JSON.stringify(a1.ordOnkun));
 
+// ★出題順は乱数でなくルール（2026-09-15 ユーザー指示「ランダムはやめて、いつも一定のルールで」→ 案2）
+const aord = await page.evaluate(() => {
+  const keepApp = APP_S, keepItems = JSON.parse(JSON.stringify(ITEMS)), keepRand = Math.random;
+  const fieldOfId = id => { const y = appIndex()[id]; return itemFieldOf(y.it, y.g); };
+  const build = r => { Math.random = () => r; APP_S = null; return todayApp().ids.slice(); };
+  const i1 = build(0.1), i2 = build(0.9), i3 = build(0.5);
+  Math.random = keepRand;
+  const fs = i1.map(fieldOfId), all = appAllItems().map(x => x.it.id);
+  const byF = {}; i1.forEach((id, k) => { (byF[fs[k]] = byF[fs[k]] || []).push(id); });
+  const bookOrder = Object.values(byF).every(ids => ids.every((id, j) => j === 0 || all.indexOf(ids[j - 1]) < all.indexOf(id)));
+  const present = APP_FIELDS.filter(f => fs.includes(f));
+  const rr = JSON.stringify(fs.slice(0, present.length)) === JSON.stringify(present)
+          && JSON.stringify(fs.slice(present.length, present.length * 2)) === JSON.stringify(present);
+  // 前日に✕の問題（本の後ろのほうの問題）は先頭に来る
+  const xId = byF.jukugo[byF.jukugo.length - 1];
+  ITEMS = { [xId]: { o: 0, x: 1, last: "x", date: "2099-06-30" } };
+  const iX = build(0.3);
+  Math.random = keepRand;
+  // 前の版で1問でも答えたきょうの分はそのまま／答えていなければ組み直す
+  const rev = i1.slice().reverse();
+  APP_S = { v: 3, date: todayStr(), ids: rev.slice(), pos: 1, ord: {}, res: { [rev[0]]: { ok: true } }, step: {}, tries: {} };
+  const keptAnswered = todayApp().ids.join() === rev.join();
+  APP_S = { v: 3, date: todayStr(), ids: rev.slice(), pos: 0, ord: {}, res: {}, step: {}, tries: {} };
+  const rebuiltFresh = todayApp().ids.join() !== rev.join() && APP_S.v === APP_VERSION;
+  ITEMS = keepItems; APP_S = keepApp; save(K_ITEMS, ITEMS); save(K_APP, APP_S);
+  return { same: i1.join() === i2.join() && i2.join() === i3.join(), n: i1.length, fs, bookOrder, rr, xFirst: iX[0] === xId, keptAnswered, rebuiltFresh };
+});
+ok("★出題順は乱数に左右されない（同じ記録なら何度組んでも同じ並び）", aord.n > 0 && aord.same, `${aord.n}問`);
+ok("★分野を1問ずつ順ぐり（読み→漢字えらび→じゅく語作り→音訓→画数→送りがな→…）", aord.rr, aord.fs.slice(0, 12).join(","));
+ok("★同じ分野の中は本の順", aord.bookOrder);
+ok("★前日に✕の問題が先頭に来る", aord.xFirst);
+ok("★1問でも答えたきょうの分は、前の版の並びのまま（答えた記録と画面をずらさない）", aord.keptAnswered);
+ok("★まだ答えていないきょうの分は、新しい並びで組み直す", aord.rebuiltFresh);
+
 const log = [];
 // ★別画面・のこり何問・続きから（ユーザー指示「アプリでやる、は、別画面にして、あと何問とか」）
 const en0 = await page.evaluate(() => ({ entry: document.getElementById("ap-entry").innerText,

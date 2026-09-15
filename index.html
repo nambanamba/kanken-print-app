@@ -976,7 +976,7 @@ function setAppCount(n){
   if(APP_S && APP_S.date===todayStr() && !Object.keys(APP_S.res||{}).length){ APP_S=null; save(K_APP,APP_S); }
   renderAll();
 }
-var APP_VERSION = 3;   // 3: 正解するまで出し直す（2026-09-12）。2: 分野ごとの上限（2026-09-11）。前の版の未回答の分は組み直す
+var APP_VERSION = 4;   // 4: 出題順を乱数でなくルールで並べる（2026-09-15）。3: 正解するまで出し直す（2026-09-12）。2: 分野ごとの上限（2026-09-11）。前の版の未回答の分は組み直す
 /* ★やり直しのとき、何問はさんでから戻すか（直後だと答えを覚えているだけで通ってしまう）。
    3 なら「2問はさんで3問目」。残りがそれより少ない日は、列の最後に付く（はさむ問題がそもそも無いため） */
 var APP_RETRY_GAP = 3;
@@ -1036,6 +1036,27 @@ function composeApp(){
   return out;
 }
 
+/* ★アプリの出題順（2026-09-15 ユーザー指示「ランダムはやめてほしい。いつも一定のルールで」→ 案2「各分野バランスよく」）。
+   ・前日に✕の問題 → 新しい問題、の順（✕を先に）
+   ・それぞれの中で、分野を APP_FIELDS の順に1問ずつ順ぐり（読み→漢字えらび→じゅく語作り→音訓→画数→送りがな→読み→…）
+   ・同じ分野の中は、composeApp が取った順（＝本の順：単元→問番号）のまま
+   ★乱数を使わないので、同じ記録なら何度組んでも同じ並びになる。
+   ⚠️ 選択肢（ア〜エ）の並べ替え（randPerm）は別。ユーザー判断で続けている */
+function appOrder(xs){
+  function rr(list){
+    var by={}, out=[], left=list.length;
+    APP_FIELDS.forEach(function(f){ by[f]=[]; });
+    list.forEach(function(x){ var f=itemFieldOf(x.it,x.g); (by[f]||(by[f]=[])).push(x); });
+    var keys=APP_FIELDS.concat(Object.keys(by).filter(function(f){ return APP_FIELDS.indexOf(f)<0; }));
+    while(left>0){
+      keys.forEach(function(f){ if(by[f].length){ out.push(by[f].shift()); left--; } });
+    }
+    return out;
+  }
+  var retry=xs.filter(function(x){ return isRetryItem(x.it.id); });
+  var rest=xs.filter(function(x){ return !isRetryItem(x.it.id); });
+  return rr(retry).concat(rr(rest));
+}
 /* 並べ替え（Math.random）。★前回と同じ並びを避けたいときは avoid を渡す */
 function randPerm(n, avoid){
   var base=[]; for(var i=0;i<n;i++) base.push(i);
@@ -1055,7 +1076,7 @@ function todayApp(){
      && (APP_S.v===APP_VERSION || Object.keys(APP_S.res||{}).length)) return APP_S;
   var xs=composeApp();
   if(!xs.length) return null;
-  var ids=shuffle(xs.map(function(x){ return x.it.id; }), Math.random);   // ★出題順を並べ替える
+  var ids=appOrder(xs).map(function(x){ return x.it.id; });   // ★出題順はルールで決める（乱数を使わない）
   var ord={};
   xs.forEach(function(x){
     var f=itemFieldOf(x.it,x.g), ch=appChoicesOf(x.it,f);
@@ -1627,7 +1648,7 @@ function moreApp(){
   if(!s || s.date!==todayStr() || appLeft(s)>0){ return; }
   var xs=composeApp();
   if(!xs.length){ alert("アプリでやる本の問題は、もうありません。"); return; }
-  var ids=shuffle(xs.map(function(x){ return x.it.id; }), Math.random), ord={};
+  var ids=appOrder(xs).map(function(x){ return x.it.id; }), ord={};
   xs.forEach(function(x){
     var f=itemFieldOf(x.it,x.g), ch=appChoicesOf(x.it,f);
     if(SHUFFLE_CHOICE_FIELDS.indexOf(f)>=0 && ch.length>1) ord[x.it.id]=randPerm(ch.length, (ITEMS[x.it.id]||{}).ord);
