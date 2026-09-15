@@ -537,6 +537,35 @@
       <div id="peek-box"></div>
     </div>
 
+    <!-- ★できた／まだの一覧と、記録の書き出し・読み込み（おうちの方）。2026-09-15 ユーザー指示。
+         「せってい」に置く＝お子さんの画面には出さない（進み具合の数字をお子さんに見せない方針） -->
+    <div class="card">
+      <h2>📚 できた／まだの一覧（おうちの方）</h2>
+      <div class="muted" style="margin-bottom:8px;font-size:.82rem">
+        タップすると「できた」と「まだ」が入れかわります。<br>
+        <b>「まだ」にしたものは次の紙に出ます。「できた」にしたものは出なくなります。</b>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn ghost" id="dl-tab-kanji" style="width:auto;flex:1" onclick="setDoneTab('kanji')">字（書き取り）</button>
+        <button class="btn ghost" id="dl-tab-item" style="width:auto;flex:1" onclick="setDoneTab('item')">問題</button>
+      </div>
+      <select id="dl-filter" style="padding:6px;margin-bottom:8px" onchange="renderDoneList()">
+        <option value="all">ぜんぶ</option><option value="mada">まだ だけ</option><option value="done">できた だけ</option>
+      </select>
+      <div id="done-box"></div>
+
+      <h2 style="margin-top:16px">💾 記録の書き出し・読み込み</h2>
+      <div class="muted" style="margin-bottom:8px;font-size:.8rem">
+        書き出したファイルには、〇✕の記録だけが入ります（<b>問題文は入りません</b>）。<br>
+        読み込むと、この端末の記録が<b>ファイルの内容にまるごと置きかわります</b>。先に、増える・変わる・消える件数を見せます。
+      </div>
+      <button class="btn ghost" onclick="downloadExport()">記録を書き出す（ファイル）</button>
+      <label class="btn ghost" style="margin-top:8px;display:block;text-align:center;cursor:pointer">記録を読み込む（まるごと置きかえ）
+        <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="onImportFile(this)"></label>
+      <button class="btn ghost" id="undo-import" style="margin-top:8px" onclick="undoImport()">読み込む前の状態に戻す</button>
+      <div id="import-info" class="muted" style="margin-top:6px;font-size:.75rem"></div>
+    </div>
+
     <!-- ★本の問題の合言葉。親御さんが1回だけ入れるもの（お子さんは触らない） -->
     <div class="card">
       <h2>🔑 本の問題（おうちの方）</h2>
@@ -1556,7 +1585,7 @@ var K_LOG="kanken7_log_v1";
 var LOG=load(K_LOG,[]);
 function logAnswer(src, id, f, cite, kanji){
   // extra … おかわり（きょうの分のあとに追加でやった回）の番号。0＝きょうの分
-  var extra = (src==="paper") ? ((SESSION&&SESSION.extra)||0) : ((APP_S&&APP_S.extra)||0);
+  var extra = (src==="paper") ? ((SESSION&&SESSION.extra)||0) : (src==="app" ? ((APP_S&&APP_S.extra)||0) : 0);
   // 紙の記録は「紙の日」で残す（遅れて入れても、その日にやった分として数える）
   var d=(src==="paper" && SESSION && SESSION.date) ? SESSION.date : todayStr();
   LOG.push({ t:Date.now(), date:d, src:src, id:id, f:f, cite:cite, kanji:kanji, extra:extra });
@@ -1759,7 +1788,7 @@ function renderLog(){
     byDate[d].slice().sort(function(a,b){ return (LOG[b].t-LOG[a].t) || (a-b); }).forEach(function(i){
       var e=LOG[i], tm=new Date(e.t), hh=String(tm.getHours()).padStart(2,"0")+":"+String(tm.getMinutes()).padStart(2,"0");
       html+='<div class="mark-row log-row"><span class="mark-no" style="min-width:3.2em">'+hh+'</span>'
-        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":e.src==="book"?"本":"アプリ")+(e.extra?"（おかわり）":"")+'・'+(FN[e.f]||e.f)+'</span>'
+        +'<span class="muted" style="font-size:.72rem;min-width:5.5em">'+(e.src==="paper"?"紙":e.src==="book"?"本":e.src==="list"?"一覧":"アプリ")+(e.extra?"（おかわり）":"")+'・'+(FN[e.f]||e.f)+'</span>'
         +e.kanji.map(function(q,ki){
           return '<div class="mark'+(q.ok?"":" x")+'" data-i="'+i+'" data-ki="'+ki+'" onclick="toggleLogMark(+this.dataset.i,+this.dataset.ki)">'
             +q.k+(q.ok?" ○":" ✕")+'</div>';
@@ -2832,6 +2861,188 @@ function saveDidInBook(){
   alert("「本でやった」で記録しました。"+(n?("できなかった字 "+n+" 字は、次の紙に出ます。"):""));
 }
 
+/* =========================================================================
+   ★記録の書き出し・読み込み（2026-09-15 ユーザー指示「できた問題のエキスポートインポートの機能は欲しいです」）
+   ・書き出すのは「ぜんぶ消す」（resetAll）で消えるものと同じ記録。受検日・合言葉の鍵・本の目次は入れない
+   ・★問題文は入れない（id・字・〇✕・日付だけ）。ファイルは人に渡りやすいので、本の文面を外に出さない
+   ・読み込みは「まるごと置きかえ」（ユーザー判断 Q5=C）。
+     先に「増える・変わる・消える」を見せ、消える記録があれば確認をもう1回。読み込む前の状態を1回ぶん残して、戻せるようにする
+   ========================================================================= */
+var K_IMPORT_BACKUP="kanken7_import_backup_v1";
+var EXPORT_KEYS=[K_ITEMS, K_KSTAT, K_WEAK, K_LOG, K_REC, K_SESSION, K_APP];
+function exportData(){
+  var o={ app:"kanken7", format:1, exportedAt:new Date().toISOString(), records:{}, doneDays:(SET.doneDays||[]).slice() };
+  EXPORT_KEYS.forEach(function(k){ o.records[k]=load(k,null); });
+  return o;
+}
+function downloadExport(){
+  var blob=new Blob([JSON.stringify(exportData(),null,1)],{type:"application/json"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="kanken7_kiroku_"+todayStr()+".json";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function parseImport(text){
+  var o; try{ o=JSON.parse(text); }catch(e){ return { error:"ファイルが読めません（記録のファイルではないようです）。" }; }
+  if(!o || o.app!=="kanken7" || o.format!==1 || !o.records || typeof o.records!=="object") return { error:"漢検7級アプリの記録ファイルではありません。何も変えていません。" };
+  return { data:o };
+}
+function diffCount(cur, next){
+  cur=cur||{}; next=next||{}; var add=0, chg=0, del=0;
+  Object.keys(next).forEach(function(k){ if(!Object.prototype.hasOwnProperty.call(cur,k)) add++; else if(JSON.stringify(cur[k])!==JSON.stringify(next[k])) chg++; });
+  Object.keys(cur).forEach(function(k){ if(!Object.prototype.hasOwnProperty.call(next,k)) del++; });
+  return { add:add, chg:chg, del:del };
+}
+function importPreview(o){
+  var r=o.records;
+  function byKey(arr){ var m={}; (arr||[]).forEach(function(e){ m[e.t+"|"+e.id]=e; }); return m; }
+  return { items:diffCount(ITEMS, r[K_ITEMS]), kanji:diffCount(KSTATS, r[K_KSTAT]), log:diffCount(byKey(LOG), byKey(r[K_LOG])) };
+}
+function writeRecords(recs, doneDays){
+  EXPORT_KEYS.forEach(function(k){
+    if(recs[k]===null || recs[k]===undefined) localStorage.removeItem(k); else save(k, recs[k]);
+  });
+  ITEMS=load(K_ITEMS,{}); KSTATS=load(K_KSTAT,{}); WEAK=load(K_WEAK,{}); LOG=load(K_LOG,[]); RECORDS=load(K_REC,{});
+  SESSION=load(K_SESSION,null); APP_S=load(K_APP,null);
+  SET.doneDays=Array.isArray(doneDays) ? doneDays.slice() : []; save(K_SET,SET);
+}
+function importFromText(text){
+  var p=parseImport(text);
+  if(p.error){ alert(p.error); return false; }
+  var v=importPreview(p.data), del=v.items.del+v.kanji.del+v.log.del;
+  function line(name, d){ return name+"： 増える "+d.add+"・変わる "+d.chg+"・消える "+d.del; }
+  if(!confirm("この端末の記録を、ファイルの内容に まるごと置きかえます。\n\n"
+      +line("問題ごとの記録", v.items)+"\n"+line("字ごとの記録", v.kanji)+"\n"+line("やった問題の履歴", v.log)
+      +"\n\nよろしいですか？")) return false;
+  if(del>0 && !confirm("⚠️ 記録が "+del+" 件 消えます。本当に置きかえますか？\n（読み込む前の状態には、あとから1回だけ戻せます）")) return false;
+  save(K_IMPORT_BACKUP, { at:new Date().toISOString(), records:exportData().records, doneDays:(SET.doneDays||[]).slice() });
+  writeRecords(p.data.records, p.data.doneDays);
+  renderAll();
+  alert("読み込みました。");
+  return true;
+}
+function onImportFile(input){
+  var f=input.files && input.files[0]; if(!f) return;
+  var r=new FileReader();
+  r.onload=function(){ importFromText(String(r.result)); input.value=""; };
+  r.readAsText(f);
+}
+function undoImport(){
+  var b=load(K_IMPORT_BACKUP,null);
+  if(!b){ alert("戻せる読み込みはありません。"); return false; }
+  if(!confirm("読み込む前の状態に戻します。よろしいですか？")) return false;
+  writeRecords(b.records, b.doneDays);
+  localStorage.removeItem(K_IMPORT_BACKUP);
+  renderAll();
+  alert("読み込む前の状態に戻しました。");
+  return true;
+}
+
+/* =========================================================================
+   ★できた／まだの一覧（おうちの方）。2026-09-15 ユーザー判断: Q1=字ごと／Q2=本の書き取りに出る字だけ／Q3=せってい に1枚（字・問題のタブ）
+   ・字を「できた」 … その字の書き取りを〇にし、**字が全部「できた」になった書き取りの問題を「できた」**にする（紙に出なくなる。doneWords と同じ動き）
+   ・字を「まだ」   … 「必ず出す」の印（markWrongChars と同じ）。**その字をふくむ「できた」の問題は「まだ」に戻す**
+                      （⚠️ 〇の問題は、印があっても bookItemsForRetry が出さないため。戻さないと「まだ」にしても紙に出ない）
+   ・問題を切り替え … その問題の記録（ITEMS）を〇／✕にする。「まだ」にした問題は次の日の紙（アプリの問題はアプリ）に出る
+   ・どの切り替えも「やった問題」の履歴に「一覧」として残す（あとから〇✕を直せる。relastItem が履歴から決め直すのと食い違わないように）
+   ========================================================================= */
+var DONE_TAB="kanji";
+function kakiItems(){ return bookAllItems().filter(function(x){ return itemFieldOf(x.it,x.g)==="kaki"; }); }
+function kakiChars(){
+  var seen={}, out=[];
+  kakiItems().forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ if(!seen[k]){ seen[k]=1; out.push(k); } }); });
+  return out;
+}
+/* 字の状態: done＝書き取りの最後が〇で「必ず出す」印なし／mada＝✕がある・印あり／none＝まだ記録なし */
+function kanjiState(k){
+  var w=WEAK[k];
+  if(w && w.must && !w.got) return "mada";
+  var st=KSTATS[k] && KSTATS[k].kaki;
+  if(!st || !((st.o||0)+(st.x||0))) return "none";
+  return (st.run||0)>0 ? "done" : "mada";
+}
+function itemState(id){ var r=ITEMS[id]; return !r ? "none" : (r.last==="o" ? "done" : "mada"); }
+function doneItemList(){
+  var seen={}, out=[];
+  bookAllItems().concat(appAllItems()).forEach(function(x){ if(!seen[x.it.id]){ seen[x.it.id]=1; out.push(x); } });
+  return out;
+}
+function markItem(x, done, withKstats){
+  var id=x.it.id, f=itemFieldOf(x.it,x.g), ks=x.it.kanji||[];
+  var r=ITEMS[id]||(ITEMS[id]={o:0,x:0});
+  if(done) r.o++; else r.x++;
+  r.last=done?"o":"x"; r.date=todayStr();
+  if(withKstats) ks.forEach(function(k){
+    if(!KSTATS[k]) KSTATS[k]={};
+    var st=KSTATS[k][f]||(KSTATS[k][f]={o:0,x:0});
+    if(done){ st.o++; st.run=(st.run||0)+1; } else { st.x++; st.run=0; }
+  });
+  logAnswer("list", id, f, bookCite(x), ks.map(function(k){ return { k:k, ok:done }; }));
+}
+function setKanjiDone(k, done){
+  if(!KSTATS[k]) KSTATS[k]={};
+  var st=KSTATS[k].kaki||(KSTATS[k].kaki={o:0,x:0}), touched=[];
+  if(done){
+    st.o=(st.o||0)+1; st.run=(st.run||0)+1;
+    if(WEAK[k]){ WEAK[k].got=true; WEAK[k].gotAt=Date.now(); WEAK[k].must=false; }
+    kakiItems().forEach(function(x){
+      var ks=x.it.kanji||[];
+      if(ks.indexOf(k)<0 || (ITEMS[x.it.id] && ITEMS[x.it.id].last==="o")) return;
+      if(ks.every(function(c){ return kanjiState(c)==="done"; })) touched.push(x);
+    });
+  }else{
+    st.x=(st.x||0)+1; st.run=0;
+    if(!WEAK[k]) WEAK[k]={wrong:0,got:false};
+    WEAK[k].wrong=(WEAK[k].wrong||0)+1; WEAK[k].got=false; WEAK[k].must=true; WEAK[k].lastAt=Date.now();
+    kakiItems().forEach(function(x){
+      if((x.it.kanji||[]).indexOf(k)>=0 && ITEMS[x.it.id] && ITEMS[x.it.id].last==="o") touched.push(x);
+    });
+  }
+  touched.forEach(function(x){ markItem(x, done, false); });
+  save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_ITEMS,ITEMS);
+}
+function setItemDone(id, done){
+  var x=doneItemList().filter(function(y){ return y.it.id===id; })[0];
+  if(!x) return false;
+  markItem(x, done, true);
+  save(K_KSTAT,KSTATS); save(K_ITEMS,ITEMS);
+  return true;
+}
+function setDoneTab(t){ DONE_TAB=t; renderDoneList(); }
+function toggleKanjiDone(k){ setKanjiDone(k, kanjiState(k)!=="done"); renderAll(); }
+function toggleItemDone(id){ setItemDone(id, itemState(id)!=="done"); renderAll(); }
+function renderDoneList(){
+  var box=document.getElementById("done-box"); if(!box) return;
+  ["kanji","item"].forEach(function(t){
+    var b=document.getElementById("dl-tab-"+t);
+    if(b){ b.style.fontWeight=(DONE_TAB===t?"700":"400"); b.style.background=(DONE_TAB===t?"#e0f2fe":""); }
+  });
+  var bk=load(K_IMPORT_BACKUP,null), ub=document.getElementById("undo-import"), info=document.getElementById("import-info");
+  if(ub) ub.style.display=bk ? "" : "none";   // ⚠️ hidden 属性は .btn の display に負けて消えない（画面で見て分かった）
+  if(info) info.textContent=bk ? ("読み込む前の状態を残しています（"+String(bk.at||"").slice(0,16).replace("T"," ")+"）") : "";
+  if(!bookLoaded()){ box.innerHTML='<span class="muted">本の問題が読みこまれると、ここに並びます。</span>'; return; }
+  var flt=(document.getElementById("dl-filter")||{}).value||"all";
+  function pass(s){ return flt==="all" || (flt==="done" ? s==="done" : s!=="done"); }
+  if(DONE_TAB==="kanji"){
+    var all=kakiChars(), nDone=all.filter(function(k){ return kanjiState(k)==="done"; }).length;
+    box.innerHTML='<div class="muted" style="font-size:.78rem;margin-bottom:6px">本の書き取りに出てくる字 '+all.length+' 字（できた '+nDone+' 字）。〇＝できた／✕＝まだ／・＝まだやっていない</div>'
+      +'<div class="marks">'+all.filter(function(k){ return pass(kanjiState(k)); }).map(function(k){
+        var s=kanjiState(k);
+        return '<div class="mark'+(s==="mada"?" x":"")+'"'+(s==="none"?' style="background:#f1f5f9;border-color:#cbd5e1;color:#64748b"':'')+' data-dl-k="'+k+'" onclick="toggleKanjiDone(this.dataset.dlK)">'
+          +k+(s==="done"?" ○":s==="mada"?" ✕":" ・")+'</div>';
+      }).join("")+'</div>';
+  }else{
+    var xs=doneItemList(), n2=xs.filter(function(x){ return itemState(x.it.id)==="done"; }).length;
+    var LB={done:"できた",mada:"まだ",none:"やっていない"};
+    box.innerHTML='<div class="muted" style="font-size:.78rem;margin-bottom:6px">本の問題 '+xs.length+' 問（できた '+n2+' 問）。ボタンを押すと切りかわります。</div>'
+      +'<table style="width:100%;font-size:.8rem">'+xs.filter(function(x){ return pass(itemState(x.it.id)); }).map(function(x){
+        var s=itemState(x.it.id), fd=fieldOf(itemFieldOf(x.it,x.g));
+        return '<tr><td style="white-space:nowrap">'+bookCite(x)+'</td><td>'+(fd?fd.name:"")+'</td><td>'+(x.it.kanji||[]).join("")+'</td>'
+          +'<td><button class="btn ghost" style="width:auto;padding:2px 8px;font-size:.78rem'+(s==="mada"?';color:#b91c1c':'')+'" data-dl-id="'+x.it.id+'" onclick="toggleItemDone(this.dataset.dlId)">'+LB[s]+'</button></td></tr>';
+      }).join("")+'</table>';
+  }
+}
+
 /* ---------- せってい ---------- */
 function renderSetei(){
   document.getElementById("m-date").value=SET.examDate;
@@ -3070,7 +3281,7 @@ function renderVersion(){
     +"（古いときは、アドレスの最後に ?数字 を付けて開き直してください）";
 }
 function renderAll(){ renderOuen(); renderKyou(); renderAppEntry(); renderApp(); renderKiroku(); renderLog(); renderSetei(); renderVersion(); renderAppPeek();
-                      renderQuizBox(); renderProgress(); renderKirokuProgress(); }
+                      renderQuizBox(); renderProgress(); renderKirokuProgress(); renderDoneList(); }
 renderAll();
 /* ★保存ずみの鍵があれば、起動時に本の問題を読む（合言葉の入力は1回だけ） */
 tryLoadBook().then(function(ok){ if(ok) renderAll(); });

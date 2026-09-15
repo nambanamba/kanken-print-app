@@ -298,6 +298,110 @@ ok("★「やらなかった」を押すと、その日（1月22日）の新し�
 ok("★「やらなかった」は記録を付けない（問題・ログ・やった日が増えない）", sk.items === 0 && sk.logs === 0 && sk.done === 0, JSON.stringify({ items: sk.items, logs: sk.logs, done: sk.done }));
 ok("★やらなかった紙の問題は、新しい紙にまた出る", sk.ids1.length > 0 && sk.ids1.every(id => sk.ids2.includes(id)), `${sk.ids1.length}問 / ${sk.ids2.length}問`);
 
+console.log("\n=== できた／まだの一覧（2026-09-15 ユーザー判断 Q1=字・Q2=本の書き取りの字・Q3=せってい） ===");
+const dl = await page.evaluate(() => {
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null; localStorage.removeItem(K_IMPORT_BACKUP);
+  window.__day = "2099-02-10"; renderAll();
+  const chars = kakiChars(), kaki = kakiItems();
+  const onlyKaki = chars.length > 0 && chars.every(k => kaki.some(x => x.it.kanji.includes(k)))
+    && bookAllItems().filter(x => itemFieldOf(x.it, x.g) !== "kaki").every(x => x.it.kanji.every(k => chars.includes(k) || !kaki.some(y => y.it.kanji.includes(k))));
+  const target = kaki.find(x => x.it.kanji.length === 1), k = target.it.kanji[0], id = target.it.id;
+  const inSheet = () => composeSheet(40).map(x => x.it.id).includes(id);
+  setKanjiDone(k, true);
+  const afterDone = { k: kanjiState(k), item: itemState(id), sheet: inSheet() };
+  setKanjiDone(k, false);
+  const afterMada = { k: kanjiState(k), item: itemState(id), must: !!(WEAK[k] && WEAK[k].must), sheet: inSheet() };
+  setItemDone(id, true);
+  const itemDone = { item: itemState(id), sheet: inSheet() };
+  setItemDone(id, false);
+  window.__day = "2099-02-11";
+  const itemMadaNextDay = { item: itemState(id), sheetFirst: composeSheet(40)[0].it.id === id };
+  const logList = LOG.filter(e => e.src === "list").length;
+  // 画面: せってい のカードに字が並び、タップで切りかわる／問題タブのボタンでも切りかわる
+  document.querySelector('.tab[data-page="setei"]').click(); setDoneTab("kanji");
+  const kEl = document.querySelector('#done-box [data-dl-k="' + k + '"]'), kBefore = kanjiState(k);
+  kEl.click();
+  const tapK = kanjiState(k) !== kBefore;
+  const shownChars = document.querySelectorAll("#done-box [data-dl-k]").length;
+  setDoneTab("item");
+  const iEl = document.querySelector('#done-box [data-dl-id="' + id + '"]'), iBefore = itemState(id);
+  iEl.click();
+  const tapI = itemState(id) !== iBefore;
+  const childScreens = ["page-ouen", "page-kyou", "page-kiroku"].every(p => !document.getElementById(p).querySelector("#done-box"));
+  return { onlyKaki, n: chars.length, shownChars, afterDone, afterMada, itemDone, itemMadaNextDay, logList, tapK, tapI, childScreens };
+});
+ok("★字の一覧は、本の書き取りに出てくる字だけ（全部並ぶ）", dl.onlyKaki && dl.shownChars === dl.n, `${dl.n}字 / 画面 ${dl.shownChars}字`);
+ok("★字を「できた」→ その字だけの書き取りの問題が「できた」になり、紙に出ない", dl.afterDone.k === "done" && dl.afterDone.item === "done" && !dl.afterDone.sheet, JSON.stringify(dl.afterDone));
+ok("★字を「まだ」→ 必ず出す印が付き、「できた」だった問題も「まだ」に戻って、紙に出る", dl.afterMada.k === "mada" && dl.afterMada.must && dl.afterMada.item === "mada" && dl.afterMada.sheet, JSON.stringify(dl.afterMada));
+ok("★問題を「できた」→ 紙に出ない", dl.itemDone.item === "done" && !dl.itemDone.sheet, JSON.stringify(dl.itemDone));
+ok("★問題を「まだ」→ 次の日の紙の先頭に出る", dl.itemMadaNextDay.item === "mada" && dl.itemMadaNextDay.sheetFirst, JSON.stringify(dl.itemMadaNextDay));
+ok("★切り替えは「やった問題」の履歴に「一覧」として残る（あとから直せる）", dl.logList >= 4, String(dl.logList));
+ok("★画面の字をタップ／問題のボタンを押すと切りかわる", dl.tapK && dl.tapI);
+ok("★一覧は「せってい」だけ（お子さんの画面には出さない）", dl.childScreens);
+
+console.log("\n=== 記録の書き出し・読み込み（Q4=JSON・問題文なし／Q5=まるごと置きかえ） ===");
+const io = await page.evaluate(() => {
+  const keepConfirm = window.confirm, keepAlert = window.alert;
+  let asked = [], answers = [];
+  window.confirm = m => { asked.push(m); return answers.length ? answers.shift() : true; };
+  window.alert = () => {};
+  const all = doneItemList();
+  RECORDS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null; APP_S = null; localStorage.removeItem(K_IMPORT_BACKUP);
+  ITEMS = {}; [0, 1, 2].forEach(i => setItemDone(all[i].it.id, i !== 1));
+  const snapA = JSON.stringify(exportData().records);
+  // 書き出し: 問題文が入っていない
+  const texts = all.map(x => String(x.it.text || "")).filter(t => t.length >= 6);
+  const exported = JSON.stringify(exportData());
+  const noText = texts.length > 0 && texts.every(t => !exported.includes(t));
+  // ファイル: 1件消す・1件変える・1件足す
+  const file = JSON.parse(exported), recs = file.records[K_ITEMS];
+  delete recs[all[0].it.id];
+  recs[all[1].it.id] = Object.assign({}, recs[all[1].it.id], { last: "o", o: 9 });
+  recs[all[3].it.id] = { o: 1, x: 0, last: "o", date: "2099-01-01" };
+  const text = JSON.stringify(file);
+  const pv = importPreview(JSON.parse(text)).items;
+  // 2回目の確認で やめる → 何も変わらない
+  asked = []; answers = [true, false];
+  const r1 = importFromText(text);
+  const cancelNoChange = !r1 && JSON.stringify(exportData().records) === snapA && !load(K_IMPORT_BACKUP, null) && asked.length === 2;
+  // 置きかえる（消える件数があるので確認2回）
+  asked = []; answers = [];
+  const r2 = importFromText(text);
+  const replaced = r2 && JSON.stringify(ITEMS) === JSON.stringify(recs) && JSON.stringify(load(K_ITEMS, {})) === JSON.stringify(recs);
+  const confirms2 = asked.length === 2 && /増える 1・変わる 1・消える 1/.test(asked[0]);
+  const sheetFollows = !composeSheet(40).map(x => x.it.id).includes(all[3].it.id);
+  // 読み込む前に戻す
+  document.querySelector('.tab[data-page="setei"]').click(); renderAll();
+  const shown = () => getComputedStyle(document.getElementById("undo-import")).display !== "none";   // ★見えているか（hidden 属性は CSS に負けて消えないことがある）
+  const undoShown = shown();
+  const r3 = undoImport();
+  const undone = r3 && JSON.stringify(exportData().records) === snapA && !load(K_IMPORT_BACKUP, null);
+  renderAll();
+  const undoHidden = !shown();
+  // 消える件数が無い読み込みは、確認1回
+  const add = JSON.parse(JSON.stringify(JSON.parse(exported)));
+  add.records[K_ITEMS][all[4].it.id] = { o: 1, x: 0, last: "o", date: "2099-01-01" };
+  asked = []; answers = [];
+  importFromText(JSON.stringify(add));
+  const confirms1 = asked.length === 1;
+  undoImport();
+  // ちがうファイルは読まない（何も変えない）
+  asked = [];
+  const before = JSON.stringify(exportData().records);
+  const bad1 = importFromText("これはJSONではない"), bad2 = importFromText(JSON.stringify({ app: "kq_battle", records: {} }));
+  const badNoChange = !bad1 && !bad2 && asked.length === 0 && JSON.stringify(exportData().records) === before;
+  window.confirm = keepConfirm; window.alert = keepAlert;
+  return { noText, pv, cancelNoChange, replaced, confirms2, sheetFollows, undoShown, undone, undoHidden, confirms1, badNoChange };
+});
+ok("★書き出したファイルに問題文が入っていない", io.noText);
+ok("★読み込む前の件数（増える1・変わる1・消える1）", io.pv.add === 1 && io.pv.chg === 1 && io.pv.del === 1, JSON.stringify(io.pv));
+ok("★消える記録があるときは確認2回。2回目でやめたら何も変わらない", io.cancelNoChange);
+ok("★読み込むと、ファイルの内容にまるごと置きかわる（画面の記録も保存も）", io.replaced && io.confirms2);
+ok("★読み込んだ記録が、次の紙に効く（ファイルで「できた」の問題は出ない）", io.sheetFollows);
+ok("★「読み込む前の状態に戻す」で、読み込む前とまったく同じに戻る（戻したらボタンは消える）", io.undoShown && io.undone && io.undoHidden);
+ok("★消える記録が無い読み込みは、確認1回", io.confirms1);
+ok("★ちがうファイルは読まない（確認も出さず、何も変えない）", io.badNoChange);
+
 console.log("\n=== 照合の取り下げ ===");
 const wd = await page.evaluate((u0) => {
   RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
