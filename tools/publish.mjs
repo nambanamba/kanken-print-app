@@ -20,6 +20,7 @@
  *   ②b 画像の関門 … 画像・PDF・data:image を含むファイルを1つも追跡させない（check_no_images）
  *   ③ 除外フォルダの混入 … `公式資料` `元データ` `情報` `書き起こし`
  *   ④ テスト
+ *   ④b 記録の引き継ぎ（check_carry_over。公開中の版＝origin/master で作った記録を、この版で開いても変わらないか）
  *   ⑤ 本物の紙（check_real_paper。合言葉が要る。無ければ「飛ばした」と大きく出す）
  *   **全部通ったときだけ commit / push する。**
  */
@@ -130,6 +131,13 @@ console.log(`OK（追跡 ${tracked.length} 本）`);
 /* ④ テスト */
 run("テスト（smoke-test）", process.execPath, [path.join(HERE, "smoke-test.mjs")]);
 run("テスト（test_gen）", process.execPath, [path.join(HERE, "test_gen.js")]);
+
+/* ④b 記録の引き継ぎ（2026-09-15 ユーザー判断「公開のたびに自動で確かめる」）
+ *   端末の記録は新しい版がそのまま読む（移行は作らない）。smoke-test は新しい版が自分で書いた記録しか見ないので、
+ *   **いま公開中の版（origin/master）の画面で作った記録**を、この版で開いても欠けたり変わったりしないかを見る。
+ *   ⚠️ 前の版は git から取り出すので、先に fetch して origin/master を最新にしておく */
+execSync("git fetch -q origin", { cwd: ROOT });
+run("記録の引き継ぎ（check_carry_over・前の版＝origin/master）", process.execPath, [path.join(HERE, "check_carry_over.mjs"), "--base", "origin/master"]);
 
 /* ⑤ 本物の紙（合言葉が要る。2026-09-11 claude-eb の依頼・司令塔の指示）
  *   ダミーではテストが通り、本物の紙は折り線を越えていた（1日に4回）。
