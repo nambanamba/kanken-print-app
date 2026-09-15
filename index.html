@@ -923,7 +923,10 @@ function renderKyou(){
   // まえに ✕ だった問題（＝紙で記録したことがある問題）
   // ★「まえに✕」は、きょうより前の日に記録があった問題だけ（きょう記録した問題を数えない。記録したあと「20問のうち20問」と出ていた）
   var retryN=items.filter(function(x){ return answeredBefore(x.it.id); }).length;
-  info.innerHTML='受検日まで <b>あと '+daysLeft()+' 日</b>。<br>'
+  info.innerHTML=(sheetPending()
+      ? '<div class="note" style="text-align:left;margin-bottom:6px">📄 まだ <b>'+mdLabel(SESSION.date)+'の紙</b> のままです。'
+        +'〇✕を「きろく」で入れると、次の紙になります。</div>' : '')
+    +'受検日まで <b>あと '+daysLeft()+' 日</b>。<br>'
     +'きょうの紙は <b>'+items.length+' 問</b>'
     +(retryN? '（うち <b>'+retryN+' 問</b>は、まえに ✕ だった問題）' : '')+'。'
     +(items.length && items.length<SHEET_TARGET
@@ -1533,7 +1536,9 @@ var LOG=load(K_LOG,[]);
 function logAnswer(src, id, f, cite, kanji){
   // extra … おかわり（きょうの分のあとに追加でやった回）の番号。0＝きょうの分
   var extra = (src==="paper") ? ((SESSION&&SESSION.extra)||0) : ((APP_S&&APP_S.extra)||0);
-  LOG.push({ t:Date.now(), date:todayStr(), src:src, id:id, f:f, cite:cite, kanji:kanji, extra:extra });
+  // 紙の記録は「紙の日」で残す（遅れて入れても、その日にやった分として数える）
+  var d=(src==="paper" && SESSION && SESSION.date) ? SESSION.date : todayStr();
+  LOG.push({ t:Date.now(), date:d, src:src, id:id, f:f, cite:cite, kanji:kanji, extra:extra });
   save(K_LOG,LOG);
 }
 
@@ -1987,8 +1992,17 @@ function countByField(xs){ var c={}; xs.forEach(function(x){ var f=itemFieldOf(x
    ⚠️ 旧形式は、同じ日付でも作り直す。
       v2 は読みが紙に乗っていた（紙とアプリの分離前）ので、v3 に上げて作り直させている。 */
 var SHEET_VERSION = 6;   // 6: 分野ごとの上限（2026-09-11）。   // 5: 送りがなを紙から外した＋20問を削らない（2026-09-11）。4 以前の「まだ記録していない紙」は作り直す
+/* ★正誤を入れる（「記録」を押す）までは、日付が変わっても同じ紙のまま（2026-09-15 ユーザー決定: 次の紙に進むのは「正誤を入れたかどうか」）。
+   ⚠️ もとは日付だけで組み直していたので、入れ忘れたまま日付が変わると、その紙の〇✕が二度と入れられなかった。
+   ★紙は1枚しか持たないので、何日入れ忘れても、たまらない（記録するまで次の紙を作らない） */
+function sheetPending(){
+  return !!(SESSION && !SESSION.saved && SESSION.v>=3 && SESSION.ids && SESSION.ids.length && SESSION.date<todayStr());
+}
+function sheetDay(){ return (SESSION && SESSION.date) || todayStr(); }
+function mdLabel(d){ var p=String(d).split("-"); return (+p[1])+"月"+(+p[2])+"日"; }
 function todaySheet(){
   if(!bookLoaded()) return null;
+  if(sheetPending()) return SESSION;
   if(SESSION && SESSION.date===todayStr()
      && (SESSION.v===SHEET_VERSION || (SESSION.v>=3 && SESSION.saved))) return SESSION;   // 記録ずみの紙は作り直さない（記録と紙がずれるため）
   var ids=fitToday().map(function(x){ return x.it.id; });
@@ -2425,7 +2439,7 @@ function renderAnswerSheet(blocks, page, pages, forLabel){
   var html='<div class="p-sheet p-ansheet"><div class="p-body'+tight+'">'
     +'<div class="p-title">漢検7級　答えとなおし'
     +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
-    +'<span class="p-sub">'+forLabel+'　'+todayStr()+'</span></div>'
+    +'<span class="p-sub">'+forLabel+'　'+sheetDay()+'</span></div>'
     +'<div class="p-fixhead"><b>おうちの方へ</b>　丸つけに使ってください。'
     +'まちがえた番号だけ、<b>おてほん</b>を見て、まん中の<b>うすい字をなぞって</b>、'
     +'いちばん右に<b>もう一度じぶんで</b>書きます。<br>'
@@ -2461,7 +2475,7 @@ function renderSheet(blocks, page, pages){
     // ★見出しと「なまえ・日付」は1行に（送りがなまで5分野が並ぶ日に1枚に収めるため。本物の紙で実測）
     +'<div class="p-title">漢検7級　きょう 書く字'
     +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
-    +'<span class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+todayStr()+'　受検日まであと '+daysLeft()+' 日</span>'
+    +'<span class="p-sub">なまえ ＿＿＿＿＿＿＿＿　'+sheetDay()+'　受検日まであと '+daysLeft()+' 日</span>'
     +'</div>';
 
   var keys=[];
@@ -2606,7 +2620,8 @@ function renderMarks(){
   //   まとめて1タップにすると、3字のうち1字だけ間違えたときに3字とも✕になり、
   //   記録の粒度が落ちる（＝できている字まで翌日また出る）。
   //   ★ただし既定は全部〇なので、**タップの数は「まちがえた数」であって「字の数」ではない。**
-  var html=SESSION.saved?'<div class="note" style="margin-bottom:8px">きょうの紙は <b>記録ずみ</b> です。</div>':"";
+  var html=SESSION.saved?'<div class="note" style="margin-bottom:8px">きょうの紙は <b>記録ずみ</b> です。</div>'
+    :(sheetPending()?'<div class="note" style="margin-bottom:8px"><b>'+mdLabel(SESSION.date)+'の紙</b>です。〇✕を入れて「記録」を押すと、次の紙になります。</div>':"");
   var lastBlock=null;
   rows.forEach(function(r){
     if(r.block!==lastBlock){ html+='<div class="mark-head">'+r.block+'</div>'; lastBlock=r.block; }
@@ -2620,7 +2635,18 @@ function renderMarks(){
       }).join("")
       +'<span class="muted" style="font-size:.75rem;margin-left:6px">'+(r.cite||"")+'</span></div>';
   });
+  // ★やらなかった日の抜け道（2026-09-15 ユーザー判断 (a)）。前の日の紙が残っているときだけ、奥に小さく出す
+  if(sheetPending()) html+='<div style="margin-top:14px;text-align:right">'
+    +'<button id="skip-sheet" class="btn sec" style="font-size:.72rem;padding:3px 8px;width:auto" onclick="skipPendingSheet()">この紙はやらなかった（新しい紙にする）</button></div>';
   box.innerHTML=html;
+}
+/* ★「この紙はやらなかった」。記録は付けない（〇✕を入れていない問題は「まだの問題」のまま、あとの紙にまた出る）。
+   ⚠️ 全部〇で記録させると、やっていない問題が「できた」になる。それを避けるための抜け道 */
+function skipPendingSheet(){
+  if(!sheetPending()) return;
+  if(!confirm(mdLabel(SESSION.date)+"の紙は、やらなかったことにして新しい紙にします。〇✕は記録しません。よろしいですか？")) return;
+  SESSION=null; save(K_SESSION,SESSION);
+  renderAll();
 }
 function toggleMark(key){
   if(!SESSION || SESSION.saved) return;
@@ -2636,6 +2662,8 @@ function saveSheetResult(){
   var rows=todayPaperRows();
   if(!rows.length || !SESSION){ alert("採点する問題がありません。"); return; }
   if(SESSION.saved){ alert("きょうの紙は、もう記録してあります。"); return; }
+  // ★記録の日付は「紙の日」。入力した日にすると、遅れて入れた紙の✕が isRetryItem で今日の紙に出ず、あさってに回る
+  var day=SESSION.date||todayStr(), late=day<todayStr();
   var res=SESSION.results||{};
   rows.forEach(function(r){
     var anyX=false;
@@ -2657,7 +2685,7 @@ function saveSheetResult(){
     });
     var it=ITEMS[r.id]||(ITEMS[r.id]={o:0,x:0});
     if(anyX) it.x++; else it.o++;
-    it.last=anyX?"x":"o"; it.date=todayStr();
+    it.last=anyX?"x":"o"; it.date=day;
     logAnswer("paper", r.id, r.field||"kaki", r.cite||"", r.kanji.map(function(k){ return { k:k, ok:res[markKey(r.id,k)]!=="x" }; }));
   });
   // ★日割りを進める。かたまりの（照合ずみ・紙に出せる）問題が全部記録されたら「おわり」。
@@ -2667,15 +2695,15 @@ function saveSheetResult(){
     if(RECORDS[c.id]) return;
     var its=bookItemsOfChunk(c);
     if(its.length && its.every(function(x){ return !!ITEMS[x.it.id]; })){
-      RECORDS[c.id]={correct:0,total:0,field:(unitOf(c.unit)||{}).field||"",date:todayStr(),via:"sheet"};
+      RECORDS[c.id]={correct:0,total:0,field:(unitOf(c.unit)||{}).field||"",date:day,via:"sheet"};
     }
   });
   SESSION.saved=true;
-  SET.doneDays=(SET.doneDays||[]).concat([todayStr()]).filter(function(v,i,a){return a.indexOf(v)===i;});
+  SET.doneDays=(SET.doneDays||[]).concat([day]).filter(function(v,i,a){return a.indexOf(v)===i;});
   save(K_ITEMS,ITEMS); save(K_REC,RECORDS);
   save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET); save(K_SESSION,SESSION);
   renderAll();
-  alert("記録しました。✕の問題は、あしたの紙にまた出ます。おうえん画面を見せてあげてください！");
+  alert("記録しました。✕の問題は、"+(late?"次の紙":"あしたの紙")+"にまた出ます。おうえん画面を見せてあげてください！");
 }
 
 function renderKiroku(){

@@ -246,6 +246,58 @@ ok("照合ずみの問題を全部やり終えたら、紙は空（足すため�
 const gen2 = await page.evaluate(() => window.__genCalls.slice());
 ok("★ここまでアプリの問題生成が1回も呼ばれていない", gen2.length === 0, gen2.join(","));
 
+console.log("\n=== 正誤を入れるまで、次の日の紙にならない（2026-09-15 ユーザー決定） ===");
+const nd = await page.evaluate(() => {
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null;
+  window.__day = "2099-01-10"; renderAll();
+  const ids1 = todaySheetItems().map(x => x.it.id);
+  renderMarks(); document.querySelector("#mark-box .mark").click();   // 1問目を✕（「記録」は押さない）
+  const xId = todayPaperRows()[0].id;
+  window.__day = "2099-01-11"; renderAll();
+  const ids2 = todaySheetItems().map(x => x.it.id);
+  const kept2 = SESSION.date === "2099-01-10" && !SESSION.saved && Object.values(SESSION.results || {}).includes("x");
+  const kyou = document.getElementById("ky-info").textContent, kiroku = document.getElementById("mark-box").textContent;
+  printSessionPractice();
+  const heads = [...document.querySelectorAll("#print-region .p-sub")].map(e => e.textContent);
+  window.__day = "2099-01-13"; renderAll();                            // 何日たっても同じ紙
+  const ids3 = todaySheetItems().map(x => x.it.id);
+  renderMarks(); const x3 = document.querySelectorAll("#mark-box .mark.x").length;
+  saveSheetResult();
+  const rec = { itemDate: ITEMS[xId].date, logDates: [...new Set(LOG.map(e => e.date))], lastDone: (SET.doneDays || []).slice(-1)[0] };
+  renderAll();
+  const ids4 = todaySheetItems().map(x => x.it.id);
+  return { ids1, ids2, ids3, ids4, kept2, kyou, kiroku, heads, x3, xId, rec, next: { date: SESSION.date, saved: SESSION.saved } };
+});
+ok("★記録しないまま日付が変わっても、同じ紙のまま", nd.ids1.length > 0 && nd.ids2.join() === nd.ids1.join(), `${nd.ids1.length}問 / ${nd.ids2.length}問`);
+ok("★入れかけの✕も消えていない（紙の日付も元のまま）", nd.kept2);
+ok("★「きょう」と「きろく」に「1月10日の紙」と出る", /1月10日の紙/.test(nd.kyou) && /1月10日の紙/.test(nd.kiroku), nd.kyou.slice(0, 40));
+ok("★印刷し直しても、紙の日付は元の日（1月10日）", nd.heads.length > 0 && nd.heads.every(h => h.includes("2099-01-10") && !h.includes("2099-01-11")), nd.heads.join(" | "));
+ok("★何日たっても同じ紙で、✕も残っている（たまらない）", nd.ids3.join() === nd.ids1.join() && nd.x3 === 1, `✕${nd.x3}`);
+ok("★遅れて記録しても、記録の日付は紙の日（1月10日）", nd.rec.itemDate === "2099-01-10" && nd.rec.logDates.join() === "2099-01-10" && nd.rec.lastDone === "2099-01-10",
+   JSON.stringify(nd.rec));
+ok("★記録したら、その日（1月13日）の新しい紙になり、✕の問題が先頭に出る",
+   nd.next.date === "2099-01-13" && !nd.next.saved && nd.ids4[0] === nd.xId, `${nd.next.date} 先頭=${nd.ids4[0]}`);
+const sk = await page.evaluate(() => {
+  RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; LOG = []; SESSION = null;
+  window.__day = "2099-01-20"; renderAll(); renderMarks();
+  const ids1 = todaySheetItems().map(x => x.it.id);
+  const btnSameDay = !!document.getElementById("skip-sheet");
+  document.querySelector("#mark-box .mark").click();                 // ✕を1つ入れかけて、やめた
+  window.__day = "2099-01-22"; renderAll(); renderMarks();
+  const btnLate = !!document.getElementById("skip-sheet");
+  document.getElementById("skip-sheet").click();                      // この紙はやらなかった
+  const ids2 = todaySheetItems().map(x => x.it.id);
+  renderMarks();
+  return { ids1, ids2, btnSameDay, btnLate, btnAfter: !!document.getElementById("skip-sheet"),
+           date: SESSION.date, saved: SESSION.saved, xs: Object.values(SESSION.results || {}).filter(v => v === "x").length,
+           items: Object.keys(ITEMS).length, logs: LOG.length, done: (SET.doneDays || []).filter(d => d >= "2099-01-20").length };
+});
+ok("★「やらなかった」ボタンは、前の日の紙が残っているときだけ出る（その日の紙には出ない）", !sk.btnSameDay && sk.btnLate && !sk.btnAfter,
+   `当日${sk.btnSameDay} / 2日後${sk.btnLate} / 押したあと${sk.btnAfter}`);
+ok("★「やらなかった」を押すと、その日（1月22日）の新しい紙になり、入れかけの✕は持ち越さない", sk.date === "2099-01-22" && !sk.saved && sk.xs === 0, `${sk.date} ✕${sk.xs}`);
+ok("★「やらなかった」は記録を付けない（問題・ログ・やった日が増えない）", sk.items === 0 && sk.logs === 0 && sk.done === 0, JSON.stringify({ items: sk.items, logs: sk.logs, done: sk.done }));
+ok("★やらなかった紙の問題は、新しい紙にまた出る", sk.ids1.length > 0 && sk.ids1.every(id => sk.ids2.includes(id)), `${sk.ids1.length}問 / ${sk.ids2.length}問`);
+
 console.log("\n=== 照合の取り下げ ===");
 const wd = await page.evaluate((u0) => {
   RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null;
