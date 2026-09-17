@@ -1998,23 +1998,28 @@ function kakiWritten(k){ return kanjiState(k)==="done"; }
 function kakiAllWritten(x){ var ks=x.it.kanji||[]; return ks.length>0 && ks.every(kakiWritten); }
 function writeRoundActive(){ return kakiChars().some(function(k){ return !kakiWritten(k); }); }
 function roundOtherCount(target){ return Math.max(1, Math.min(3, Math.round(target*3/20))); }
+/* ⚠️ 2026-09-18 に直した: もとは「書き取りを left-nOther 問で打ち切って、3問を部首などに取り置く」形だった。
+   **本にある部首・同じ読み・対義語は38問しかなく、やり終えると取り置いた3問が埋まらず、紙が17問になった**（ユーザー報告・本物で再現）。
+   → ★**先に部首などを取り（無ければ0問）、残りの枠は全部 書き取りで埋める。**まだ書けていない字があるかぎり20問になる（ユーザー判断 (A)） */
 function composeWriteRound(left, ex, retry, target){
   if(left<=0) return [];
   var covered={};
   retry.forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ covered[k]=1; }); });
   var all=bookAllItems().filter(function(x){ return !ex[x.it.id] && !ITEMS[x.it.id]; });
-  var nOther=Math.min(roundOtherCount(target), left), kaki=[];
+  var others=all.filter(function(x){ return itemFieldOf(x.it,x.g)!=="kaki"; });
+  var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiWritten); });   // 字がもう書けている問題を先に
+  var pool=ready.concat(others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); }));
+  var other=pool.slice(0, Math.min(roundOtherCount(target), left));
+  var room=left-other.length, kaki=[];
   all.forEach(function(x){
-    if(kaki.length>=left-nOther || itemFieldOf(x.it,x.g)!=="kaki") return;
+    if(kaki.length>=room || itemFieldOf(x.it,x.g)!=="kaki") return;
     var ks=x.it.kanji||[];
     if(!ks.some(function(k){ return !kakiWritten(k) && !covered[k]; })) return;   // 書けた字・きょう出す字だけの問題は出さない
     kaki.push(x); ks.forEach(function(k){ covered[k]=1; });
   });
-  var others=all.filter(function(x){ return itemFieldOf(x.it,x.g)!=="kaki"; });
-  var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiWritten); });
-  var rest=others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); });
-  // 書き取りが足りない日（一巡の終わりごろ）は、ほかの分野で埋める
-  return kaki.concat(ready.concat(rest).slice(0, left-kaki.length));
+  // 書き取りが足りない日（一巡の終わりごろ）は、ほかの分野でさらに埋める
+  if(kaki.length<room) other=other.concat(pool.slice(other.length, other.length+(room-kaki.length)));
+  return kaki.concat(other);
 }
 function composeSheet(target){
   target=target||SHEET_TARGET;

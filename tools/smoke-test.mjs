@@ -204,6 +204,11 @@ const rd = await page.evaluate(() => {
   const r = { round: writeRoundActive(), n: list.length, kk: kk.length, others: others.length,
     noWritten: kk.every(x => !x.it.kanji.every(k => done.includes(k))),
     newEach: kk.every((x, i) => x.it.kanji.some(k => !done.includes(k) && !kk.slice(0, i).some(y => y.it.kanji.includes(k)))) };
+  // ★部首・同じ読み・対義語をやり終えた日も20問（2026-09-18 ユーザー報告の17問）
+  bookAllItems().filter(x => f(x) !== "kaki").forEach(x => { ITEMS[x.it.id] = { o: 1, x: 0, last: "o", date: "2099-01-01" }; });
+  const only = composeSheet(20);
+  r.otherGone = { n: only.length, kaki: only.filter(x => f(x) === "kaki").length };
+  ITEMS = {};
   kakiChars().forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });
   const after = composeSheet(20);
   r.afterRound = !writeRoundActive() && after.length > 0 && after.every(x => f(x) !== "kaki");
@@ -212,6 +217,8 @@ const rd = await page.evaluate(() => {
 });
 ok("★一巡中: 書けた字の書き取りは出ない／まだ書けていない字を1字につき1問／部首などは3問（書き取りが足りなければ埋める）",
    rd.round && rd.noWritten && rd.newEach && rd.others === Math.max(3, 20 - rd.kk) && rd.n === rd.kk + rd.others, JSON.stringify(rd));
+ok("★部首・同じ読み・対義語をやり終えた日も、書き取りで20問にそろう（2026-09-18 の17問）",
+   rd.otherGone.n === 20 && rd.otherGone.kaki === 20, JSON.stringify(rd.otherGone));
 ok("★一巡したら: 字が全部書けた書き取りは出ず、ふだんの混ぜ方にもどる", rd.afterRound);
 ok("★1問ごとに出典が出ている（本の名前・ページ・問番号）",
    d1.cites.length === d1.n && d1.cites.every(c => /^（ドリル p\d+(-\d+)? の \d+）$/.test(c)),
