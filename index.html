@@ -310,8 +310,7 @@
   <div class="page active" id="page-ouen">
     <div class="card hero">
       <div class="big" id="h-done">0<small> 字</small></div>
-      <div class="cap" id="h-cap">ここまで進んだよ</div>
-      <div class="bar"><i id="h-bar" style="width:0%"></i></div>
+      <div class="cap" id="h-cap">できるようになった字</div>
     </div>
 
     <div class="card">
@@ -780,13 +779,11 @@ function renderOuen(){
   var dl=daysLeft();
   document.getElementById("hdr-sub").textContent="受検日 "+SET.examDate+"　あと "+dl+" 日";
 
+  // ★できるようになった字の数だけを出す（2026-09-17 ユーザー了承「進捗を実態に合わせて」）。分母は出さない。
+  //   もとは「/ 642 字」とバー。本の問題に出てくる字は340字しかないので、全部できても届かない遠さを見せていた
   var okCount=KANJI_MASTER.filter(function(r){return isOK(r.k);}).length;
-  var total=KANJI_MASTER.length;
-  document.getElementById("h-done").innerHTML=okCount+"<small> / "+total+" 字</small>";
-  document.getElementById("h-bar").style.width=(okCount/total*100)+"%";
-  document.getElementById("h-cap").textContent=
-    okCount===0?"さあ、はじめよう！":
-    okCount>=total?"ぜんぶできた！すごい！":"ここまでできるようになったよ";
+  document.getElementById("h-done").innerHTML=okCount+"<small> 字</small>";
+  document.getElementById("h-cap").textContent=okCount===0?"さあ、はじめよう！":"できるようになった字";
 
   var e=estimate();
   var shown=(e.testScore!==null&&e.testScore!==undefined)?e.testScore:e.est;
@@ -1988,14 +1985,47 @@ function bookItemsNew(exclude, limit){
       それでも足りなければ20問に満たなくてよい。
       ⚠️ 読み・アプリの分野・自動生成では**絶対に埋めない**（叱責の中心）。
       ★ほかの紙の分野で埋めるのは、ユーザーの「毎日20文字書きます」に合わせるため（私の判断。司令塔に報告ずみ） */
+/* ★まずは全部の字を書けるように（2026-09-17 ユーザー判断 Q2=B・Q3=A・Q4=A）
+   ユーザー「昨日〇だった字が出てました。まずはすべての文字を書けるようになるを優先にしたい」
+   ・原因: 出題は問題ごとで、字ごとではなかった。本の書き取りの155字のうち81字が2問以上の書き取りに入っている（本物で実測）
+   ・書けた字 … 一覧の「字」タブと同じ判定（kanjiState==="done"）。見る場所で食い違わないように
+   ・一巡中（書けていない字が1字でもある）: ✕の問題 → まだ書けていない字の書き取りを1字につき1問 → 部首・同じ読み・対義語を2〜3問（字がもう書けている問題を優先）
+   ・★字が全部もう書けている書き取りの問題は、一巡のあとも出さない（Q3=A「一度〇ならもう出さない」）
+   ・一巡したら、今までの配点の混ぜ方に自動で戻る
+   ・✕の問題は翌日にまた出す、は変えない（bookItemsForRetry が先に入れる）
+   ⚠️ SHEET_VERSION は上げない。上げると、きょう刷ったまま記録していない紙が組み直され、紙と記録がずれる。次に組む紙から効く */
+function kakiWritten(k){ return kanjiState(k)==="done"; }
+function kakiAllWritten(x){ var ks=x.it.kanji||[]; return ks.length>0 && ks.every(kakiWritten); }
+function writeRoundActive(){ return kakiChars().some(function(k){ return !kakiWritten(k); }); }
+function roundOtherCount(target){ return Math.max(1, Math.min(3, Math.round(target*3/20))); }
+function composeWriteRound(left, ex, retry, target){
+  if(left<=0) return [];
+  var covered={};
+  retry.forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ covered[k]=1; }); });
+  var all=bookAllItems().filter(function(x){ return !ex[x.it.id] && !ITEMS[x.it.id]; });
+  var nOther=Math.min(roundOtherCount(target), left), kaki=[];
+  all.forEach(function(x){
+    if(kaki.length>=left-nOther || itemFieldOf(x.it,x.g)!=="kaki") return;
+    var ks=x.it.kanji||[];
+    if(!ks.some(function(k){ return !kakiWritten(k) && !covered[k]; })) return;   // 書けた字・きょう出す字だけの問題は出さない
+    kaki.push(x); ks.forEach(function(k){ covered[k]=1; });
+  });
+  var others=all.filter(function(x){ return itemFieldOf(x.it,x.g)!=="kaki"; });
+  var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiWritten); });
+  var rest=others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); });
+  // 書き取りが足りない日（一巡の終わりごろ）は、ほかの分野で埋める
+  return kaki.concat(ready.concat(rest).slice(0, left-kaki.length));
+}
 function composeSheet(target){
   target=target||SHEET_TARGET;
   var retry=bookItemsForRetry().slice(0, target);
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
+  if(writeRoundActive()) return retry.concat(composeWriteRound(target-retry.length, ex, retry, target));
   var left=target-retry.length, cand={};
   PAPER_FIELDS.forEach(function(f){ cand[f]=[]; });
   bookAllItems().forEach(function(x){
     if(ex[x.it.id] || ITEMS[x.it.id]) return;
+    if(itemFieldOf(x.it,x.g)==="kaki" && kakiAllWritten(x)) return;   // Q3=A: 字が全部もう書けている書き取りは出さない
     cand[itemFieldOf(x.it,x.g)].push(x);
   });
   var q=paperQuota(left), take={}, n=0;
@@ -3025,7 +3055,9 @@ function renderDoneList(){
   function pass(s){ return flt==="all" || (flt==="done" ? s==="done" : s!=="done"); }
   if(DONE_TAB==="kanji"){
     var all=kakiChars(), nDone=all.filter(function(k){ return kanjiState(k)==="done"; }).length;
-    box.innerHTML='<div class="muted" style="font-size:.78rem;margin-bottom:6px">本の書き取りに出てくる字 '+all.length+' 字（できた '+nDone+' 字）。〇＝できた／✕＝まだ／・＝まだやっていない</div>'
+    box.innerHTML='<div class="note" style="text-align:left;margin-bottom:6px">✏️ <b>全部の字を書く一巡</b>： '+all.length+' 字のうち <b>'+nDone+' 字</b> 書けた'
+        +(nDone>=all.length ? '（<b>一巡しました</b>。紙は ふだんの混ぜ方に もどっています）' : '（あと '+(all.length-nDone)+' 字。紙は まだ書けていない字を先に出します）')+'</div>'
+      +'<div class="muted" style="font-size:.78rem;margin-bottom:6px">本の書き取りに出てくる字です。〇＝書けた／✕＝まだ／・＝まだやっていない。<b>タップで〇✕を入れると、次の紙にそのまま効きます。</b></div>'
       +'<div class="marks">'+all.filter(function(k){ return pass(kanjiState(k)); }).map(function(k){
         var s=kanjiState(k);
         return '<div class="mark'+(s==="mada"?" x":"")+'"'+(s==="none"?' style="background:#f1f5f9;border-color:#cbd5e1;color:#64748b"':'')+' data-dl-k="'+k+'" onclick="toggleKanjiDone(this.dataset.dlK)">'
@@ -3064,15 +3096,21 @@ function renderSetei(){
    ⚠️ **同じ数字が2か所に出る**（「きろく」と「せってい」）。
       **計算はここ1か所だけ。**両方がこの結果を読む。
       別々に計算すると、**片方だけ直したときに食い違う**（そして気づけない）。 */
+/* ★2026-09-17 ユーザー了承「進捗がおかしい。実態と合わせて」→ **実際の記録から数える**形に変えた。
+   ⚠️ もとはドリルの日割り（58日分）の「おわった／のこり」だった。紙とアプリはもう日割りに沿って出していないので、
+      ・31日分は照合がまだで出せない ・照合ずみ27日分のうち17日分はアプリの問題だけで、紙の記録では終わらない
+      → 本の問題を全部やっても「おわった 10日分／のこり 48日分」と出ていた（本物で実測）
+   ★日割りの「きょうやるところ」は画面に出さない。「きょうは本でやった」の記録先（b-today）としてだけ使う */
 function progressInfo(){
-  var done=PLAN.filter(function(c){return !!RECORDS[c.id];}).length;
-  var left=PLAN.length-done, days=daysLeft(), t=planToday();
+  var t=planToday(), paper=bookAllItems(), app=appAllItems();
+  function did(xs){ return xs.filter(function(x){ return !!ITEMS[x.it.id]; }).length; }
+  var chars=kakiChars(), written=chars.filter(kakiWritten).length;
   return {
-    days:days, total:PLAN.length, done:done, left:left,
-    today:t, todayText:t?(chunkLabel(t)+" "+chunkRange(t)+"（"+t.n+"問）"):"ぜんぶ おわりました",
-    short:(left>0?("のこり "+left+" 日ぶん"):"ぜんぶ おわりました"),
-    // 日割りが受検日までに収まらないか（★親御さんにだけ見せる）
-    over:(left>days)?(left-days):0
+    days:daysLeft(), loaded:bookLoaded(),
+    paperTotal:paper.length, paperDone:did(paper), appTotal:app.length, appDone:did(app),
+    chars:chars.length, written:written, round:chars.length>0 && written<chars.length,
+    unitsV:UNITS.filter(function(u){ return isVerifiedUnit(u.id); }).length, unitsT:UNITS.length,
+    today:t, todayText:t?(chunkLabel(t)+" "+chunkRange(t)+"（"+t.n+"問）"):"ぜんぶ おわりました"
   };
 }
 
@@ -3080,33 +3118,29 @@ function progressInfo(){
 function renderProgress(){
   var box=document.getElementById("progress-box"); if(!box) return;
   var p=progressInfo();
+  if(!p.loaded){ box.innerHTML='<span class="muted">本の問題が読みこまれると、ここに出ます（受検日まで '+p.days+' 日）。</span>'; return; }
   var rows=[
     ["受検日まで", p.days+" 日"],
-    ["日割り", "全 "+p.total+" 日ぶん（ドリル）"],
-    ["おわった", p.done+" 日ぶん"],
-    ["のこり", p.left+" 日ぶん"],
-    ["きょうやるところ", p.todayText]
+    ["本の問題", (p.paperDone+p.appDone)+" / "+(p.paperTotal+p.appTotal)+" 問 やった"],
+    ["　紙", p.paperDone+" / "+p.paperTotal+" 問"],
+    ["　アプリ", p.appDone+" / "+p.appTotal+" 問"],
+    ["書き取りの字", p.written+" / "+p.chars+" 字 書けた"+(p.chars ? (p.round?"（一巡中）":"（一巡しました）") : "")],
+    ["照合がすんだ単元", p.unitsV+" / "+p.unitsT]
   ];
-  var warn="";
-  if(p.over>0){
-    // ★ここは親御さんにだけ見せる。お子さんの画面には出さない
-    warn='<div class="note" style="margin-top:10px;text-align:left">'
-      +'<b>のこり '+p.left+' 日ぶんに対して、受検日まで '+p.days+' 日です（'+p.over+' 日ぶん多い）。</b><br>'
-      +'ドリルはステージ1（1〜29）とステージ2（30〜54）で同じ単元が2巡します。'
-      +'<b>ステージ2は、記録で苦手と分かった分野だけ</b>にすると収まります。'
-      +'<br><span class="muted">1日の量を増やして間に合わせる作りにはしていません。</span></div>';
-  }
   box.innerHTML='<table>'+rows.map(function(r){
     return "<tr><td style='white-space:nowrap'>"+r[0]+"</td><td><b>"+r[1]+"</b></td></tr>";
-  }).join("")+'</table>'+warn;
+  }).join("")+'</table>'
+    +'<div class="muted" style="margin-top:6px;font-size:.78rem">紙・アプリ・一覧で入れた〇✕の記録から数えています。照合がすんだ単元が増えると、問題の数も増えます。</div>';
 }
 
 /* 「きろく」… 短く。★父親が毎日いるのはこちら（「せってい」は用があるときしか開かない） */
 function renderKirokuProgress(){
   var box=document.getElementById("k-progress"); if(!box) return;
   var p=progressInfo();
-  box.innerHTML='<span class="muted">きょうは <b>'+p.todayText+'</b>'
-    +'　／　'+p.short+'（受検日まで '+p.days+' 日）</span>';
+  box.innerHTML='<span class="muted">'+(p.loaded
+      ? '本の問題 <b>'+(p.paperDone+p.appDone)+' / '+(p.paperTotal+p.appTotal)+' 問</b> やった・書き取りの字 <b>'+p.written+' / '+p.chars+' 字</b> 書けた'
+      : '本の問題がまだ読みこまれていません')
+    +'（受検日まで '+p.days+' 日）</span>';
   // 「きょうは本でやった」に、どこを記録するかを出す（選ぶ手間をなくす）
   var bt=document.getElementById("b-today");
   if(bt) bt.innerHTML=p.today

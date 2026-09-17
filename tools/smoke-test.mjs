@@ -130,7 +130,12 @@ ok("「きょうの紙を印刷」がある", scr.btns.some(t => /きょうの�
 
 console.log("\n=== 1日目の紙 ===");
 const d1 = await page.evaluate(() => {
+  // ★ここは「一巡が終わったあと」のふだんの混ぜ方（配点比・上限）を見る。一巡中の出し方は「全部の字を書く一巡」で見る
+  const keepR = window.writeRoundActive; window.writeRoundActive = () => false;
+  SESSION = null;   // 準備の renderAll で一巡の出し方の紙がもう組まれているので、組み直す
   printSessionPractice();
+  renderAll();
+  window.writeRoundActive = keepR;
   const region = document.getElementById("print-region");
   const trs = [...region.querySelectorAll(".p-sheet:not(.p-ansheet) .p-body tr")];   // ★答えの紙(.p-ansheet)は数えない
   const blocks = buildPaperBlocks();
@@ -171,7 +176,9 @@ const mix = await page.evaluate(() => {
                              window.__mk("dr_19", 10, "kakusu")]);
   window.isVerifiedUnit = () => true;
   ITEMS = {};
+  const keepR = window.writeRoundActive; window.writeRoundActive = () => false;   // 一巡のあとの、ふだんの混ぜ方を見る
   const c = {}; composeSheet().forEach(x => { const f = itemFieldOf(x.it, x.g); c[f] = (c[f] || 0) + 1; });
+  window.writeRoundActive = keepR;
   const q = paperQuota(20);
   BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; SESSION = keepS; ITEMS = keepI;
   return { c, q };
@@ -184,6 +191,28 @@ ok("★全分野がそろえば、紙はその割り振りどおりに混ざる"
    JSON.stringify(mix.c));
 ok("★送りがなは紙に1問も出ない（アプリへ移した）", !mix.c.okuri, JSON.stringify(mix.c));
 ok("★漢字えらび・画数（アプリ側）は紙に出ない", !mix.c.erabi && !mix.c.kakusu && !mix.c.yomi, JSON.stringify(mix.c));
+
+console.log("\n=== 全部の字を書く一巡（2026-09-17 ユーザー判断 Q2=B・Q3=A） ===");
+const rd = await page.evaluate(() => {
+  const keepU = BOOK_UNITS, keepV = window.isVerifiedUnit, keepI = ITEMS, keepK = KSTATS, keepW = WEAK;
+  BOOK_UNITS = keepU.concat([window.__mk("dr_26", 10, "onaji"), window.__mk("dr_21", 10, "taigi")]);
+  window.isVerifiedUnit = () => true; ITEMS = {}; KSTATS = {}; WEAK = {};
+  const f = x => itemFieldOf(x.it, x.g);
+  const done = kakiItems()[0].it.kanji.slice();
+  done.forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });
+  const list = composeSheet(20), kk = list.filter(x => f(x) === "kaki"), others = list.filter(x => f(x) !== "kaki");
+  const r = { round: writeRoundActive(), n: list.length, kk: kk.length, others: others.length,
+    noWritten: kk.every(x => !x.it.kanji.every(k => done.includes(k))),
+    newEach: kk.every((x, i) => x.it.kanji.some(k => !done.includes(k) && !kk.slice(0, i).some(y => y.it.kanji.includes(k)))) };
+  kakiChars().forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });
+  const after = composeSheet(20);
+  r.afterRound = !writeRoundActive() && after.length > 0 && after.every(x => f(x) !== "kaki");
+  BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; ITEMS = keepI; KSTATS = keepK; WEAK = keepW;
+  return r;
+});
+ok("★一巡中: 書けた字の書き取りは出ない／まだ書けていない字を1字につき1問／部首などは3問（書き取りが足りなければ埋める）",
+   rd.round && rd.noWritten && rd.newEach && rd.others === Math.max(3, 20 - rd.kk) && rd.n === rd.kk + rd.others, JSON.stringify(rd));
+ok("★一巡したら: 字が全部書けた書き取りは出ず、ふだんの混ぜ方にもどる", rd.afterRound);
 ok("★1問ごとに出典が出ている（本の名前・ページ・問番号）",
    d1.cites.length === d1.n && d1.cites.every(c => /^（ドリル p\d+(-\d+)? の \d+）$/.test(c)),
    d1.cites.slice(0, 3).join(" "));
@@ -691,7 +720,9 @@ const five = await page.evaluate(() => {
   window.isVerifiedUnit = () => true; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; window.__day = "2099-06-20";
   const keepFit = window.sheetsFit;
   window.sheetsFit = (region) => region.querySelectorAll(".p-sheet:not(.p-ansheet)").length === 1 && region.querySelectorAll(".p-sheet:not(.p-ansheet) .p-body tr").length <= 17;
+  const keepR = window.writeRoundActive; window.writeRoundActive = () => false;   // 一巡のあとの、ふだんの混ぜ方を見る
   const items = todaySheetItems();
+  window.writeRoundActive = keepR;
   window.sheetsFit = keepFit;
   const c = {}; items.forEach(x => { const f = itemFieldOf(x.it, x.g); c[f] = (c[f] || 0) + 1; });
   const n = SESSION.ids.length;
