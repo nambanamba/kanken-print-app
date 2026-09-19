@@ -10,9 +10,11 @@
  *
  * 見るもの（止める＝終了コード1）:
  *   ・きょうの紙が1枚である（2枚目が5問以下の紙を出していない）
- *   ・どの紙も、問題の最後の行が折り線より上
- *   ・答えが答えの欄からはみ出していない
+ *   ・どの紙も、問題の最後の行が本文の枠（紙の余白の内側）より上
+ *   ・答えの紙（別紙・2026-09-12〜）も枠に収まり、番号がもんだいの紙と1対1で一致する
+ *   （折り線式に戻したとき＝.p-fold があるときは、従来どおり折り線より上・答えが答えの欄に収まる）
  *   ・分野の数が配点比のまま（書き取りを先に削っていない）・どの分野も0にしない
+ *     （一巡中＝まだ書けていない字がある間は、書き取り以外は合わせて2〜3問。分野ごとの1問は見ない）
  *   --all-units … 照合ずみの単元ごとの紙も同じく測る（照合担当の print_sheets と同じ出し方）
  * 出力は数字だけ（問題文は出さない）。
  */
@@ -58,27 +60,47 @@ async function measure(label, prep, arg) {
   const m = await p.evaluate(() => {
     window.print = () => {};
     printSessionPractice();
-    return [...document.querySelectorAll("#print-region .p-sheet")].map(s => {
+    // ★2026-09-12〜 答えは別紙（SEPARATE_ANS）。もんだいの紙に .p-fold・.p-key は無い（あれば旧式として測る）。
+    //   下限は「折り線」ではなく「本文の枠（p-body）の下端」＝紙の余白の内側。
+    const one = s => {
       const top = s.getBoundingClientRect().top;
-      const fold = s.querySelector(".p-fold").getBoundingClientRect().top - top;
+      const body = s.querySelector(".p-body");
+      const f = s.querySelector(".p-fold");
+      const limit = (f ? f.getBoundingClientRect().top : body.getBoundingClientRect().bottom) - top;
       const bottom = Math.max(...[...s.querySelectorAll(".p-body tr, .p-body .p-sec, .p-body .p-pool, .p-body .p-example")].map(e => e.getBoundingClientRect().bottom - top));
       const key = s.querySelector(".p-key");
-      return { rows: s.querySelectorAll(".p-body tr").length, fold: Math.round(fold), bottom: Math.round(bottom), keyOver: key.scrollHeight - key.clientHeight };
-    }).concat([{ exWant: buildPaperBlocks().filter(b => b.example).length, exHave: document.querySelectorAll("#print-region .p-example").length }]);
+      return { rows: s.querySelectorAll(".p-body tr").length, nos: [...s.querySelectorAll(".p-body td.p-no")].map(e => e.textContent.trim()),
+               limit: Math.round(limit), bottom: Math.round(bottom), over: body.scrollHeight - body.clientHeight,
+               keyOver: key ? key.scrollHeight - key.clientHeight : 0 };
+    };
+    const all = [...document.querySelectorAll("#print-region .p-sheet")];
+    return { prob: all.filter(s => !s.classList.contains("p-ansheet")).map(one),
+             ans: all.filter(s => s.classList.contains("p-ansheet")).map(one),
+             sep: typeof SEPARATE_ANS !== "undefined" && SEPARATE_ANS,
+             exWant: buildPaperBlocks().filter(b => b.example).length, exHave: document.querySelectorAll("#print-region .p-example").length };
   });
-  const ex = m.pop();
-  ok(`${label}: 本の〈例〉が紙に出ている（${ex.exHave}/${ex.exWant}）`, ex.exHave === ex.exWant);
   await p.emulateMedia({ media: null });
-  ok(`${label}: 折り線より上（${m.length}枚・${m.map(s => s.rows).join("+")}問）`, m.length > 0 && m.every(s => s.bottom <= s.fold), m.map(s => `${s.bottom}/${s.fold}`).join(" "));
-  ok(`${label}: 答えが欄に収まる`, m.every(s => s.keyOver <= 1), m.map(s => s.keyOver).join(","));
-  return m;
+  const fits = s => s.bottom <= s.limit && s.over <= 1;
+  const show = list => list.map(s => `${s.bottom}/${s.limit}`).join(" ");
+  ok(`${label}: 本の〈例〉が紙に出ている（${m.exHave}/${m.exWant}）`, m.exHave === m.exWant);
+  ok(`${label}: もんだいの紙が枠に収まる（${m.prob.length}枚・${m.prob.map(s => s.rows).join("+")}問）`, m.prob.length > 0 && m.prob.every(fits), show(m.prob));
+  ok(`${label}: 答えが欄に収まる（折り線式のとき）`, m.prob.every(s => s.keyOver <= 1), m.prob.map(s => s.keyOver).join(","));
+  if (m.sep) {
+    // ★答えの紙: 枠に収まる／もんだいと同じ番号が同じ数だけある（抜け・重なり・ずれがあると丸つけを取り違える）
+    //   並びは段組みで変わる（答えの紙は別に詰めて送る）ので、番号を数の順に並べてから比べる
+    const sorted = list => list.flatMap(s => s.nos).map(Number).sort((a, b) => a - b);
+    const pn = sorted(m.prob), an = sorted(m.ans);
+    ok(`${label}: 答えの紙が枠に収まる（${m.ans.length}枚・${m.ans.map(s => s.rows).join("+")}行）`, m.ans.length > 0 && m.ans.every(fits), show(m.ans));
+    ok(`${label}: 答えの紙の番号が、もんだいの紙と一致（${an.length}/${pn.length}）`, pn.length > 0 && pn.join(",") === an.join(","));
+  }
+  return m.prob;
 }
 
 console.log("=== きょうの紙（本物） ===");
 const day = await measure("きょう", () => { SESSION = null; });
 const comp = await p.evaluate(() => {
   const c = {}; todaySheetItems().forEach(x => { const f = itemFieldOf(x.it, x.g); c[f] = (c[f] || 0) + 1; });
-  return { c, n: SESSION.ids.length, q: paperQuota(SESSION.ids.length),
+  return { c, n: SESSION.ids.length, q: paperQuota(SESSION.ids.length), round: writeRoundActive(), rOther: roundOtherCount(SESSION.ids.length),
            avail: PAPER_FIELDS.filter(f => bookAllItems().some(x => itemFieldOf(x.it, x.g) === f && !ITEMS[x.it.id])) };
 });
 // ★ユーザー指示「書き問題20問」→ 本の問題が足りる限り20問。入らなければ2枚（枚ごとにそろえる）
@@ -93,9 +115,16 @@ const pack = await p.evaluate((per) => {
 }, day.map(s => s.rows));
 ok("書くマスは大きいまま（18mm）", pack.slots.length === 1 && pack.slots[0] === "18mm", pack.slots.join(","));
 ok("2枚以上のときは、1枚目から入るだけ詰めている", pack.full, day.map(s => s.rows).join("+"));
-ok("出せる分野はどれも1問以上", comp.avail.every(f => (comp.c[f] || 0) >= 1), `${JSON.stringify(comp.c)} / 出せる分野 ${comp.avail.join(",")}`);
+// ★一巡中（まだ書けていない字がある間・2026-09-17 ユーザー「まずはすべての文字を書けるように」）は、
+//   書き取り以外は合わせて2〜3問（roundOtherCount）。分野ごとに1問ずつ、はしない（composeWriteRound）
+if (comp.round) {
+  const other = Object.keys(comp.c).filter(f => f !== "kaki").reduce((a, f) => a + comp.c[f], 0);
+  ok(`一巡中: 書き取り以外も出ている（出せるなら1問以上）`, !comp.avail.some(f => f !== "kaki") || other >= 1, `${JSON.stringify(comp.c)} / 出せる分野 ${comp.avail.join(",")}`);
+} else {
+  ok("出せる分野はどれも1問以上", comp.avail.every(f => (comp.c[f] || 0) >= 1), `${JSON.stringify(comp.c)} / 出せる分野 ${comp.avail.join(",")}`);
+}
 ok("書き取りがいちばん多い（書き取りを先に削っていない）", Object.keys(comp.c).every(f => (comp.c.kaki || 0) >= comp.c[f]), JSON.stringify(comp.c));
-console.log(`  （${comp.n}問: ${JSON.stringify(comp.c)}／配点比 ${JSON.stringify(comp.q)}）`);
+console.log(`  （${comp.n}問: ${JSON.stringify(comp.c)}／${comp.round ? `一巡中: 書き取り以外は ${comp.rOther} 問まで（✕の問題は別）` : "配点比 " + JSON.stringify(comp.q)}）`);
 
 if (allUnits) {
   console.log("\n=== 単元ごとの紙（照合ずみ） ===");

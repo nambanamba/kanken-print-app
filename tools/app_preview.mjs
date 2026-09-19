@@ -8,7 +8,7 @@
  * ⚠️ 出力先は必ず `--out` で、リポジトリの外に。合言葉は環境変数から（print_sheets.mjs と同じ）。
  *
  * 出るもの（1問につき）:
- *   <単元id>_<問番号>.png  … 答える前の画面（音訓・記号・画数）／読みは「こたえを見る」を押した後も
+ *   <単元id>_<出題順3桁>_<問番号>.png  … 答える前の画面（音訓・記号・画数）／読みは「こたえを見る」を押した後も
  *   <単元id>_info.json     … 画面に出ている指示文・問題（ルビ込み）・ボタンの文字・出典
  */
 import http from "node:http";
@@ -106,18 +106,20 @@ for (const u of want) {
                questionHtml: box.querySelector(".ap-q") ? box.querySelector(".ap-q").innerHTML : "",
                buttons: [...box.querySelectorAll("button")].map(e => e.textContent) };
     }, i);
-    await p.screenshot({ path: path.join(OUT, `${u}_${row.no}.png`) });
+    // ★ファイル名に出題順の通し番号を付ける。問番号だけだと、ブロックごとに番号が1に戻る単元（tn_22 など）で上書きし合う（34問撮って10枚しか残らなかった・2026-09-19）
+    row.file = `${u}_${String(i + 1).padStart(3, "0")}_${row.no}`;
+    await p.screenshot({ path: path.join(OUT, `${row.file}.png`) });
     // 図があれば、タップして2倍に広げた画面も撮る（太い画が見分けられるかの照合用）
     if (await p.$('#ap-box .ap-fig img')) {
       await p.click('#ap-box .ap-fig img');
-      await p.screenshot({ path: path.join(OUT, `${u}_${row.no}_zoom.png`) });
+      await p.screenshot({ path: path.join(OUT, `${row.file}_zoom.png`) });
       await p.evaluate(() => { document.getElementById("fig-zoom").style.display = "none"; });
       row.figure = true;
     }
     if (await p.$('#ap-box [data-act="show"]')) {
       await p.click('#ap-box [data-act="show"]');
       row.afterShow = await p.evaluate(() => document.getElementById("ap-box").innerText);
-      await p.screenshot({ path: path.join(OUT, `${u}_${row.no}_shown.png`) });
+      await p.screenshot({ path: path.join(OUT, `${row.file}_shown.png`) });
     }
     info.push(row);
   }

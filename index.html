@@ -2468,7 +2468,8 @@ function ansRowMM(row, boxMM){ return ansList(row).length>1 ? Math.max(ANS_MULTI
 /* 答え1個＝1区画の格子。並べ方は「字がいちばん大きくなる段数」を選ぶ（マスの横 ≒ 26.6mm と行の高さで見積もる。大きさそのものは CSS がマスから決める） */
 function ansGlyphs(row, cls, hmm){
   var list=ansList(row);
-  var n=Math.max(1,list.length), len=Math.max.apply(null,[1].concat(list.map(function(s){ return String(s).length; })));
+  // ★字数は「見た目の1字」で数える。`length` だと `𠆢`（U+201A2 ひとやね）のような字が2文字と数えられ、字が半分の大きさになる（2026-09-18）
+  var n=Math.max(1,list.length), len=Math.max.apply(null,[1].concat(list.map(function(s){ return Array.from(String(s)).length; })));
   var best=1, bestSize=0;
   for(var r=1;r<=n;r++){
     var c=Math.ceil(n/r), size=Math.min(26.6/c/len, (hmm-2.9)/r);
