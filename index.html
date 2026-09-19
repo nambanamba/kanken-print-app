@@ -2001,6 +2001,38 @@ function roundOtherCount(target){ return Math.max(1, Math.min(3, Math.round(targ
 /* ⚠️ 2026-09-18 に直した: もとは「書き取りを left-nOther 問で打ち切って、3問を部首などに取り置く」形だった。
    **本にある部首・同じ読み・対義語は38問しかなく、やり終えると取り置いた3問が埋まらず、紙が17問になった**（ユーザー報告・本物で再現）。
    → ★**先に部首などを取り（無ければ0問）、残りの枠は全部 書き取りで埋める。**まだ書けていない字があるかぎり20問になる（ユーザー判断 (A)） */
+/* ★同じ日の紙に一緒に出さない組（2026-09-20 司令塔依頼・ノート側の検証担当の表「アプリへの申し送り.md」から）。
+   ある問の答えの字が、同じ単元の別の問の本文にそのまま印刷されている。本は見開きで承知の上で組んでいるが、
+   **アプリは1問ずつ選んで1枚に並べるので、2問が同じ紙に来ると片方の答えが見える。**
+   → 片方を選んだ日は、もう片方を選ばない（翌日以降に回る。問題は減らない）。
+   ・[答えの問, 答えの字が見えている問]。★公開リポジトリなので **問id だけ**書く（字・語は書かない。ROLE.md）
+   ・問id は「q_tn<単元>_00_<ブロック>_<問番号>」。ブロックの無い単元は 00、❶〜は 01〜
+   ・✕の問題どうしがぶつかった日も、あとの1問を翌日に回す（✕のままなので次の日に出る）
+   ・単元をまたぐ組は未走査（表の注記）。見つかったら行を足すだけで効く */
+var APART_PAIRS = [
+  // 強（同じブロックの中）
+  ["q_tn17_00_07_003","q_tn17_00_07_005"],
+  // 中
+  ["q_tn20_00_00_004","q_tn20_00_00_001"], ["q_tn20_00_00_004","q_tn20_00_00_024"], ["q_tn20_00_00_016","q_tn20_00_00_021"], ["q_tn20_00_00_026","q_tn20_00_00_012"],
+  ["q_tn21_00_00_002","q_tn21_00_00_012"], ["q_tn21_00_00_004","q_tn21_00_00_025"], ["q_tn21_00_00_008","q_tn21_00_00_018"], ["q_tn21_00_00_016","q_tn21_00_00_014"],
+  ["q_tn13_00_00_016","q_tn13_00_00_043"], ["q_tn13_00_00_018","q_tn13_00_00_005"], ["q_tn13_00_00_029","q_tn13_00_00_039"],
+  ["q_tn14_00_00_045","q_tn14_00_00_001"],
+  ["q_tn16_00_02_002","q_tn16_00_01_004"], ["q_tn16_00_03_004","q_tn16_00_02_001"], ["q_tn16_00_03_004","q_tn16_00_02_005"], ["q_tn16_00_07_003","q_tn16_00_01_004"], ["q_tn16_00_08_004","q_tn16_00_07_002"],
+  ["q_tn17_00_01_004","q_tn17_00_03_005"], ["q_tn17_00_03_003","q_tn17_00_05_001"], ["q_tn17_00_03_003","q_tn17_00_08_003"], ["q_tn17_00_05_001","q_tn17_00_07_003"], ["q_tn17_00_06_003","q_tn17_00_02_002"],
+  // 弱（別の語・別の読みとして見えている。離しても損は無いので入れる）
+  ["q_tn12_00_00_027","q_tn12_00_00_003"], ["q_tn12_00_00_036","q_tn12_00_00_009"], ["q_tn14_00_00_003","q_tn14_00_00_039"], ["q_tn14_00_00_007","q_tn14_00_00_015"]
+];
+/* list を先頭から見て、すでに残した問（seen に入れていく）と組になる問を落とす。順番は変えない */
+function apartThin(list, seen){
+  var mate={};
+  APART_PAIRS.forEach(function(pr){ (mate[pr[0]]=mate[pr[0]]||[]).push(pr[1]); (mate[pr[1]]=mate[pr[1]]||[]).push(pr[0]); });
+  seen=seen||{};
+  return list.filter(function(x){
+    var id=x.it.id;
+    if((mate[id]||[]).some(function(m){ return seen[m]; })) return false;
+    seen[id]=1; return true;
+  });
+}
 function composeWriteRound(left, ex, retry, target){
   if(left<=0) return [];
   var covered={};
@@ -2008,7 +2040,8 @@ function composeWriteRound(left, ex, retry, target){
   var all=bookAllItems().filter(function(x){ return !ex[x.it.id] && !ITEMS[x.it.id]; });
   var others=all.filter(function(x){ return itemFieldOf(x.it,x.g)!=="kaki"; });
   var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiWritten); });   // 字がもう書けている問題を先に
-  var pool=ready.concat(others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); }));
+  var pool=ready.concat(others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); }))
+  pool=apartThin(pool, retry.reduce(function(a,x){ a[x.it.id]=1; return a; },{}));   // 一緒に出さない組（APART_PAIRS）
   var other=pool.slice(0, Math.min(roundOtherCount(target), left));
   var room=left-other.length, kaki=[];
   all.forEach(function(x){
@@ -2023,7 +2056,8 @@ function composeWriteRound(left, ex, retry, target){
 }
 function composeSheet(target){
   target=target||SHEET_TARGET;
-  var retry=bookItemsForRetry().slice(0, target);
+  var seen={};
+  var retry=apartThin(bookItemsForRetry(), seen).slice(0, target);   // 一緒に出さない組（APART_PAIRS）。あとの✕は翌日へ
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
   if(writeRoundActive()) return retry.concat(composeWriteRound(target-retry.length, ex, retry, target));
   var left=target-retry.length, cand={};
@@ -2033,6 +2067,7 @@ function composeSheet(target){
     if(itemFieldOf(x.it,x.g)==="kaki" && kakiAllWritten(x)) return;   // Q3=A: 字が全部もう書けている書き取りは出さない
     cand[itemFieldOf(x.it,x.g)].push(x);
   });
+  PAPER_FIELDS.forEach(function(f){ cand[f]=apartThin(cand[f], seen); });   // 一緒に出さない組（APART_PAIRS）
   var q=paperQuota(left), take={}, n=0;
   // ★出せる分野は、少なくとも1問（0にしない。分野が丸ごと消えると、その日その分野に触れない。司令塔判断）。
   //   足りない1問は、いちばん多い分野（ふつうは書き取り）から回す

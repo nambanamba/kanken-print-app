@@ -220,6 +220,40 @@ ok("★一巡中: 書けた字の書き取りは出ない／まだ書けてい�
 ok("★部首・同じ読み・対義語をやり終えた日も、書き取りで20問にそろう（2026-09-18 の17問）",
    rd.otherGone.n === 20 && rd.otherGone.kaki === 20, JSON.stringify(rd.otherGone));
 ok("★一巡したら: 字が全部書けた書き取りは出ず、ふだんの混ぜ方にもどる", rd.afterRound);
+
+console.log("\n=== 一緒に出さない組（APART_PAIRS・2026-09-20） ===");
+const ap = await page.evaluate(() => {
+  const keepU = BOOK_UNITS, keepV = window.isVerifiedUnit, keepI = ITEMS, keepK = KSTATS, keepW = WEAK, keepP = APART_PAIRS;
+  BOOK_UNITS = keepU.concat([window.__mk("dr_26", 10, "onaji"), window.__mk("dr_21", 10, "taigi")]);
+  window.isVerifiedUnit = () => true; ITEMS = {}; KSTATS = {}; WEAK = {};
+  const has = (l, id) => l.some(x => x.it.id === id);
+  // 組は「組を入れなければ同じ紙に来る2問」から選ぶ（並びに頼らない。試験が空振りしないように）
+  const pairOf = l => { const o = l.filter(x => itemFieldOf(x.it, x.g) !== "kaki"); return [o[0].it.id, o[1].it.id]; };
+  const r = {};
+  APART_PAIRS = [];
+  const [a, b] = pairOf(composeSheet(20));
+  APART_PAIRS = [[a, b]];
+  const round = composeSheet(20);
+  r.round = { n: round.length, a: has(round, a), b: has(round, b) };
+  kakiChars().forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });
+  APART_PAIRS = [];
+  const [c, d] = pairOf(composeSheet(20));
+  APART_PAIRS = [[c, d]];
+  const mix = composeSheet(20);
+  r.mix = { n: mix.length, c: has(mix, c), d: has(mix, d) };
+  // ✕どうしがぶつかった日: あとの✕は翌日へ（✕のままなので次の日に出る）
+  const past = "2098-12-31";
+  ITEMS = { [c]: { o: 0, x: 1, last: "x", date: past }, [d]: { o: 0, x: 1, last: "x", date: past } };
+  const rt = composeSheet(20);
+  r.retry = { c: has(rt, c), d: has(rt, d) };
+  BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; ITEMS = keepI; KSTATS = keepK; WEAK = keepW; APART_PAIRS = keepP;
+  return r;
+});
+ok("★一巡中: 組の片方を選んだ日は、もう片方を選ばない（20問はそろう）", ap.round.a && !ap.round.b && ap.round.n === 20, JSON.stringify(ap.round));
+ok("★ふだんの混ぜ方でも、組は同じ紙に来ない", ap.mix.c && !ap.mix.d, JSON.stringify(ap.mix));
+ok("★✕どうしの組は、あとの1問を翌日へ回す", ap.retry.c && !ap.retry.d, JSON.stringify(ap.retry));
+const apReal = await page.evaluate(() => ({ n: APART_PAIRS.length, idsOnly: APART_PAIRS.every(p => p.length === 2 && p.every(id => /^q_(tn|dr)\d+_\d\d_\d\d_\d{3}$/.test(id))) }));
+ok("★本物の組の表は、問idだけ（字を書いていない）・27組", apReal.n === 27 && apReal.idsOnly, JSON.stringify(apReal));
 ok("★1問ごとに出典が出ている（本の名前・ページ・問番号）",
    d1.cites.length === d1.n && d1.cites.every(c => /^（ドリル p\d+(-\d+)? の \d+）$/.test(c)),
    d1.cites.slice(0, 3).join(" "));
