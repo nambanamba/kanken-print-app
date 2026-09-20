@@ -2732,6 +2732,11 @@ function markKey(id,k){ return id+"|"+k; }
 
 function renderMarks(){
   var box=document.getElementById("mark-box"), rows=todayPaperRows();
+  // ★本を読みこんでいないときは、そう言う（「紙が出ると並びます」だと、入れた〇✕が消えたように読める。2026-09-20）
+  if(!bookLoaded()){
+    box.innerHTML='<span class="muted">本の問題がまだ読みこまれていません。<b>「せってい」で合言葉を入れて「よみこむ」</b>を押すと、前の日の紙もここに出ます。<br>入れた〇✕（記録）は消えていません。</span>';
+    return;
+  }
   if(!rows.length || !SESSION){
     box.innerHTML='<span class="muted">「きょう」の紙が出ると、ここに並びます。</span>';
     return;
@@ -2781,6 +2786,11 @@ function toggleMark(key){
    ・日割り … かたまりの問題が全部記録されたら、そのかたまりは「おわり」 */
 function saveSheetResult(){
   var rows=todayPaperRows();
+  // ★本を読みこんでいないと、紙の問題を1問も引けない（BOOK_UNITS が空なので rows が0）。
+  //   ⚠️ もとは「採点する問題がありません。」とだけ出していた。**入れたはずの紙の〇✕が消えたように読める。**
+  //      実際に 2026-09-20、前の日の紙の〇✕を入れようとして「問題がありません」と言われた（記録は無事だった）。
+  //      公開のたびに画面が読み直され、読みこみずみだった本がメモリから消えるので、ふつうに起きる。
+  if(!bookLoaded()){ alert("本の問題がまだ読みこまれていません。「せってい」で合言葉を入れて「よみこむ」を押すと、紙と〇✕が出ます。記録は消えていません。"); return; }
   if(!rows.length || !SESSION){ alert("採点する問題がありません。"); return; }
   if(SESSION.saved){ alert("きょうの紙は、もう記録してあります。"); return; }
   // ★記録の日付は「紙の日」。入力した日にすると、遅れて入れた紙の✕が isRetryItem で今日の紙に出ず、あさってに回る
