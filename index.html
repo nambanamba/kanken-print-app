@@ -3043,6 +3043,35 @@ function kanjiState(k){
   return (st.run||0)>0 ? "done" : "mada";
 }
 function itemState(id){ var r=ITEMS[id]; return !r ? "none" : (r.last==="o" ? "done" : "mada"); }
+/* =========================================================================
+   ★設問ごとの「これまで何回 ✕ だったか」（2026-09-25 ユーザー依頼
+     「これまでに間違えた数（チャレンジの回数）を載せたいです。漢検はバツの数で」）
+
+   ⚠️ **読むだけ。ITEMS にも WEAK にも KSTATS にも1バイトも書かない。**
+      数を出したことで記録が動いたら、翌日の出題（✕にした問題はまた出る＝このアプリの背骨）が狂う。
+   ⚠️ **紙には出さない。**印刷のコード（renderSheet / renderAnswerSheet / printPractice）から
+      呼ばないこと。紙はこれまでどおり。数は画面だけ。
+   ★「✕2」だけでは「2回中2回なのか」が分からないので、**必ず「／やった回数」を付ける。**
+   ★1回もやっていない問題は「0回まちがえた」ではない。**「−」**と出して、0 と区別する。
+   ========================================================================= */
+function itemWrongCount(id){
+  var r=ITEMS[id];
+  if(!r) return { x:0, t:0 };            // まだ1回もやっていない
+  var x=r.x||0, o=r.o||0;
+  return { x:x, t:o+x };                 // t＝やった回数（〇の回＋✕の回）
+}
+function wrongLabel(id){
+  var c=itemWrongCount(id);
+  if(!c.t) return '<span class="muted">−</span>';
+  if(!c.x) return '<span class="muted">✕0 ／ '+c.t+'回</span>';
+  return '<b style="color:#b91c1c">✕'+c.x+'</b><span class="muted"> ／ '+c.t+'回</span>';
+}
+/* 見出しに出す合計。★0件のときも、ちゃんと「0問」と言う（0件の人の画面が壊れないように） */
+function wrongTotals(xs){
+  var items=0, times=0;
+  xs.forEach(function(x){ var c=itemWrongCount(x.it.id); if(c.x){ items++; times+=c.x; } });
+  return { items:items, times:times };
+}
 function doneItemList(){
   var seen={}, out=[];
   bookAllItems().concat(appAllItems()).forEach(function(x){ if(!seen[x.it.id]){ seen[x.it.id]=1; out.push(x); } });
@@ -3117,10 +3146,24 @@ function renderDoneList(){
   }else{
     var xs=doneItemList(), n2=xs.filter(function(x){ return itemState(x.it.id)==="done"; }).length;
     var LB={done:"できた",mada:"まだ",none:"やっていない"};
+    // ★これまでに ✕ にした数（2026-09-25）。読むだけ・画面だけ
+    var wt=wrongTotals(xs);
     box.innerHTML='<div class="muted" style="font-size:.78rem;margin-bottom:6px">本の問題 '+xs.length+' 問（できた '+n2+' 問）。ボタンを押すと切りかわります。</div>'
-      +'<table style="width:100%;font-size:.8rem">'+xs.filter(function(x){ return pass(itemState(x.it.id)); }).map(function(x){
+      +'<div class="muted" style="font-size:.78rem;margin-bottom:6px">❌ <b>まちがえ</b>の欄は、<b>その問題を ✕ にした回数 ／ やった回数</b>です。'
+        +'まだやっていない問題は「−」。<br>'
+        +(wt.items ? 'いままでに <b>'+wt.items+' 問</b>で ✕ がつきました（のべ <b>'+wt.times+' 回</b>）。'
+                   : 'いままでに ✕ がついた問題は <b>0 問</b>です。')
+        +'</div>'
+      +'<table style="width:100%;font-size:.8rem">'
+      +'<tr><th style="text-align:left;font-weight:400;color:#64748b">どこ</th>'
+        +'<th style="text-align:left;font-weight:400;color:#64748b">分野</th>'
+        +'<th style="text-align:left;font-weight:400;color:#64748b">字</th>'
+        +'<th style="text-align:left;font-weight:400;color:#64748b;white-space:nowrap">まちがえ</th>'
+        +'<th></th></tr>'
+      +xs.filter(function(x){ return pass(itemState(x.it.id)); }).map(function(x){
         var s=itemState(x.it.id), fd=fieldOf(itemFieldOf(x.it,x.g));
         return '<tr><td style="white-space:nowrap">'+bookCite(x)+'</td><td>'+(fd?fd.name:"")+'</td><td>'+(x.it.kanji||[]).join("")+'</td>'
+          +'<td style="white-space:nowrap" data-wrong-id="'+x.it.id+'">'+wrongLabel(x.it.id)+'</td>'
           +'<td><button class="btn ghost" style="width:auto;padding:2px 8px;font-size:.78rem'+(s==="mada"?';color:#b91c1c':'')+'" data-dl-id="'+x.it.id+'" onclick="toggleItemDone(this.dataset.dlId)">'+LB[s]+'</button></td></tr>';
       }).join("")+'</table>';
   }

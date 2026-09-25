@@ -20,3 +20,9 @@ node_modules/
 *.tiff
 *.pdf
 *.svg
+# 検査のときに撮る写真（tools/check_wrong_count.mjs --shot）。公開しない
+_shot_*.png
+
+# 素性の分からない作業途中のファイル（2026-09-20 に作業ツリーに置かれていたもの）。
+# ★公開しない。消してもいない（司令塔の判断・2026-09-25）
+extract_yoshunavi.py
