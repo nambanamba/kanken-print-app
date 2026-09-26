@@ -13,6 +13,7 @@
 <script src="kanken-data.js"></script>
 <script src="kanken-kanji.js"></script>
 <script src="kanken-gen.js"></script>
+<script src="kanken-practice.js"></script>
 <style>
   :root{
     --primary:#2563eb; --accent:#0891b2; --good:#16a34a; --soft:#f59e0b;
@@ -253,6 +254,22 @@
     /* 答えが複数のときだけ、左上の「おてほん／なぞる」の札の下から並べる（1字の答えは位置も大きさも今までどおり） */
     .p-ansheet .p-multi{box-sizing:border-box;padding:2.6mm 0.5mm 0.3mm;}
     .p-multi .p-acell{font-size:min(38pt, calc(90cqw / var(--c,1) / var(--len,1)), calc((100cqh - 2.9mm) * .9 / var(--r,1)));}
+    /* ★語の形（国 ▢（こっき））。wordGlyphs() 参照。
+       --ks … 練習する字の大きさ＝じぶんで の空マスの一辺。マスの高さ（札の下）と、横にほかの字が並ぶ幅から決める。
+       ⚠️ 字は 38pt を超えない（1字だけのときと同じ上限）。空マスは書く場所なので上限を付けない */
+    .p-ansheet .p-word{display:flex;align-items:center;justify-content:center;gap:0.6mm;height:100%;
+              box-sizing:border-box;padding-top:2.6mm;letter-spacing:0;
+              --ks:min(calc(100cqh - 3.2mm), calc(88cqw / (1 + 0.5 * var(--n,1))));}
+    /* ★札（おてほん／なぞる／じぶんで）の行の高さを字の高さにする。既定の行の高さだと札の下が約4.2mmまで伸び、
+       空マス（上端約3mm）にかかっていた（本物の語で実測）。札は absolute なので、ほかの並びは動かない */
+    .p-ansheet .p-slotlab{line-height:1;}
+    .p-word .p-wk{font-size:min(38pt, var(--ks));line-height:1;}
+    .p-word .p-wo{font-size:max(7pt, calc(var(--ks) * 0.5));line-height:1;color:#222;}
+    .p-word .p-wbox{display:inline-block;flex:0 0 auto;width:var(--ks);height:var(--ks);border:1px dashed #999;box-sizing:border-box;}
+    /* ⚠️ 読みが6字をこえると、6.5pt のままでは左上の札（おてほん／じぶんで）に重なる（本物の語で実際に重なった）。
+       札のぶん（約10.5mm）を除いた幅に、読みの字数で割って収める */
+    .p-wy{position:absolute;top:0.3mm;right:0.8mm;font-size:6.5pt;color:#444;white-space:nowrap;letter-spacing:0;line-height:1;
+          font-size:min(6.5pt, calc((100cqw - 11mm) / var(--yl,5)));}
     .p-fixhead{font-size:8.5pt;color:#333;margin:0 0 2mm;line-height:1.5;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
@@ -2277,7 +2294,9 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
           }),
           a: ans.map(function(a){return a.text;}).join("・"),
           aList: ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
-          kanji: it.kanji||[], field: f, id: it.id
+          kanji: it.kanji||[], field: f, id: it.id,
+          // ★答えとなおしの紙の「語の形」（国 ▢（こっき））。無ければ null＝今までどおり字だけ（kanken-practice.js）
+          word: practiceWordFor(it, x.g, bookWordDict())
         };
       })
     });
@@ -2553,6 +2572,18 @@ function renderAnswers(groups, region){
   });
   return pages.map(function(p, k){ return renderAnswerSheet(p.blocks, k+1, pages.length, p.label); }).join("");
 }
+/* ★語の形（2026-09-27 ユーザー指示「国はプリントに書いてあって旗だけ練習するので、やることは変えずに」）。
+   語のほかの字は小さく濃く印刷し、練習する字だけ おてほん／なぞる（うすい）／じぶんで（空マス）にする。
+   ★書く字は1字のまま。読みは右上に（　）で。どちらも本の読み問題の答えそのまま（推測しない・A-6）。
+   ⚠️ ほかの字をなぞり色にしない。なぞる字が2字に増えると「やることは変えずに」が崩れる */
+function wordGlyphs(w, cls){
+  var n=Array.from(w.pre+w.post).length, esc=function(s){ return String(s).replace(/[&<>"']/g,function(c){return "&#"+c.charCodeAt(0)+";";}); };
+  var mid=(cls==="p-self") ? "<span class='p-wbox'></span>" : "<span class='p-wk'>"+esc(w.k)+"</span>";
+  var side=function(s){ return s ? "<span class='p-wo'>"+esc(s)+"</span>" : ""; };
+  // --yl … 読みの字数（かっこ込み）。長い読みでも左上の札に重ならない大きさにする（CSS の .p-wy）
+  return "<span class='p-wy' style='--yl:"+(Array.from(w.yomi).length+2)+"'>（"+esc(w.yomi)+"）</span>"
+    +"<div class='"+(cls==="p-self"?"":cls+" ")+"p-word' style='--n:"+n+"'>"+side(w.pre)+mid+side(w.post)+"</div>";
+}
 function renderAnswerSheet(blocks, page, pages, forLabel){
   var rowsPerCol=blocks.reduce(function(a,b){ return a+Math.ceil(b.rows.length/2); },0);
   var boxMM=boxHeightFor(rowsPerCol);
@@ -2574,10 +2605,11 @@ function renderAnswerSheet(blocks, page, pages, forLabel){
       return "<tr><td class='p-no'>"+no+"</td>"
         +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"
         +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>おてほん</span>"
-        +ansGlyphs(row,"p-sample",hmm)+"</div>"
+        +(row.word?wordGlyphs(row.word,"p-sample"):ansGlyphs(row,"p-sample",hmm))+"</div>"
         +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>なぞる</span>"
-        +ansGlyphs(row,"p-trace",hmm)+"</div>"
-        +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>じぶんで</span></div>"
+        +(row.word?wordGlyphs(row.word,"p-trace"):ansGlyphs(row,"p-trace",hmm))+"</div>"
+        +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>じぶんで</span>"
+        +(row.word?wordGlyphs(row.word,"p-self"):"")+"</div>"
         +"</div></td></tr>";
     });
   });
@@ -3305,6 +3337,13 @@ function screenable(item){
 function printable(item){ return askable(item) && !screenable(item); }
 
 function bookLoaded(){ return !!BOOK_UNITS; }
+/* 本の読み問題から集めた「語 → 読み」（kanken-practice.js）。本が読めていなければ null＝全部字だけ */
+var WORD_DICT=null, WORD_DICT_SRC=null;
+function bookWordDict(){
+  if(!BOOK_UNITS) return null;
+  if(WORD_DICT_SRC!==BOOK_UNITS){ WORD_DICT=buildWordDict(BOOK_UNITS, isVerifiedUnit); WORD_DICT_SRC=BOOK_UNITS; }
+  return WORD_DICT;
+}
 function bookStats(){
   if(!BOOK_UNITS) return {units:0,items:0,askable:0};
   var items=0, ok=0, scr=0, pr=0;
