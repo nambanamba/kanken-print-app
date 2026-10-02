@@ -59,15 +59,15 @@ function buildWordDict(units, okUnit) {
   return { dict: dict, byK: byK };
 }
 
-/* その問題の文中の語（①の候補）。無ければ null */
-function ownWordOf(it, g, k) {
+/* その問題の文中の語（①の候補）を {pre, post} で返す。無ければ null。k は答えの字（pre と post のあいだに入る） */
+function ownPartsOf(it, g, k, wd) {
   var f = it.field || (g && g.field) || "";
   var a = (it.answers || [])[0] || {};
   if (f === "taigi") {
     var ar = String(a.around || "");
-    if (pwChars(ar).filter(function (c) { return c === "□"; }).length !== 1) return null;
-    var w = ar.replace("□", k);
-    return pwChars(w).every(pwIsKanji) ? w : null;
+    var parts = ar.split("□");
+    if (parts.length !== 2) return null;                       // □ がちょうど1つの形だけ
+    return { pre: parts[0], post: parts[1] };
   }
   var t = String(it.target || ""), txt = String(it.text || "");
   if (!t || !/^[ァ-ヶー]+$/.test(t)) return null;
@@ -77,10 +77,30 @@ function ownWordOf(it, g, k) {
   while (s > 0 && pwIsKanji(txt.charAt(s - 1))) s--;
   while (e < txt.length && pwIsKanji(txt.charAt(e))) e++;
   if (s === idx && e === idx + t.length) return null;          // となりに漢字が無い
-  return txt.slice(s, idx) + k + txt.slice(idx + t.length, e);
+  var pre = txt.slice(s, idx), post = txt.slice(idx + t.length, e);
+  var all = pwChars(pre + k + post);
+  if (all.length > 4) {
+    // 長い語（天体望遠鏡）は、本の読み問題にある語（望遠鏡）が中に入っていれば、その部分だけにする。無ければ使わない
+    var best = null, pc = pwChars(pre).length;
+    for (var a1 = 0; a1 <= pc; a1++) for (var b1 = pc + 1; b1 <= all.length; b1++) {
+      var w = all.slice(a1, b1).join("");
+      if (wd && wd.dict[w] && (!best || pwChars(w).length > pwChars(best.w).length)) best = { w: w, a: a1, b: b1 };
+    }
+    if (!best) return null;
+    return { pre: all.slice(best.a, pc).join(""), post: all.slice(pc + 1, best.b).join("") };
+  }
+  return { pre: pre, post: post };
+}
+/* 互換: 語をひとつの文字列で返す（検査道具が使う） */
+function ownWordOf(it, g, k) {
+  var p = ownPartsOf(it, g, k, null);
+  return p ? p.pre + k + p.post : null;
 }
 
-/* 1問ぶんの語の形。{pre, k, post, yomi, how:"same"|"other", word} か null（＝字だけ） */
+/* 1問ぶんの語の形。{pre, k, post, yomi, how:"same"|"other", word} か null（＝字だけ）
+   ★2026-10-03 ユーザー指示「不満、入浴って出題、練習させたい」→ 問題に出た語をそのまま使う（how:"same"）。
+     読みは、本の読み問題にその語があって読みが1通りのときだけ出す。無ければ yomi:""（語の形だけ。読みは作らない・A-6）
+   ② 問題の文中に語が無いときだけ、これまでどおり本の別の語（how:"other"）→ 無ければ字だけ */
 function practiceWordFor(it, g, wd) {
   if (!wd || !it) return null;
   var f = it.field || (g && g.field) || "";
@@ -89,13 +109,36 @@ function practiceWordFor(it, g, wd) {
   if (ans.length !== 1) return null;
   var k = String(ans[0].text || "");
   if (pwChars(k).length !== 1 || !pwIsKanji(k)) return null;
-  var w = ownWordOf(it, g, k), how = "same";
-  if (!(w && wd.dict[w] && (wd.byK[k] || []).indexOf(w) >= 0)) { w = (wd.byK[k] || [])[0]; how = "other"; }
+  var o = ownPartsOf(it, g, k, wd);
+  if (o && (o.pre || o.post)) {
+    var w0 = o.pre + k + o.post;
+    return { pre: o.pre, k: k, post: o.post, yomi: wd.dict[w0] || "", how: "same", word: w0 };
+  }
+  var w = (wd.byK[k] || [])[0];
   if (!w) return null;
   var i = w.indexOf(k);
-  return { pre: w.slice(0, i), k: k, post: w.slice(i + k.length), yomi: wd.dict[w], how: how, word: w };
+  return { pre: w.slice(0, i), k: k, post: w.slice(i + k.length), yomi: wd.dict[w], how: "other", word: w };
+}
+
+/* 部首の問題（答えが2〜4字、それぞれ □ を含む語）→ 字ごとの語の形の配列。作れなければ null（＝今までどおり）
+   ★読み(yomi)は、問題の紙の答えらんの上に印刷されている字の読み（ruby の ぎょ・まん・よく）。語の読みではない（yk:true）。
+   ruby が無い字は yomi:""（作らない・A-6） */
+function practiceWordsFor(it, g) {
+  if (!it) return null;
+  var f = it.field || (g && g.field) || "";
+  if (f !== "bushu") return null;
+  var ans = it.answers || [], ruby = it.ruby || [];
+  if (ans.length < 2 || ans.length > 4) return null;
+  var out = [];
+  for (var i = 0; i < ans.length; i++) {
+    var k = String(ans[i].text || ""), parts = String(ans[i].around || "").split("□");
+    if (pwChars(k).length !== 1 || parts.length !== 2 || !(parts[0] || parts[1])) return null;
+    var y = String((ruby[i] || {}).yomi || "");
+    out.push({ pre: parts[0], k: k, post: parts[1], yomi: /^[ぁ-ゖー]+$/.test(y) ? y : "", yk: true });
+  }
+  return out;
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS };
+  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS };
 }

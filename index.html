@@ -270,6 +270,11 @@
        札のぶん（約10.5mm）を除いた幅に、読みの字数で割って収める */
     .p-wy{position:absolute;top:0.3mm;right:0.8mm;font-size:6.5pt;color:#444;white-space:nowrap;letter-spacing:0;line-height:1;
           font-size:min(6.5pt, calc((100cqw - 11mm) / var(--yl,5)));}
+    /* ★部首: 字の数だけ縦に積む（wordGlyphs に配列を渡したとき）。各段が自分で大きさを決める（--ks は段の高さから） */
+    .p-ansheet .p-wstack{display:flex;flex-direction:column;height:100%;box-sizing:border-box;padding-top:2.6mm;}
+    .p-ansheet .p-wcell{flex:1 1 0;min-height:0;position:relative;container-type:size;}
+    .p-ansheet .p-wcell .p-word{padding-top:0;--ks:min(calc(100cqh - 1.2mm), calc(88cqw / (1 + 0.5 * var(--n,1))));}
+    .p-word .p-wyi{font-size:max(5.5pt, calc(var(--ks) * 0.36));line-height:1;color:#555;align-self:flex-end;margin-left:0.3mm;white-space:nowrap;}
     .p-fixhead{font-size:8.5pt;color:#333;margin:0 0 2mm;line-height:1.5;}
     .p-fold{flex:0 0 auto;border-top:2px dashed #444;margin-top:3mm;padding-top:1.2mm;
             font-size:8.5pt;color:#444;text-align:center;letter-spacing:.15em;}
@@ -2296,7 +2301,9 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
           aList: ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
           kanji: it.kanji||[], field: f, id: it.id,
           // ★答えとなおしの紙の「語の形」（国 ▢（こっき））。無ければ null＝今までどおり字だけ（kanken-practice.js）
-          word: practiceWordFor(it, x.g, bookWordDict())
+          word: practiceWordFor(it, x.g, bookWordDict()),
+          // ★部首は、答え1字ずつを「漁▢・不▢・入▢」の形にする（2026-10-03）。作れなければ null＝今までどおり
+          words: practiceWordsFor(it, x.g)
         };
       })
     });
@@ -2518,7 +2525,12 @@ function ansLabel(i, n){
    ⚠️ 1字の行は、高さも38ptも変えない。 */
 var ANS_MULTI_MM = 32;
 function ansList(row){ return (row.aList&&row.aList.length)?row.aList:(row.a?[row.a]:[]); }
-function ansRowMM(row, boxMM){ return ansList(row).length>1 ? Math.max(ANS_MULTI_MM, boxMM) : boxMM; }
+/* ★部首の「語の形」（words）は、字の数だけ縦に積む。1字あたり WORD_CELL_MM（2026-10-03）。小さくすると書くマスが小さくなる */
+var WORD_CELL_MM = 14;
+function ansRowMM(row, boxMM){
+  if(row.words && row.words.length) return Math.max(boxMM, row.words.length*WORD_CELL_MM+2.6);
+  return ansList(row).length>1 ? Math.max(ANS_MULTI_MM, boxMM) : boxMM;
+}
 /* 答え1個＝1区画の格子。並べ方は「字がいちばん大きくなる段数」を選ぶ（マスの横 ≒ 26.6mm と行の高さで見積もる。大きさそのものは CSS がマスから決める） */
 function ansGlyphs(row, cls, hmm){
   var list=ansList(row);
@@ -2576,13 +2588,23 @@ function renderAnswers(groups, region){
    語のほかの字は小さく濃く印刷し、練習する字だけ おてほん／なぞる（うすい）／じぶんで（空マス）にする。
    ★書く字は1字のまま。読みは右上に（　）で。どちらも本の読み問題の答えそのまま（推測しない・A-6）。
    ⚠️ ほかの字をなぞり色にしない。なぞる字が2字に増えると「やることは変えずに」が崩れる */
-function wordGlyphs(w, cls){
+function wordWidthUnits(w){ return Array.from(w.pre+w.post).length+((w.yk&&w.yomi)?Array.from(w.yomi).length*0.72:0); }
+function wordGlyphs(w, cls, nFix){
+  // 部首: 字の数だけ縦に積む（それぞれが 語の形）。1つなら今までどおり
+  // 字の大きさ・空マスの大きさは、いちばん幅をとる語にそろえる（段ごとにばらつくと、なぞる字の大きさが揃わない）
+  if(Array.isArray(w)){
+    var nmax=Math.max.apply(null,w.map(wordWidthUnits));
+    return "<div class='p-wstack'>"+w.map(function(x){ return "<div class='p-wcell'>"+wordGlyphs(x,cls,nmax)+"</div>"; }).join("")+"</div>";
+  }
   var n=Array.from(w.pre+w.post).length, esc=function(s){ return String(s).replace(/[&<>"']/g,function(c){return "&#"+c.charCodeAt(0)+";";}); };
   var mid=(cls==="p-self") ? "<span class='p-wbox'></span>" : "<span class='p-wk'>"+esc(w.k)+"</span>";
   var side=function(s){ return s ? "<span class='p-wo'>"+esc(s)+"</span>" : ""; };
   // --yl … 読みの字数（かっこ込み）。長い読みでも左上の札に重ならない大きさにする（CSS の .p-wy）
-  return "<span class='p-wy' style='--yl:"+(Array.from(w.yomi).length+2)+"'>（"+esc(w.yomi)+"）</span>"
-    +"<div class='"+(cls==="p-self"?"":cls+" ")+"p-word' style='--n:"+n+"'>"+side(w.pre)+mid+side(w.post)+"</div>";
+  // yk … 部首の字の読み（問題の紙に印刷されているもの）。語の読みではないので かっこを付けない。yomi が空なら読みは出さない
+  // 部首の字の読みは、語のあとに小さく続ける（右上に置くと、となりの字に重なる）
+  var yi=(w.yk && w.yomi) ? "<span class='p-wyi'>"+esc(w.yomi)+"</span>" : "";
+  return ((!w.yk && w.yomi) ? "<span class='p-wy' style='--yl:"+(Array.from(w.yomi).length+2)+"'>（"+esc(w.yomi)+"）</span>" : "")
+    +"<div class='"+(cls==="p-self"?"":cls+" ")+"p-word' style='--n:"+(nFix||(n+(yi?Array.from(w.yomi).length*0.72:0)))+"'>"+side(w.pre)+mid+side(w.post)+yi+"</div>";
 }
 function renderAnswerSheet(blocks, page, pages, forLabel){
   var rowsPerCol=blocks.reduce(function(a,b){ return a+Math.ceil(b.rows.length/2); },0);
@@ -2605,11 +2627,11 @@ function renderAnswerSheet(blocks, page, pages, forLabel){
       return "<tr><td class='p-no'>"+no+"</td>"
         +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"
         +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>おてほん</span>"
-        +(row.word?wordGlyphs(row.word,"p-sample"):ansGlyphs(row,"p-sample",hmm))+"</div>"
+        +(row.words?wordGlyphs(row.words,"p-sample"):row.word?wordGlyphs(row.word,"p-sample"):ansGlyphs(row,"p-sample",hmm))+"</div>"
         +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>なぞる</span>"
-        +(row.word?wordGlyphs(row.word,"p-trace"):ansGlyphs(row,"p-trace",hmm))+"</div>"
+        +(row.words?wordGlyphs(row.words,"p-trace"):row.word?wordGlyphs(row.word,"p-trace"):ansGlyphs(row,"p-trace",hmm))+"</div>"
         +"<div class='p-slot' style='height:"+h+"'><span class='p-slotlab'>じぶんで</span>"
-        +(row.word?wordGlyphs(row.word,"p-self"):"")+"</div>"
+        +(row.words?wordGlyphs(row.words,"p-self"):row.word?wordGlyphs(row.word,"p-self"):"")+"</div>"
         +"</div></td></tr>";
     });
   });

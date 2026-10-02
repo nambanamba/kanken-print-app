@@ -7,7 +7,8 @@
 //   node tools/check_practice_word.mjs --shot     ← 答えの紙を撮る（_shot_practice_word.png）。★最後は目で見るため（3-4）
 //
 // 見ること:
-//   ① 同じ問題の語が本の読み問題にあれば、その語 ／ ② 無ければ本の別の語（短い語が先）／ ③ どちらも無ければ字だけ
+//   ① 問題に出た語（2026-10-03: 本の読み問題に無くても使う。読みは本にあるときだけ） ／ ② 問題に語が無ければ本の別の語（短い語が先）／ ③ どちらも無ければ字だけ
+//   ★部首（2026-10-03）: 答え1字ずつを「漁▢・不▢・入▢」の語の形にする（1マスに3字を詰めない）。読みは問題の紙に印刷されている字の読み
 //   ★読みは本の読み問題の答えそのまま。読みが2通りの語・未照合の単元の語・1字の語は使わない（推測しない・A-6）
 //   ★書く字は1字（おてほん・なぞるの大きい字が1字、じぶんでの空マスが1つ。ほかの字は濃く小さく）
 //   ★③の字が落ちない ／ 部首（答えが複数）は今までどおり
@@ -60,10 +61,18 @@ const FAKES = {
   // (b3) 照合が通っていない単元の語も使う
   b3: () => withHtml([["buildWordDict(BOOK_UNITS, isVerifiedUnit)", "buildWordDict(BOOK_UNITS, null)"]], "b3 未照合の語を使う"),
   // (c) ③（本に語が無い字）を落とす
-  c: () => withHtml([["(row.word?wordGlyphs(row.word,\"p-sample\"):ansGlyphs(row,\"p-sample\",hmm))",
-                      "(row.word?wordGlyphs(row.word,\"p-sample\"):\"\")"],
-                     ["(row.word?wordGlyphs(row.word,\"p-trace\"):ansGlyphs(row,\"p-trace\",hmm))",
-                      "(row.word?wordGlyphs(row.word,\"p-trace\"):\"\")"]], "c ③を落とす"),
+  c: () => withHtml([["row.word?wordGlyphs(row.word,\"p-sample\"):ansGlyphs(row,\"p-sample\",hmm)",
+                      "row.word?wordGlyphs(row.word,\"p-sample\"):\"\""],
+                     ["row.word?wordGlyphs(row.word,\"p-trace\"):ansGlyphs(row,\"p-trace\",hmm)",
+                      "row.word?wordGlyphs(row.word,\"p-trace\"):\"\""]], "c ③を落とす"),
+  // (i) 部首の語の形を出さない（3字を1マスに詰めた形のまま）
+  i: () => withHtml([["words: practiceWordsFor(it, x.g)", "words: null"]], "i 部首が語の形でない"),
+  // (j) 問題に出た語に、本に読みが無いのに読みを作る
+  j: () => withJs([["yomi: wd.dict[w0] || \"\"", "yomi: wd.dict[w0] || \"すいそく\""]], "j 読みを作る"),
+  // (k) 問題に出た語を使わず、本の別の語に置きかえる
+  k: () => withJs([["if (o && (o.pre || o.post)) {", "if (false) {"]], "k 別の語に置きかえる"),
+  // (l) 部首の字の読みを、問題の紙と違うものにする
+  l: () => withJs([["yomi: /^[ぁ-ゖー]+$/.test(y) ? y : \"\", yk: true", "yomi: \"ぎょ\", yk: true"]], "l 部首の読みが違う"),
   // (d) 合言葉が無い（本が読めていない）と壊れる
   d: () => withHtml([["  if(!BOOK_UNITS) return null;" + NL + "  if(WORD_DICT_SRC", "  if(!BOOK_UNITS) return WORD_DICT.dict;" + NL + "  if(WORD_DICT_SRC"]], "d 合言葉なしで壊れる"),
   // (e) 書く字が2字になる（語のほかの字まで なぞり・大きい字にする）
@@ -140,7 +149,7 @@ async function inspect(ver, shotPath) {
         [ "テストのジーをかく。", "ジー", G, { plain: [G] } ],                                         // ③ 1字の語・未照合の語しか無い
         [ "テストのイーをかく。", "イー", E, { plain: [E] } ],                                         // ③ 読みが2通りの語しか無い
         [ "テストのアイ" + J + "をかく。", "アイ", I, { pre: "", k: I, post: J, yomi: "なにぬ" } ],   // ① 後ろにとなる語
-        [ "テスト" + H + "のシー" + I + "。", "シー", C, { pre: "", k: C, post: D, yomi: "かきく" } ], // ① の語が本に無い → ②
+        [ "テスト" + H + "のシー" + I + "。", "シー", C, { pre: "", k: C, post: I, yomi: "" } ],     // ① 問題の語（本に読みが無い）→ 語の形だけ・読みは出さない
       ];
       for (let i = 0; i < 36; i++) {        // ★行が多い日（マスが小さくなる日）も見るため、36問にする
         const b = base6[i % base6.length], id = "k" + (i + 1);
@@ -155,10 +164,11 @@ async function inspect(ver, shotPath) {
       const taigiU = { unitId: "dr_21", mat: "dr", srcPages: [21], groups: [{ gno: 0, field: "taigi", instruction: "ダミー", items: [
         { id: "t1", no: 1, text: "ダミー — □" + D, target: null, answers: [{ text: C, around: "□" + D }], kanji: [C] },
         { id: "t2", no: 2, text: "ダミー — □" + A, target: null, answers: [{ text: H, around: "□" + A }], kanji: [H] }] }] };
-      want.t1 = { pre: "", k: C, post: D, yomi: "かきく" }; want.t2 = { plain: [H] };
+      want.t1 = { pre: "", k: C, post: D, yomi: "かきく" }; want.t2 = { pre: "", k: H, post: A, yomi: "" };
       const bushuU = { unitId: "dr_25", mat: "dr", srcPages: [25], groups: [{ gno: 0, field: "bushu", instruction: "ダミー", items: [
-        { id: "b1", no: 1, text: "ダミー", answers: [{ text: A }, { text: B }], kanji: [A, B] }] }] };
-      want.b1 = { plain: [A, B] };
+        { id: "b1", no: 1, text: "ダミー", ruby: [{ base: "□", yomi: "あ", nth: 1 }, { base: "□", yomi: "いう", nth: 2 }, { base: "□", yomi: "え", nth: 3 }],
+          answers: [{ text: A, around: "□" + C }, { text: B, around: D + "□" }, { text: E, around: "□" + F }], kanji: [A, B, E] }] }] };
+      want.b1 = { words: [{ pre: "", k: A, post: C, yomi: "あ" }, { pre: D, k: B, post: "", yomi: "いう" }, { pre: "", k: E, post: F, yomi: "え" }], plain: [A, B, E] };
 
       BOOK_UNITS = [yomiU, unverified, kakiU, onajiU, taigiU, bushuU];
       window.isVerifiedUnit = id => id !== "dr_99";
@@ -185,6 +195,11 @@ async function inspect(ver, shotPath) {
           const clashBox = !!(gr && gr.height && gr.top < topBand - 0.5);
           return {
             wy: [...s.querySelectorAll(".p-wy")].map(e => e.textContent),
+            wyi: [...s.querySelectorAll(".p-wyi")].map(e => e.textContent),
+            cells: s.querySelectorAll(".p-wcell").length,
+            cellsK: [...s.querySelectorAll(".p-wcell")].map(c => [...c.querySelectorAll(".p-wk")].map(e => e.textContent).join("")),
+            cellsO: [...s.querySelectorAll(".p-wcell")].map(c => [...c.querySelectorAll(".p-wo")].map(e => e.textContent).join("")),
+            cellsBox: [...s.querySelectorAll(".p-wcell")].map(c => c.querySelectorAll(".p-wbox").length),
             wo: [...s.querySelectorAll(".p-wo")].map(e => e.textContent),
             wk: [...s.querySelectorAll(".p-wk")].map(e => e.textContent),
             wkColor: [...s.querySelectorAll(".p-wk")].map(e => getComputedStyle(e).color),
@@ -231,10 +246,24 @@ async function inspect(ver, shotPath) {
     if (got.ids.length !== got.rows.length) add("答えの紙の行数が、問題の数と合わない", got.rows.length + " / " + got.ids.length);
     const check = (rows, label, allPlain) => {
       got.ids.forEach((id, i) => {
-        const w = allPlain ? { plain: (got.want[id].plain || [got.want[id].k]) } : got.want[id], r = rows[i];
+        const w = (allPlain && !got.want[id].words) ? { plain: (got.want[id].plain || [got.want[id].k]) } : got.want[id], r = rows[i];   // 部首の語の形は本の辞書に頼らないので、合言葉なしでも出る
         if (!w) { add(label + "期待値の無い問題", id); return; }
         if (!r || r.length !== 3) { add(label + "答えの行が3マスでない", id); return; }
         const [s0, s1, s2] = r;
+        if (w.words) {   // 部首: 字ごとに1つの語の形（1マスに詰めない）。読みは問題の紙の字の読み
+          [s0, s1, s2].forEach((s, j) => {
+            const nm = ["おてほん", "なぞる", "じぶんで"][j];
+            if (s.cells !== w.words.length) { add(label + "★部首が字の数の語の形になっていない", id + " " + nm + " " + s.cells + " 期待 " + w.words.length); return; }
+            w.words.forEach((x, n) => {
+              if (j < 2 && s.cellsK[n] !== x.k) add(label + "★部首の練習する字が違う", id + " " + nm + " " + n + " " + s.cellsK[n]);
+              if (j === 2 && (s.cellsBox[n] !== 1 || s.cellsK[n])) add(label + "★部首のじぶんでが空マス1つでない", id + " " + n);
+              if (s.cellsO[n] !== x.pre + x.post) add(label + "★部首の語のほかの字が違う", id + " " + nm + " " + s.cellsO[n] + " 期待 " + x.pre + x.post);
+            });
+            if (s.wyi.join("") !== w.words.map(x => x.yomi).join("")) add(label + "★部首の字の読みが問題の紙と違う", id + " " + nm + " " + JSON.stringify(s.wyi));
+            if (!s.inside) add(label + "★マスからはみ出している", id + " " + nm);
+          });
+          return;
+        }
         if (w.plain) {
           if (s0.wy.length || s1.wy.length || s2.wy.length || s0.wo.length || s2.box)
             add(label + "★本に語が無い字に、語か読みが出ている（推測）", id + " " + JSON.stringify([s0.wy, s0.wo]));
@@ -244,7 +273,7 @@ async function inspect(ver, shotPath) {
           return;
         }
         const others = [w.pre, w.post].filter(Boolean);
-        const yomiT = "（" + w.yomi + "）";
+        const yomiT = w.yomi ? "（" + w.yomi + "）" : "";
         [s0, s1, s2].forEach((s, j) => {
           const nm = ["おてほん", "なぞる", "じぶんで"][j];
           if (s.wy.join("") !== yomiT) add(label + "★読みが本の読み問題と違う", id + " " + nm + " " + JSON.stringify(s.wy) + " 期待 " + yomiT);
@@ -267,7 +296,7 @@ async function inspect(ver, shotPath) {
     else if (!got.noPass || got.noPass.length !== got.ids.length) add("★合言葉が無いと、答えの紙の行が出ない", String(got.noPass && got.noPass.length));
     else check(got.noPass, "[合言葉なし] ", true);
     got.fit.forEach((d, i) => { if (d > 1) add("★答えの紙がはみ出す", (i + 1) + "枚め " + d + "px"); });
-    const expectKanji = got.ids.map(id => id + ":" + (got.want[id].plain ? got.want[id].plain.join("") : got.want[id].k));
+    const expectKanji = got.ids.map(id => id + ":" + (got.want[id].words ? got.want[id].plain.join("") : got.want[id].plain ? got.want[id].plain.join("") : got.want[id].k));
     if (JSON.stringify(got.kanji) !== JSON.stringify(expectKanji)) add("★採点の字（kanji）が変わった", "");
   }
   if (shotPath) {
@@ -295,6 +324,10 @@ const selftests = [
   ["(f)  空マスが小さすぎる", FAKES.f(), true],
   ["(f2) 読みの大きさが固定（長い読みが札に重なる）", FAKES.f2(), true],
   ["(f3) 札の行の高さが既定（空マスが札にかかる）", FAKES.f3(), true],
+  ["(i)  部首が語の形でない（3字を1マスに詰めた形）", FAKES.i(), true],
+  ["(j)  問題の語に、本に無い読みを作る", FAKES.j(), true],
+  ["(k)  問題に出た語を使わず、本の別の語に置きかえる", FAKES.k(), true],
+  ["(l)  部首の字の読みが問題の紙と違う", FAKES.l(), true],
   ["(g)  見た目だけ変えた（中身は正しい）", FAKES.g(), false],
   ["(h)  直す前の版 " + BEFORE_FIX + "（コミットで固定）", beforeFix(), true],
 ];
