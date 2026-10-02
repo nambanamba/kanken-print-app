@@ -309,10 +309,12 @@ const d3 = await page.evaluate(() => {
   saveSheetResult();   // 全部〇
   window.__day = "2099-01-03";
   renderAll();
-  return { ids: todaySheetItems().map(x => x.it.id) };
+  return { ids: todaySheetItems().map(x => x.it.id), retry: bookItemsForRetry().map(x => x.it.id),
+           allDone: todaySheetItems().every(x => ITEMS[x.it.id] && ITEMS[x.it.id].last === "o") };
 });
-ok("★✕だった問題を〇にしたら、次の日は出ない", !fix.xIds.some(id => d3.ids.includes(id)), d3.ids.join(","));
-ok("照合ずみの問題を全部やり終えたら、紙は空（足すために作らない）", d3.ids.length === 0, String(d3.ids.length));
+// ★2026-10-03 変更: 全部やり終えた日は、一度〇の書き取りを「復習」で足す（毎日20問・ユーザー承認）。✕の再出題としては出ない
+ok("★✕だった問題を〇にしたら、次の日に「✕のやり直し」としては出ない", !fix.xIds.some(id => d3.retry.includes(id)), d3.retry.join(","));
+ok("照合ずみの問題を全部やり終えた日の紙は、〇にした書き取りの復習だけ（新しい問題は作らない・20問まで）", d3.allDone && d3.ids.length <= 20, d3.ids.length + "問");
 const gen2 = await page.evaluate(() => window.__genCalls.slice());
 ok("★ここまでアプリの問題生成が1回も呼ばれていない", gen2.length === 0, gen2.join(","));
 

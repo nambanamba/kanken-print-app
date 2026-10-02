@@ -2111,7 +2111,33 @@ function composeSheet(target){
   });
   var out=retry.slice();
   PAPER_FIELDS.forEach(function(f){ out=out.concat(cand[f].slice(0,take[f])); });
-  return out;
+  return out.concat(reviewFill(out, target-out.length));
+}
+
+/* ★20問に足りない日は、一度〇になった書き取りを「最後に〇にした日が古い順」で足す（2026-10-03 ユーザー承認）。
+   原因: 書き取りの字が全部〇になると（Q3=A）書き取りが0問になり、のこりの分野は上限（fieldCaps）と問題数の有限さで
+        15問→9問に減った（10-02 の紙は15問）。新しい問題（部首など）は今までどおり先。Q3=A は「枠が余った日だけ」緩める。
+   ・同じ日の紙に同じ字が重ならない（out に入っている問題の字は避ける）／一緒に出さない組（APART_PAIRS）／
+     ✕の問題はここに入れない（✕は retry が先に入れる。last==="o" だけ）／記録は書かない（読むだけ） */
+function reviewFill(out, need){
+  if(need<=0) return [];
+  var used={}, seen={};
+  out.forEach(function(x){ seen[x.it.id]=1; (x.it.kanji||[]).forEach(function(k){ used[k]=1; }); });
+  var pool=bookAllItems().filter(function(x){
+    var r=ITEMS[x.it.id];
+    return itemFieldOf(x.it,x.g)==="kaki" && !seen[x.it.id] && r && r.last==="o" && r.date;
+  });
+  pool.forEach(function(x,i){ x._i=i; });
+  pool.sort(function(a,b){ var da=ITEMS[a.it.id].date, db=ITEMS[b.it.id].date; return da<db?-1:da>db?1:a._i-b._i; });
+  var got=[];
+  pool.forEach(function(x){
+    if(got.length>=need) return;
+    var ks=x.it.kanji||[];
+    if(ks.some(function(k){ return used[k]; })) return;
+    if(!apartThin([x], seen).length) return;
+    got.push(x); ks.forEach(function(k){ used[k]=1; });
+  });
+  return got;
 }
 
 /* ★分野ごとの上限（2026-09-11 ユーザー指示「ルールベースで数をコントロールしてほしいです」）。
