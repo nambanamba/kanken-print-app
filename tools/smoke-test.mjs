@@ -760,6 +760,9 @@ const five = await page.evaluate(() => {
   const mkF = (uid, field, n) => { const u = JSON.parse(JSON.stringify(base[0])); u.unitId = uid; u.srcPages = [Number(uid.slice(3))];
     u.groups[0].field = field; u.groups[0].items = u.groups[0].items.slice(0, n).map((it, i) => Object.assign({}, it, { id: "q_five_" + uid + "_" + i })); return u; };
   BOOK_UNITS = base.concat([mkF("dr_26", "onaji", 8), mkF("dr_23", "okuri", 8), mkF("dr_21", "taigi", 8)]);
+  // ★ダミーの問題は同じ字を使い回している。2026-10-03 から「同じ日に同じ字を2回出さない」ので、字が重ならないよう1問ごとに別の字にする（配点比の削り方だけを見る検査のため）
+  { const P = KANJI_MASTER.map(r => r.k).filter(c => /^[一-鿿]$/.test(c)); let pi = 0;
+    BOOK_UNITS.forEach(u => (u.groups || []).forEach(g => (g.items || []).forEach(it => { it.kanji = (it.kanji && it.kanji.length ? it.kanji : [0]).map(() => P[pi++]); }))); }
   window.isVerifiedUnit = () => true; RECORDS = {}; ITEMS = {}; WEAK = {}; KSTATS = {}; SESSION = null; window.__day = "2099-06-20";
   const keepFit = window.sheetsFit;
   window.sheetsFit = (region) => region.querySelectorAll(".p-sheet:not(.p-ansheet)").length === 1 && region.querySelectorAll(".p-sheet:not(.p-ansheet) .p-body tr").length <= 17;

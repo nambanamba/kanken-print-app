@@ -2055,31 +2055,48 @@ function apartThin(list, seen){
     seen[id]=1; return true;
   });
 }
+/* ★同じ日の紙に、同じ字を答えに持つ問題を2つ出さない（2026-10-03 ユーザー承認「同じ日に同じ字が2回出る」）。
+   書き取り・部首・同じ読み・対義語の全分野をまたいで見る（部首は3字・2字の答えは各字）。重なった問題はその日は出さず、次の候補で埋める
+   （記録は書かない＝その問題は翌日以降に回る）。✕の問題どうしが重なったときも、あとの1問は翌日に回る */
+function charsOf(x){ return (x.it.kanji||[]); }
+function charClash(x, used){ return charsOf(x).some(function(k){ return used[k]; }); }
+function charMark(x, used){ charsOf(x).forEach(function(k){ used[k]=1; }); }
 function composeWriteRound(left, ex, retry, target){
   if(left<=0) return [];
-  var covered={};
-  retry.forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ covered[k]=1; }); });
+  var covered={}, used={};
+  retry.forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ covered[k]=1; used[k]=1; }); });
   var all=bookAllItems().filter(function(x){ return !ex[x.it.id] && !ITEMS[x.it.id]; });
   var others=all.filter(function(x){ return itemFieldOf(x.it,x.g)!=="kaki"; });
   var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiWritten); });   // 字がもう書けている問題を先に
   var pool=ready.concat(others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); }))
   pool=apartThin(pool, retry.reduce(function(a,x){ a[x.it.id]=1; return a; },{}));   // 一緒に出さない組（APART_PAIRS）
-  var other=pool.slice(0, Math.min(roundOtherCount(target), left));
+  var poolLeft=pool.slice(), other=[];
+  function takeOther(n){
+    for(var i=0; i<poolLeft.length && n>0; ){
+      var x=poolLeft[i];
+      if(charClash(x, used)){ i++; continue; }    // 字が重なる問題は、その日は出さない（poolLeft には残す＝あとで重なりが消えれば使える）
+      poolLeft.splice(i,1); other.push(x); charMark(x, used); n--;
+    }
+  }
+  takeOther(Math.min(roundOtherCount(target), left));
   var room=left-other.length, kaki=[];
   all.forEach(function(x){
     if(kaki.length>=room || itemFieldOf(x.it,x.g)!=="kaki") return;
     var ks=x.it.kanji||[];
     if(!ks.some(function(k){ return !kakiWritten(k) && !covered[k]; })) return;   // 書けた字・きょう出す字だけの問題は出さない
-    kaki.push(x); ks.forEach(function(k){ covered[k]=1; });
+    if(charClash(x, used)) return;                                                  // 同じ日に同じ字を2回出さない
+    kaki.push(x); ks.forEach(function(k){ covered[k]=1; }); charMark(x, used);
   });
   // 書き取りが足りない日（一巡の終わりごろ）は、ほかの分野でさらに埋める
-  if(kaki.length<room) other=other.concat(pool.slice(other.length, other.length+(room-kaki.length)));
+  if(kaki.length<room) takeOther(room-kaki.length);
   return kaki.concat(other);
 }
 function composeSheet(target){
   target=target||SHEET_TARGET;
   var seen={};
-  var retry=apartThin(bookItemsForRetry(), seen).slice(0, target);   // 一緒に出さない組（APART_PAIRS）。あとの✕は翌日へ
+  var usedC={};
+  var retry=apartThin(bookItemsForRetry(), seen).filter(function(x){ if(charClash(x, usedC)) return false; charMark(x, usedC); return true; }).slice(0, target);   // 一緒に出さない組（APART_PAIRS）・同じ字。あとの✕は翌日へ
+  usedC={}; retry.forEach(function(x){ charMark(x, usedC); });
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
   if(writeRoundActive()) return retry.concat(composeWriteRound(target-retry.length, ex, retry, target));
   var left=target-retry.length, cand={};
@@ -2109,8 +2126,24 @@ function composeSheet(target){
     var more=Math.min(left-n, cand[f].length-take[f], cap[f]-(rc[f]||0)-take[f]);
     if(more>0){ take[f]+=more; n+=more; }
   });
-  var out=retry.slice();
-  PAPER_FIELDS.forEach(function(f){ out=out.concat(cand[f].slice(0,take[f])); });
+  var out=retry.slice(), got={}, chosen={};
+  PAPER_FIELDS.forEach(function(f){ got[f]=[]; });
+  // 各分野の取り分を、本の順に。同じ字が重なる問題は飛ばして、その分野の次の候補を取る
+  PAPER_FIELDS.forEach(function(f){
+    for(var i=0; i<cand[f].length && got[f].length<take[f]; i++){
+      var x=cand[f][i]; if(charClash(x, usedC)) continue;
+      got[f].push(x); chosen[x.it.id]=1; charMark(x, usedC);
+    }
+  });
+  // 飛ばして足りなくなった枠を、ほかの分野の次の候補で埋める（分野ごとの上限は守る）
+  var nGot=PAPER_FIELDS.reduce(function(a,f){ return a+got[f].length; },0)+retry.length;
+  PAPER_FIELDS.forEach(function(f){
+    for(var i=0; i<cand[f].length && nGot<left+retry.length && got[f].length<cap[f]-(rc[f]||0); i++){
+      var x=cand[f][i]; if(chosen[x.it.id] || charClash(x, usedC)) continue;
+      got[f].push(x); chosen[x.it.id]=1; charMark(x, usedC); nGot++;
+    }
+  });
+  PAPER_FIELDS.forEach(function(f){ out=out.concat(got[f]); });
   return out.concat(reviewFill(out, target-out.length));
 }
 
