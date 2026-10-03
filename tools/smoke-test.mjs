@@ -211,7 +211,7 @@ const rd = await page.evaluate(() => {
   ITEMS = {};
   kakiChars().forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });
   const after = composeSheet(20);
-  r.afterRound = !writeRoundActive() && after.length > 0 && after.every(x => f(x) !== "kaki");
+  r.afterRound = !writeRoundActive() && after.length>0 && after.some(x => f(x) === "kaki");   // 2026-10-03: 第2段階は、書けた字の書き取りでも まだ出していない別の語を出す
   BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; ITEMS = keepI; KSTATS = keepK; WEAK = keepW;
   return r;
 });
@@ -219,7 +219,7 @@ ok("★一巡中: 書けた字の書き取りは出ない／まだ書けてい�
    rd.round && rd.noWritten && rd.newEach && rd.others === Math.max(3, 20 - rd.kk) && rd.n === rd.kk + rd.others, JSON.stringify(rd));
 ok("★部首・同じ読み・対義語をやり終えた日も、書き取りで20問にそろう（2026-09-18 の17問）",
    rd.otherGone.n === 20 && rd.otherGone.kaki === 20, JSON.stringify(rd.otherGone));
-ok("★一巡したら: 字が全部書けた書き取りは出ず、ふだんの混ぜ方にもどる", rd.afterRound);
+ok("★一巡したら（第2段階）: ふだんの混ぜ方にもどり、書けた字の書き取りも まだ出していない別の語が出る", rd.afterRound);
 
 console.log("\n=== 一緒に出さない組（APART_PAIRS・2026-09-20） ===");
 const ap = await page.evaluate(() => {

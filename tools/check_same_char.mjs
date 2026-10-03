@@ -98,9 +98,8 @@ async function inspect(html) {
       if (s.length !== 20) add("A 20問にならない " + s.length);
       if (dupes(s).length) add("A 同じ字が重なっている " + dupes(s).join(""));
       if (JSON.stringify(ITEMS) !== before) add("A 記録（ITEMS）が書き換わった");
-      /* A2: 復習に回せる書き取りが無い日。重なりで飛ばした分は、次の候補で埋めて 部首6・同じ読み5・対義語4 の15問になる */
-      b = mkB(40); reset(b, 0);
-      b.kakiK.forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });
+      /* A2: 書き取りも復習も無い日。重なりで飛ばした分は、次の候補で埋めて 部首6・同じ読み5・対義語4 の15問になる */
+      b = mkB(0); reset(b, 0);   // 書き取りの本が無い日（第2段階の別の語も復習も無い）
       s = composeSheet(20); days.push("A2:" + s.length);
       const c2 = s.reduce((a, x) => { const f = itemFieldOf(x.it, x.g); a[f] = (a[f] || 0) + 1; return a; }, {});
       if (!(c2.bushu === 6 && c2.onaji === 5 && c2.taigi === 4 && s.length === 15)) add("A2 重なりで飛ばした分を次の候補で埋めていない " + JSON.stringify(c2));

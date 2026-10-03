@@ -85,7 +85,7 @@ async function inspect(html) {
     const days = [];
     try {
       /* A: 10-02 の条件（書き取りは全部〇・新しい問題は十分ある） */
-      let b = build(40, 20, 20, 20, true); reset(b, 40);
+      let b = build(40, 6, 20, 20, true); reset(b, 40);   // 部首は6問ちょうど（共有の字の部首も必ず出る）
       const before = JSON.stringify(ITEMS);
       let s = composeSheet(20);
       days.push("A:" + s.length);
@@ -116,12 +116,12 @@ async function inspect(html) {
       s = composeSheet(20); days.push("D:" + s.length);
       if (dupes(s).length) add("D 同じ字が重なっている");
       if (s.length > 20) add("D 21問以上になった");
-      /* E: きょう✕にした問題（翌日に回す）は、復習にも入れない */
-      b = build(40, 6, 5, 4, false); reset(b, 4);
+      /* E: きょう✕にした問題（翌日に回す）は、復習にも入れない。書き取りは5問だけ（k0〜k3 は〇、k4 がきょう✕）で、新しい別の語は無い */
+      b = build(5, 6, 5, 4, false); reset(b, 4);
       b.kakiK.forEach(k => { KSTATS[k] = { kaki: { o: 1, x: 0, run: 1 } }; });   // 字はぜんぶ書けた（一巡のあと）
-      ITEMS.k9 = { o: 0, x: 1, last: "x", date: "2026-10-02" };
+      ITEMS.k4 = { o: 0, x: 1, last: "x", date: "2026-10-02" };
       s = composeSheet(20); days.push("E:" + s.length);
-      if (s.some(x => x.it.id === "k9")) add("E きょう✕にした問題が、復習で紙に出ている");
+      if (s.some(x => x.it.id === "k4")) add("E きょう✕にした問題が、復習で紙に出ている");
     } catch (e) { add("検査の途中で止まった " + (e && e.stack || e)); }
     return { ng, days };
   });

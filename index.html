@@ -2018,7 +2018,37 @@ function bookItemsNew(exclude, limit){
    ⚠️ SHEET_VERSION は上げない。上げると、きょう刷ったまま記録していない紙が組み直され、紙と記録がずれる。次に組む紙から効く */
 function kakiWritten(k){ return kanjiState(k)==="done"; }
 function kakiAllWritten(x){ var ks=x.it.kanji||[]; return ks.length>0 && ks.every(kakiWritten); }
-function writeRoundActive(){ return kakiChars().some(function(k){ return !kakiWritten(k); }); }
+/* ★出題の2段階（2026-10-03 ユーザー指示。6級でも同じ）
+   第1段階: 書き取りの全部の字が「書けた」まで、まだ書けていない字を優先（composeWriteRound）
+   第2段階: 全部書けたら、同じ字の「まだ出していない別の熟語・使い方」を、これまで出た通り数が少ない字から（composeSheet の varietyOrder）
+   ★「書けた」の判定を2つに分ける:
+     ・kakiWritten … 一覧の「字」タブと同じ（最後が〇・印なし）。表示用
+     ・kakiGate    … 段階の判定。**一度でも書き取りが〇になった字**（KSTATS の o>0）。「本でやった」の必ず出す印が残っている字は まだ
+   ⚠️ 第2段階で✕が付いても、第1段階には戻さない（1回の✕で全体が第1段階に戻ると、✕の出る日のたびに第2段階が止まる）。
+      その問題は翌日にまた出る（bookItemsForRetry）／その字は第2段階の並びで先に回る（charFailing）。 */
+function kakiGate(k){
+  var w=WEAK[k]; if(w && w.must && !w.got) return false;
+  var st=KSTATS[k] && KSTATS[k].kaki;
+  return !!(st && (st.o||0)>0);
+}
+function writeRoundActive(){ return kakiChars().some(function(k){ return !kakiGate(k); }); }
+/* 第2段階の並び: ①いま書き取りが✕の字（まだ直っていない）を先に ②これまで出た通り数が少ない字 ③本の順。通り数＝その字を答えに持つ、答えを記録ずみの問題の数 */
+function charUses(){
+  var u={};
+  bookAllItems().forEach(function(x){ if(ITEMS[x.it.id]) (x.it.kanji||[]).forEach(function(k){ u[k]=(u[k]||0)+1; }); });
+  return u;
+}
+function charFailing(k){ var st=KSTATS[k] && KSTATS[k].kaki; return !!(st && (st.x||0)>0 && (st.run||0)===0); }
+function varietyOrder(list){
+  var uses=charUses();
+  var keyed=list.map(function(x,i){
+    var ks=x.it.kanji||[], sum=0, fail=0;
+    ks.forEach(function(k){ sum+=(uses[k]||0); if(charFailing(k)) fail=1; });
+    return { x:x, fail:fail?0:1, avg:ks.length?sum/ks.length:0, i:i };
+  });
+  keyed.sort(function(a,b){ return (a.fail-b.fail) || (a.avg-b.avg) || (a.i-b.i); });
+  return keyed.map(function(e){ return e.x; });
+}
 function roundOtherCount(target){ return Math.max(1, Math.min(3, Math.round(target*3/20))); }
 /* ⚠️ 2026-09-18 に直した: もとは「書き取りを left-nOther 問で打ち切って、3問を部首などに取り置く」形だった。
    **本にある部首・同じ読み・対義語は38問しかなく、やり終えると取り置いた3問が埋まらず、紙が17問になった**（ユーザー報告・本物で再現）。
@@ -2067,8 +2097,8 @@ function composeWriteRound(left, ex, retry, target){
   retry.forEach(function(x){ (x.it.kanji||[]).forEach(function(k){ covered[k]=1; used[k]=1; }); });
   var all=bookAllItems().filter(function(x){ return !ex[x.it.id] && !ITEMS[x.it.id]; });
   var others=all.filter(function(x){ return itemFieldOf(x.it,x.g)!=="kaki"; });
-  var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiWritten); });   // 字がもう書けている問題を先に
-  var pool=ready.concat(others.filter(function(x){ return !(x.it.kanji||[]).every(kakiWritten); }))
+  var ready=others.filter(function(x){ return (x.it.kanji||[]).every(kakiGate); });   // 字がもう書けている問題を先に
+  var pool=ready.concat(others.filter(function(x){ return !(x.it.kanji||[]).every(kakiGate); }))
   pool=apartThin(pool, retry.reduce(function(a,x){ a[x.it.id]=1; return a; },{}));   // 一緒に出さない組（APART_PAIRS）
   var poolLeft=pool.slice(), other=[];
   function takeOther(n){
@@ -2083,7 +2113,7 @@ function composeWriteRound(left, ex, retry, target){
   all.forEach(function(x){
     if(kaki.length>=room || itemFieldOf(x.it,x.g)!=="kaki") return;
     var ks=x.it.kanji||[];
-    if(!ks.some(function(k){ return !kakiWritten(k) && !covered[k]; })) return;   // 書けた字・きょう出す字だけの問題は出さない
+    if(!ks.some(function(k){ return !kakiGate(k) && !covered[k]; })) return;   // 書けた字・きょう出す字だけの問題は出さない
     if(charClash(x, used)) return;                                                  // 同じ日に同じ字を2回出さない
     kaki.push(x); ks.forEach(function(k){ covered[k]=1; }); charMark(x, used);
   });
@@ -2103,10 +2133,10 @@ function composeSheet(target){
   PAPER_FIELDS.forEach(function(f){ cand[f]=[]; });
   bookAllItems().forEach(function(x){
     if(ex[x.it.id] || ITEMS[x.it.id]) return;
-    if(itemFieldOf(x.it,x.g)==="kaki" && kakiAllWritten(x)) return;   // Q3=A: 字が全部もう書けている書き取りは出さない
+    // ★第2段階（全部の字が書けた）: 字がもう書けている書き取りでも、まだ出していない別の語・使い方は出す（2026-10-03。Q3=A を、一度〇の同じ問題を繰り返さない形に変えた）
     cand[itemFieldOf(x.it,x.g)].push(x);
   });
-  PAPER_FIELDS.forEach(function(f){ cand[f]=apartThin(cand[f], seen); });   // 一緒に出さない組（APART_PAIRS）
+  PAPER_FIELDS.forEach(function(f){ cand[f]=apartThin(varietyOrder(cand[f]), seen); });   // 第2段階の並び（varietyOrder）→ 一緒に出さない組（APART_PAIRS）   // 一緒に出さない組（APART_PAIRS）
   var q=paperQuota(left), take={}, n=0;
   // ★出せる分野は、少なくとも1問（0にしない。分野が丸ごと消えると、その日その分野に触れない。司令塔判断）。
   //   足りない1問は、いちばん多い分野（ふつうは書き取り）から回す
