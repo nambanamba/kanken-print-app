@@ -577,7 +577,7 @@
 
       <h2 style="margin-top:16px">💾 記録の書き出し・読み込み</h2>
       <div class="muted" style="margin-bottom:8px;font-size:.8rem">
-        書き出したファイルには、〇✕の記録だけが入ります（<b>問題文は入りません</b>）。<br>
+        書き出したファイルには、〇✕の記録・受検日・1回の問数・目次の手直しが入ります（<b>問題文は入りません</b>。<b>合言葉の鍵も入りません</b>）。<br>
         読み込むと、この端末の記録が<b>ファイルの内容にまるごと置きかわります</b>。先に、増える・変わる・消える件数を見せます。
       </div>
       <button class="btn ghost" onclick="downloadExport()">記録を書き出す（ファイル）</button>
@@ -3063,10 +3063,15 @@ function saveDidInBook(){
      先に「増える・変わる・消える」を見せ、消える記録があれば確認をもう1回。読み込む前の状態を1回ぶん残して、戻せるようにする
    ========================================================================= */
 var K_IMPORT_BACKUP="kanken7_import_backup_v1";
+/* ★format 2（2026-10-03 引越し対応・ユーザー承認）: 受検日・1回の問数（settings）と、目次の手直し（K_UNITS）も入れる。
+   ・format 1（古いファイル）も読める。そのときは受検日・1回の問数・目次は、この端末のまま（ファイルに無いものは触らない）
+   ・★合言葉の鍵（K_QKEY）は入れない。ファイルが人に渡ると、本の問題が読めてしまうため。読み込んだあと本が未読込なら、合言葉を入れるよう案内する */
 var EXPORT_KEYS=[K_ITEMS, K_KSTAT, K_WEAK, K_LOG, K_REC, K_SESSION, K_APP];
+var EXPORT_KEYS_V2=[K_UNITS];
 function exportData(){
-  var o={ app:"kanken7", format:1, exportedAt:new Date().toISOString(), records:{}, doneDays:(SET.doneDays||[]).slice() };
-  EXPORT_KEYS.forEach(function(k){ o.records[k]=load(k,null); });
+  var o={ app:"kanken7", format:2, exportedAt:new Date().toISOString(), records:{}, doneDays:(SET.doneDays||[]).slice(),
+          settings:{ examDate:SET.examDate, appCount:(SET.appCount===undefined?null:SET.appCount) } };
+  EXPORT_KEYS.concat(EXPORT_KEYS_V2).forEach(function(k){ o.records[k]=load(k,null); });
   return o;
 }
 function downloadExport(){
@@ -3078,7 +3083,7 @@ function downloadExport(){
 }
 function parseImport(text){
   var o; try{ o=JSON.parse(text); }catch(e){ return { error:"ファイルが読めません（記録のファイルではないようです）。" }; }
-  if(!o || o.app!=="kanken7" || o.format!==1 || !o.records || typeof o.records!=="object") return { error:"漢検7級アプリの記録ファイルではありません。何も変えていません。" };
+  if(!o || o.app!=="kanken7" || (o.format!==1 && o.format!==2) || !o.records || typeof o.records!=="object") return { error:"漢検7級アプリの記録ファイルではありません。何も変えていません。" };
   return { data:o };
 }
 function diffCount(cur, next){
@@ -3092,10 +3097,17 @@ function importPreview(o){
   function byKey(arr){ var m={}; (arr||[]).forEach(function(e){ m[e.t+"|"+e.id]=e; }); return m; }
   return { items:diffCount(ITEMS, r[K_ITEMS]), kanji:diffCount(KSTATS, r[K_KSTAT]), log:diffCount(byKey(LOG), byKey(r[K_LOG])) };
 }
-function writeRecords(recs, doneDays){
-  EXPORT_KEYS.forEach(function(k){
+function writeRecords(recs, doneDays, v2){   // v2 … {settings} を渡したときだけ、受検日・1回の問数・目次も置きかえる（format 1 のファイルでは触らない）
+  EXPORT_KEYS.concat(v2?EXPORT_KEYS_V2:[]).forEach(function(k){
     if(recs[k]===null || recs[k]===undefined) localStorage.removeItem(k); else save(k, recs[k]);
   });
+  if(v2){
+    UNITS=mergeUnits(load(K_UNITS,null),DEFAULT_UNITS);
+    PLAN=buildPlan(UNITS.filter(function(u){return u.mat==="dr"&&u.field!=="test";}),{});
+    var st=v2.settings||{};
+    if(typeof st.examDate==="string" && /^\d{4}-\d{2}-\d{2}$/.test(st.examDate)) SET.examDate=st.examDate;
+    if(st.appCount===null || st.appCount===undefined) delete SET.appCount; else SET.appCount=st.appCount;
+  }
   ITEMS=load(K_ITEMS,{}); KSTATS=load(K_KSTAT,{}); WEAK=load(K_WEAK,{}); LOG=load(K_LOG,[]); RECORDS=load(K_REC,{});
   SESSION=load(K_SESSION,null); APP_S=load(K_APP,null);
   SET.doneDays=Array.isArray(doneDays) ? doneDays.slice() : []; save(K_SET,SET);
@@ -3109,10 +3121,11 @@ function importFromText(text){
       +line("問題ごとの記録", v.items)+"\n"+line("字ごとの記録", v.kanji)+"\n"+line("やった問題の履歴", v.log)
       +"\n\nよろしいですか？")) return false;
   if(del>0 && !confirm("⚠️ 記録が "+del+" 件 消えます。本当に置きかえますか？\n（読み込む前の状態には、あとから1回だけ戻せます）")) return false;
-  save(K_IMPORT_BACKUP, { at:new Date().toISOString(), records:exportData().records, doneDays:(SET.doneDays||[]).slice() });
-  writeRecords(p.data.records, p.data.doneDays);
+  var cur=exportData();
+  save(K_IMPORT_BACKUP, { at:new Date().toISOString(), format:2, records:cur.records, doneDays:cur.doneDays, settings:cur.settings });
+  writeRecords(p.data.records, p.data.doneDays, p.data.format===2 ? { settings:p.data.settings } : null);
   renderAll();
-  alert("読み込みました。");
+  alert("読み込みました。"+(bookLoaded() ? "" : "\n\n本の問題はまだ読みこまれていません。「🔑 本の問題」で合言葉を入れてください（合言葉の鍵は、ファイルには入っていません）。"));
   return true;
 }
 function onImportFile(input){
@@ -3125,7 +3138,7 @@ function undoImport(){
   var b=load(K_IMPORT_BACKUP,null);
   if(!b){ alert("戻せる読み込みはありません。"); return false; }
   if(!confirm("読み込む前の状態に戻します。よろしいですか？")) return false;
-  writeRecords(b.records, b.doneDays);
+  writeRecords(b.records, b.doneDays, b.format===2 ? { settings:b.settings } : null);
   localStorage.removeItem(K_IMPORT_BACKUP);
   renderAll();
   alert("読み込む前の状態に戻しました。");
