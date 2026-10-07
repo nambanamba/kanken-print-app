@@ -24,7 +24,7 @@ const REAL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8").split(CR).jo
 const OLD = execFileSync("git", ["show", BEFORE_FIX + ":index.html"], { cwd: ROOT, maxBuffer: 1 << 28 }).toString("utf8").split(CR).join("");
 
 /* 箱の分類。新しい kanken7_ のキーが index.html に増えたら、どちらかに足すまでこの検査は止まる */
-const MOVED = ["items_v1", "kstats_v1", "weak_v1", "log_v1", "records_v1", "session_v1", "app_v1", "units_v1", "settings_v1", "next_sheet_v1"].map(k => "kanken7_" + k);
+const MOVED = ["items_v1", "kstats_v1", "weak_v1", "log_v1", "records_v1", "session_v1", "app_v1", "units_v1", "settings_v1", "next_sheet_v1", "last_saved_v1"].map(k => "kanken7_" + k);
 const NOT_MOVED = {
   kanken7_qkey_v1: "合言葉の鍵（ファイルに入れない。入れるとファイルから本の問題が読める）",
   kanken7_import_backup_v1: "読み込む前の状態の控え（端末の中だけ）",
@@ -73,6 +73,7 @@ const A_VALUES = {
   kanken7_session_v1: { v: 6, date: "2026-10-02", ids: ["q_a_1"], results: { "q_a_1|甲": "x" }, saved: false, boxMM: 14 },
   kanken7_app_v1: { date: "2026-10-02", ids: ["a1"], pos: 1 },
   kanken7_next_sheet_v1: { v: 6, date: "2026-10-03", ids: ["q_a_2"], results: {}, saved: false, boxMM: 18, nid: "n1_1", from: "2026-10-02" },
+  kanken7_last_saved_v1: { v: 6, date: "2026-10-02", savedOn: "2026-10-02", ids: ["q_a_1"], results: { "q_a_1|甲": "x" }, boxMM: 18 },
   kanken7_units_v1: [{ id: "dr_01", field: "kaki", pages: "3-4", qs: 9, label: "L", mat: "dr" }, { id: "x_custom", field: "kaki", pages: "1", qs: 3, label: "手直し", mat: "dr" }],
   kanken7_settings_v1: { examDate: "2026-11-14", appCount: 30, doneDays: ["2026-10-01", "2026-10-02"] },
   kanken7_qkey_v1: SECRET,

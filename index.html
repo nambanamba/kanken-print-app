@@ -634,13 +634,14 @@
 var K_REC="kanken7_records_v1", K_UNITS="kanken7_units_v1", K_WEAK="kanken7_weak_v1",
     K_SET="kanken7_settings_v1", K_KSTAT="kanken7_kstats_v1", K_SHEET="kanken7_sheet_v1",
     K_SESSION="kanken7_session_v1",
+    K_LAST="kanken7_last_saved_v1",   // ★きょう「記録する」を押した紙の控え（日付がきょうでなくても、記録したのがきょうなら、つづきのボタンを出すため）
     K_NEXT="kanken7_next_sheet_v1";   // ★あしたのぶんの紙（2026-10-07）。きょうの紙を記録したあとに印刷した「あしたのテスト」。あした開いたら、この紙の採点から始める
 
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v===null?d:v; }catch(e){ return d; } }
 function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
 
 var RECORDS=load(K_REC,{}), WEAK=load(K_WEAK,{}), SET=load(K_SET,{examDate:KANKEN.examDate}),
-    KSTATS=load(K_KSTAT,{}), SHEET=load(K_SHEET,null), SESSION=load(K_SESSION,null), NEXT=load(K_NEXT,null),
+    KSTATS=load(K_KSTAT,{}), SHEET=load(K_SHEET,null), SESSION=load(K_SESSION,null), NEXT=load(K_NEXT,null), LAST=load(K_LAST,null),
     UNITS=mergeUnits(load(K_UNITS,null),DEFAULT_UNITS);
 
 /* ★保存ずみの目次と DEFAULT_UNITS を、id をキーにして合流させる。
@@ -1786,7 +1787,8 @@ function resetToday(){
   });
   Object.keys(RECORDS).forEach(function(id){ if(RECORDS[id] && RECORDS[id].date===d) delete RECORDS[id]; });
   if(SESSION && SESSION.date===d) SESSION=null;
-  if(NEXT && NEXT.from===d){ NEXT=null; save(K_NEXT,NEXT); }   // きょうの記録を消したら、それをもとに作ったあしたの紙も作り直し
+  if(NEXT && NEXT.from===d){ NEXT=null; save(K_NEXT,NEXT); }
+  if(LAST && LAST.savedOn===d){ LAST=null; save(K_LAST,LAST); }   // きょうの記録を消したら、それをもとに作ったあしたの紙も作り直し
   if(APP_S && APP_S.date===d) APP_S=null;
   SET.doneDays=(SET.doneDays||[]).filter(function(v){ return v!==d; });
   save(K_LOG,LOG); save(K_ITEMS,ITEMS); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_REC,RECORDS);
@@ -1796,7 +1798,7 @@ function resetToday(){
 /* ★ぜんぶ消す。受検日・合言葉の鍵・本の目次（人が直した分野・ページ）は残す */
 function resetAll(){
   if(!confirm("これまでの記録を、ぜんぶ消します。元にはもどせません。よろしいですか？")) return;
-  RECORDS={}; WEAK={}; KSTATS={}; ITEMS={}; LOG=[]; SESSION=null; APP_S=null; NEXT=null; save(K_NEXT,NEXT);
+  RECORDS={}; WEAK={}; KSTATS={}; ITEMS={}; LOG=[]; SESSION=null; APP_S=null; NEXT=null; save(K_NEXT,NEXT); LAST=null; save(K_LAST,LAST);
   SET.doneDays=[];
   save(K_REC,RECORDS); save(K_WEAK,WEAK); save(K_KSTAT,KSTATS); save(K_ITEMS,ITEMS); save(K_LOG,LOG);
   save(K_SESSION,SESSION); save(K_APP,APP_S); save(K_SET,SET);
@@ -3008,6 +3010,8 @@ function saveSheetResult(){
     }
   });
   SESSION.saved=true;
+  LAST={ v:SESSION.v, date:day, savedOn:todayStr(), ids:(SESSION.ids||[]).slice(), results:Object.assign({}, SESSION.results||{}), boxMM:SESSION.boxMM };
+  save(K_LAST,LAST);
   SET.doneDays=(SET.doneDays||[]).concat([day]).filter(function(v,i,a){return a.indexOf(v)===i;});
   save(K_ITEMS,ITEMS); save(K_REC,RECORDS);
   save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_SET,SET); save(K_SESSION,SESSION);
@@ -3027,12 +3031,15 @@ function saveSheetResult(){
    ・★きょうの紙を記録した日だけ（SESSION.date===きょう）。遅れて入れた紙は、今までどおり新しい紙が自動で出る
    ・出題の決まり・記録の書き方は触らない。あしたの紙を組むときは「きょう」をあしたに読みかえるだけ（DAY_OVERRIDE）。記録は書かない
    ========================================================================= */
-function sameDayReady(){ return !!(bookLoaded() && SESSION && SESSION.saved && SESSION.v>=3 && SESSION.date===todayStr()); }
+/* きょう「記録する」を押した紙があるか（紙の日付は問わない。遅れて入れた紙でも、きょう記録したなら出す） */
+function recordedToday(){ return !!(LAST && LAST.savedOn===todayStr() && LAST.v>=3 && LAST.ids && LAST.ids.length); }
+function sameDayReady(){ return bookLoaded() && recordedToday(); }
+function lastList(){ var idx=bookIndex(); return LAST.ids.map(function(id){ return idx[id]; }).filter(Boolean); }
 /* きょう✕だった問題の行だけの、答えとなおし用ブロック。番号は きょうの紙の番号のまま（紙の○番と合わせるため） */
 function practiceBlocksOfToday(){
   if(!sameDayReady()) return [];
-  var res=SESSION.results||{}, out=[], n=0;
-  buildPaperBlocks().forEach(function(b){
+  var res=LAST.results||{}, out=[], n=0;
+  buildPaperBlocks(lastList()).forEach(function(b){
     var rows=[];
     b.rows.forEach(function(r,i){
       var wrong=(r.kanji||[]).some(function(k){ return res[markKey(r.id,k)]==="x"; });
@@ -3062,7 +3069,9 @@ function ensureNext(rebuild){
   if(NEXT && NEXT.date===tm) return NEXT;
   DAY_OVERRIDE=tm;
   var list;
-  try{ list=fitToday(); }finally{ DAY_OVERRIDE=null; }
+  // きょうの紙がまだ記録されていない（遅れて入れた日に自動で出た紙など）なら、その問題は あしたの紙に入れない
+  HOLD={}; if(SESSION && !SESSION.saved) (SESSION.ids||[]).forEach(function(id){ HOLD[id]=1; });
+  try{ list=fitToday(); }finally{ DAY_OVERRIDE=null; HOLD={}; }
   if(!list.length) return null;
   NEXT={ v:SHEET_VERSION, date:tm, ids:list.map(function(x){ return x.it.id; }), results:{}, saved:false,
          boxMM:DAILY_BOX_MM, nid:"n"+Date.now()+"_"+Math.floor(Math.random()*1e6), from:todayStr() };
@@ -3103,6 +3112,8 @@ function rebuildNext(){
   ensureNext(true); renderAfterTest();
 }
 function afterTestHtml(){
+  if(recordedToday() && !bookLoaded())
+    return '<div class="note" style="text-align:left;margin-top:10px">きょうの紙は記録ずみです。<b>練習・あしたのテストの印刷ボタンは、本の問題を読みこむと出ます。</b>「せってい」で合言葉を入れて「よみこむ」を押してください（記録は消えていません）。</div>';
   if(!sameDayReady()) return "";
   var nWrong=practiceBlocksOfToday().reduce(function(a,b){ return a+b.rows.length; },0);
   var h='<div class="note" style="text-align:left;margin-top:10px"><b>つづけて（きょうの紙は記録ずみです）</b></div>'
@@ -3238,7 +3249,7 @@ var K_IMPORT_BACKUP="kanken7_import_backup_v1";
 /* ★format 2（2026-10-03 引越し対応・ユーザー承認）: 受検日・1回の問数（settings）と、目次の手直し（K_UNITS）も入れる。
    ・format 1（古いファイル）も読める。そのときは受検日・1回の問数・目次は、この端末のまま（ファイルに無いものは触らない）
    ・★合言葉の鍵（K_QKEY）は入れない。ファイルが人に渡ると、本の問題が読めてしまうため。読み込んだあと本が未読込なら、合言葉を入れるよう案内する */
-var EXPORT_KEYS=[K_ITEMS, K_KSTAT, K_WEAK, K_LOG, K_REC, K_SESSION, K_APP, K_NEXT];
+var EXPORT_KEYS=[K_ITEMS, K_KSTAT, K_WEAK, K_LOG, K_REC, K_SESSION, K_APP, K_NEXT, K_LAST];
 var EXPORT_KEYS_V2=[K_UNITS];
 function exportData(){
   var o={ app:"kanken7", format:2, exportedAt:new Date().toISOString(), records:{}, doneDays:(SET.doneDays||[]).slice(),
@@ -3281,7 +3292,7 @@ function writeRecords(recs, doneDays, v2){   // v2 … {settings} を渡した�
     if(st.appCount===null || st.appCount===undefined) delete SET.appCount; else SET.appCount=st.appCount;
   }
   ITEMS=load(K_ITEMS,{}); KSTATS=load(K_KSTAT,{}); WEAK=load(K_WEAK,{}); LOG=load(K_LOG,[]); RECORDS=load(K_REC,{});
-  SESSION=load(K_SESSION,null); APP_S=load(K_APP,null); NEXT=load(K_NEXT,null);
+  SESSION=load(K_SESSION,null); APP_S=load(K_APP,null); NEXT=load(K_NEXT,null); LAST=load(K_LAST,null);
   SET.doneDays=Array.isArray(doneDays) ? doneDays.slice() : []; save(K_SET,SET);
 }
 function importFromText(text){

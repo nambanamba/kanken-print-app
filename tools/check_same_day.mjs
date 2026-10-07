@@ -39,6 +39,7 @@ const FAKES = [
   ["(d) 練習に〇の問題も入れる", mutate([["if(wrong){ var c=Object.assign({}, r);", "if(true){ var c=Object.assign({}, r);"]], "d"), true],
   ["(e) あしたの紙を保存しない（あした開いても出ない）", mutate([["  save(K_NEXT,NEXT);\n  return NEXT;", "  return NEXT;"]], "e"), true],
   ["(f) 見た目だけ変えた（中身は同じ）", mutate([["var DAY_OVERRIDE=null;", "var DAY_OVERRIDE = null;"]], "f"), false],
+  ["(h) 記録した日の紙しかボタンを出さない（遅れて入れた紙で出ない）", mutate([["function recordedToday(){ return !!(LAST && LAST.savedOn===todayStr()", "function recordedToday(){ return !!(LAST && LAST.date===todayStr() && LAST.savedOn===todayStr()"]], "h"), true],
   ["(g) おかわりの紙が あしたの紙と重なる", mutate([["Object.keys(HOLD).forEach(function(id){ ex[id]=1; });", ""]], "g"), true],
 ];
 
@@ -205,6 +206,30 @@ async function inspect(html) {
       await open("2026-10-08", false);
       const d3 = await page.evaluate(() => ({ date: SESSION && SESSION.date, pending: sheetPending(), ids: SESSION && SESSION.ids.slice(), info: /10月6日の紙/.test(document.getElementById("ky-info").textContent) }));
       if (d3.date !== "2026-10-06" || !d3.pending || d3.ids.join() !== w2.join() || !d3.info) add("S6 何日か開かなかったとき、その紙が「10月6日の紙」として残っていない " + JSON.stringify({ date: d3.date, pending: d3.pending, info: d3.info }));
+
+      /* ---- S8 記録したあと、開き直しても、その日ならボタンが出る／遅れて入れた紙でも出る／本が未読込なら案内が出る ---- */
+      await open("2026-10-05", true);
+      await tab("kiroku");
+      await page.evaluate(() => { renderMarks(); saveSheetResult(); });
+      await open("2026-10-05", false);   // 開き直し（ページを読み直す）
+      await tab("kiroku");
+      const re = await page.evaluate(() => ({ both: !!document.getElementById("btn-both"), ky: !!document.getElementById("ky-after").querySelector("#btn-next") }));
+      if (!re.both) add("S8 記録したあと開き直したら、つづきのボタンが出ない");
+      if (!re.ky) add("S8 きょう画面に、つづきのボタンが出ない");
+      const nb = await page.evaluate(() => { BOOK_UNITS = null; renderAll(); return document.getElementById("after-box").textContent; });
+      if (!/読みこむと出ます/.test(nb)) add("S8 本が未読込のとき、ボタンが出ない理由の案内が出ない");
+      // 遅れて入れた紙: 10/04 の紙を 10/05 に記録
+      await open("2026-10-04", true);
+      await page.evaluate(() => { todaySheet(); });
+      await open("2026-10-05", false);
+      await tab("kiroku");
+      const late = await page.evaluate(() => { const pend = sheetPending(); renderMarks(); [...document.querySelectorAll("#mark-box .mark")].slice(0, 1).forEach(e => e.click()); saveSheetResult();
+        return { pend, both: !!document.getElementById("btn-both"), pr: practiceBlocksOfToday().flat ? practiceBlocksOfToday().reduce((a, b) => a + b.rows.length, 0) : -1, sessDate: SESSION.date }; });
+      if (!late.pend) add("S8 前提: 前の日の紙が残っていない");
+      if (!late.both) add("S8 遅れて入れた紙（前の日の紙）を記録したあと、つづきのボタンが出ない");
+      if (late.pr !== 1) add("S8 遅れて入れた紙の✕が練習に入らない " + late.pr);
+      const lateNext = await page.evaluate(() => { const held = SESSION && !SESSION.saved ? SESSION.ids.slice() : []; const n = ensureNext(false); return { date: n && n.date, overlap: n ? n.ids.filter(id => held.indexOf(id) >= 0).length : -1 }; });
+      if (lateNext.date !== "2026-10-06" || lateNext.overlap !== 0) add("S8 遅れて入れた日のあしたの紙が、きょう自動で出た紙と重なる/日付が違う " + JSON.stringify(lateNext));
     } catch (e) { add("検査の途中で止まった " + String(e && e.message || e).split("\n")[0]); }
     return { ng, notes };
   })();
