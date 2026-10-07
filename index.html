@@ -390,6 +390,7 @@
         <b>×にした字は、次の日の紙にまた出ます。</b>
       </div>
       <!-- ★おかわり（きょうの紙を記録したあとに出る） -->
+      <div id="ky-after"></div>
       <div id="ky-extra" style="margin-top:12px"></div>
     </div>
 
@@ -428,6 +429,8 @@
       </div>
       <div class="marks" id="mark-box"></div>
       <button class="btn" style="margin-top:12px" onclick="saveSheetResult()">記録する</button>
+      <!-- ★記録したあと、つづけて 練習 → あしたのテスト を印刷する（2026-10-07） -->
+      <div id="after-box"></div>
     </div>
 
     <!-- ★やった問題の一覧と〇✕の訂正（ユーザー指示 2026-09-11）。紙もアプリも。字をタップすると〇✕が入れかわる -->
@@ -630,13 +633,14 @@
    ========================================================================= */
 var K_REC="kanken7_records_v1", K_UNITS="kanken7_units_v1", K_WEAK="kanken7_weak_v1",
     K_SET="kanken7_settings_v1", K_KSTAT="kanken7_kstats_v1", K_SHEET="kanken7_sheet_v1",
-    K_SESSION="kanken7_session_v1";
+    K_SESSION="kanken7_session_v1",
+    K_NEXT="kanken7_next_sheet_v1";   // ★あしたのぶんの紙（2026-10-07）。きょうの紙を記録したあとに印刷した「あしたのテスト」。あした開いたら、この紙の採点から始める
 
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v===null?d:v; }catch(e){ return d; } }
 function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
 
 var RECORDS=load(K_REC,{}), WEAK=load(K_WEAK,{}), SET=load(K_SET,{examDate:KANKEN.examDate}),
-    KSTATS=load(K_KSTAT,{}), SHEET=load(K_SHEET,null), SESSION=load(K_SESSION,null),
+    KSTATS=load(K_KSTAT,{}), SHEET=load(K_SHEET,null), SESSION=load(K_SESSION,null), NEXT=load(K_NEXT,null),
     UNITS=mergeUnits(load(K_UNITS,null),DEFAULT_UNITS);
 
 /* ★保存ずみの目次と DEFAULT_UNITS を、id をキーにして合流させる。
@@ -709,9 +713,13 @@ function chunkRange(c){
   return c.parts>1 ? ("問"+c.from+"〜"+c.to) : ("問1〜"+c.to);
 }
 function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-function todayStr(){ return ymd(new Date()); }
+/* DAY_OVERRIDE … 「あしたのぶんの紙」を組む・刷るあいだだけ、きょうを あした にする（✕の翌日・見出しの日付・受検日までの日数を、あしたのものにするため）。
+   ⚠️ 必ず try/finally で戻す。残ると、記録の日付が あした になる */
+var DAY_OVERRIDE=null;
+function todayStr(){ return DAY_OVERRIDE || ymd(new Date()); }
+function nextDayStr(){ var d=new Date(ymd(new Date())+"T00:00:00"); d.setDate(d.getDate()+1); return ymd(d); }
 function daysLeft(){
-  var d=new Date(SET.examDate+"T00:00:00"), t=new Date(); t.setHours(0,0,0,0);
+  var d=new Date(SET.examDate+"T00:00:00"), t=new Date(todayStr()+"T00:00:00");
   return Math.max(0, Math.round((d-t)/86400000));
 }
 
@@ -971,7 +979,9 @@ function renderKyou(){
   // まえに ✕ だった問題（＝紙で記録したことがある問題）
   // ★「まえに✕」は、きょうより前の日に記録があった問題だけ（きょう記録した問題を数えない。記録したあと「20問のうち20問」と出ていた）
   var retryN=items.filter(function(x){ return answeredBefore(x.it.id); }).length;
-  info.innerHTML=(sheetPending()
+  info.innerHTML=(SESSION && SESSION.fromNext && !SESSION.saved
+      ? '<div class="note" style="text-align:left;margin-bottom:6px">📄 前の日に印刷しておいた <b>「あしたのテスト」</b> です。刷ったその紙の〇✕を「きろく」で入れてください。</div>' : '')
+    +(sheetPending()
       ? '<div class="note" style="text-align:left;margin-bottom:6px">📄 まだ <b>'+mdLabel(SESSION.date)+'の紙</b> のままです。'
         +'〇✕を「きろく」で入れると、次の紙になります。</div>' : '')
     +'受検日まで <b>あと '+daysLeft()+' 日</b>。<br>'
@@ -1685,7 +1695,8 @@ function saveDoneWords(){
 
 function startExtraSheet(){
   if(!SESSION || SESSION.date!==todayStr() || !SESSION.saved){ alert("まず、きょうの紙を「きろく」で記録してください。"); return; }
-  var ids=fitToday().map(function(x){ return x.it.id; });
+  HOLD={}; if(NEXT) (NEXT.ids||[]).forEach(function(id){ HOLD[id]=1; });
+  var ids; try{ ids=fitToday().map(function(x){ return x.it.id; }); }finally{ HOLD={}; }
   if(!ids.length){ alert("本の問題は、もうありません（照合が済んだ単元の問題は、ぜんぶやりました）。"); return; }
   SESSION={ v:SHEET_VERSION, date:todayStr(), ids:ids, results:{}, saved:false, boxMM:FIT_BOX, extra:(SESSION.extra||0)+1 };
   save(K_SESSION,SESSION);
@@ -1775,6 +1786,7 @@ function resetToday(){
   });
   Object.keys(RECORDS).forEach(function(id){ if(RECORDS[id] && RECORDS[id].date===d) delete RECORDS[id]; });
   if(SESSION && SESSION.date===d) SESSION=null;
+  if(NEXT && NEXT.from===d){ NEXT=null; save(K_NEXT,NEXT); }   // きょうの記録を消したら、それをもとに作ったあしたの紙も作り直し
   if(APP_S && APP_S.date===d) APP_S=null;
   SET.doneDays=(SET.doneDays||[]).filter(function(v){ return v!==d; });
   save(K_LOG,LOG); save(K_ITEMS,ITEMS); save(K_KSTAT,KSTATS); save(K_WEAK,WEAK); save(K_REC,RECORDS);
@@ -1784,7 +1796,7 @@ function resetToday(){
 /* ★ぜんぶ消す。受検日・合言葉の鍵・本の目次（人が直した分野・ページ）は残す */
 function resetAll(){
   if(!confirm("これまでの記録を、ぜんぶ消します。元にはもどせません。よろしいですか？")) return;
-  RECORDS={}; WEAK={}; KSTATS={}; ITEMS={}; LOG=[]; SESSION=null; APP_S=null;
+  RECORDS={}; WEAK={}; KSTATS={}; ITEMS={}; LOG=[]; SESSION=null; APP_S=null; NEXT=null; save(K_NEXT,NEXT);
   SET.doneDays=[];
   save(K_REC,RECORDS); save(K_WEAK,WEAK); save(K_KSTAT,KSTATS); save(K_ITEMS,ITEMS); save(K_LOG,LOG);
   save(K_SESSION,SESSION); save(K_APP,APP_S); save(K_SET,SET);
@@ -2121,13 +2133,15 @@ function composeWriteRound(left, ex, retry, target){
   if(kaki.length<room) takeOther(room-kaki.length);
   return kaki.concat(other);
 }
+var HOLD={};   // あしたのぶんの紙に入っている問題。おかわりの紙には出さない（あしたの紙と同じ問題が重ならないように）
 function composeSheet(target){
   target=target||SHEET_TARGET;
   var seen={};
   var usedC={};
-  var retry=apartThin(bookItemsForRetry(), seen).filter(function(x){ if(charClash(x, usedC)) return false; charMark(x, usedC); return true; }).slice(0, target);   // 一緒に出さない組（APART_PAIRS）・同じ字。あとの✕は翌日へ
+  var retry=apartThin(bookItemsForRetry().filter(function(x){ return !HOLD[x.it.id]; }), seen).filter(function(x){ if(charClash(x, usedC)) return false; charMark(x, usedC); return true; }).slice(0, target);   // 一緒に出さない組（APART_PAIRS）・同じ字。あとの✕は翌日へ
   usedC={}; retry.forEach(function(x){ charMark(x, usedC); });
   var ex={}; retry.forEach(function(x){ ex[x.it.id]=1; });
+  Object.keys(HOLD).forEach(function(id){ ex[id]=1; });
   if(writeRoundActive()) return retry.concat(composeWriteRound(target-retry.length, ex, retry, target));
   var left=target-retry.length, cand={};
   PAPER_FIELDS.forEach(function(f){ cand[f]=[]; });
@@ -2188,7 +2202,7 @@ function reviewFill(out, need){
   out.forEach(function(x){ seen[x.it.id]=1; (x.it.kanji||[]).forEach(function(k){ used[k]=1; }); });
   var pool=bookAllItems().filter(function(x){
     var r=ITEMS[x.it.id];
-    return itemFieldOf(x.it,x.g)==="kaki" && !seen[x.it.id] && r && r.last==="o" && r.date;
+    return itemFieldOf(x.it,x.g)==="kaki" && !seen[x.it.id] && !HOLD[x.it.id] && r && r.last==="o" && r.date;
   });
   pool.forEach(function(x,i){ x._i=i; });
   pool.sort(function(a,b){ var da=ITEMS[a.it.id].date, db=ITEMS[b.it.id].date; return da<db?-1:da>db?1:a._i-b._i; });
@@ -2229,10 +2243,26 @@ var SHEET_VERSION = 6;   // 6: 分野ごとの上限（2026-09-11）。   // 5: 
 function sheetPending(){
   return !!(SESSION && !SESSION.saved && SESSION.v>=3 && SESSION.ids && SESSION.ids.length && SESSION.date<todayStr());
 }
-function sheetDay(){ return (SESSION && SESSION.date) || todayStr(); }
+function sheetDay(){ return DAY_OVERRIDE || (SESSION && SESSION.date) || todayStr(); }
 function mdLabel(d){ var p=String(d).split("-"); return (+p[1])+"月"+(+p[2])+"日"; }
+/* ★きのうのうちに印刷した「あしたのぶんの紙」を、今日の紙にする。
+   ・今の紙が無い／記録ずみのときだけ（記録していない紙は、そのまま採点を待つ）
+   ・日付が今日（または過ぎている）になったら。過ぎていたら「◯月◯日の紙」として採点を待つ（sheetPending）
+   ・採り入れたら NEXT は消す。nid で「採り入れずみ」を見分けるので、二重には入らない */
+function adoptNext(){
+  if(!NEXT) return;
+  if(SESSION && SESSION.nid && SESSION.nid===NEXT.nid){ NEXT=null; save(K_NEXT,NEXT); return; }   // 途中で止まっても二重にしない
+  if(NEXT.date>todayStr()) return;
+  if(SESSION && !SESSION.saved) return;
+  var ids=(NEXT.ids||[]).slice();
+  if(!ids.length){ NEXT=null; save(K_NEXT,NEXT); return; }
+  SESSION={ v:SHEET_VERSION, date:NEXT.date, ids:ids, results:{}, saved:false, boxMM:NEXT.boxMM||DAILY_BOX_MM, nid:NEXT.nid, fromNext:true };
+  save(K_SESSION,SESSION);       // ★先に紙を置いてから、NEXT を消す（逆だと、途中で止まったとき紙が消える）
+  NEXT=null; save(K_NEXT,NEXT);
+}
 function todaySheet(){
   if(!bookLoaded()) return null;
+  adoptNext();
   if(sheetPending()) return SESSION;
   if(SESSION && SESSION.date===todayStr()
      && (SESSION.v===SHEET_VERSION || (SESSION.v>=3 && SESSION.saved))) return SESSION;   // 記録ずみの紙は作り直さない（記録と紙がずれるため）
@@ -2424,6 +2454,16 @@ function bookQuestionText(it){
    ⚠️ 上げるときは必ず 5/13/20/30/40問のテストを通し直すこと。 */
 var SHEET_MAX = 30;
 
+/* 毎日の紙（もんだいの紙 → 答えとなおし）の html。BOX_OVERRIDE は呼ぶ側で固定しておく */
+function dailyPaperHtml(blocks, total, region){
+  var ranges=packDaily(blocks, total, region);
+  // ★答えは別紙。もんだいの紙を全部出したあとに、同じ枚数ぶんの「答えとなおし」を続ける
+  var probHtml=ranges.map(function(r,i){
+    return renderSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length);
+  }).join("");
+  var ansHtml=SEPARATE_ANS ? renderAnswers(ranges.map(function(r){ return sliceBlocks(blocks, r[0], r[1]); }), region) : "";
+  return probHtml+ansHtml;
+}
 function printSessionPractice(){
   var blocks=buildPaperBlocks();
   var total=blocks.reduce(function(a,b){return a+b.rows.length;},0);
@@ -2450,13 +2490,7 @@ function printSessionPractice(){
   BOX_OVERRIDE=daily ? DAILY_BOX_MM : null;
   if(daily){
     // ★毎日の紙は「入るだけ詰めて、次の枚へ」。問数でそろえて割ると、1枚目の半分が空く（本物で実測）
-    var ranges=packDaily(blocks, total, region);
-    // ★答えは別紙。もんだいの紙を全部出したあとに、同じ枚数ぶんの「答えとなおし」を続ける
-    var probHtml=ranges.map(function(r,i){
-      return renderSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length);
-    }).join("");
-    var ansHtml=SEPARATE_ANS ? renderAnswers(ranges.map(function(r){ return sliceBlocks(blocks, r[0], r[1]); }), region) : "";
-    region.innerHTML=probHtml+ansHtml;
+    region.innerHTML=dailyPaperHtml(blocks, total, region);
     BOX_OVERRIDE=null;
     window.print();
     return;
@@ -2695,23 +2729,24 @@ function wordGlyphs(w, cls, nFix){
   return ((!w.yk && w.yomi) ? "<span class='p-wy' style='--yl:"+(Array.from(w.yomi).length+2)+"'>（"+esc(w.yomi)+"）</span>" : "")
     +"<div class='"+(cls==="p-self"?"":cls+" ")+"p-word' style='--n:"+(nFix||(n+(yi?Array.from(w.yomi).length*0.72:0)))+"'>"+side(w.pre)+mid+side(w.post)+yi+"</div>";
 }
+var ANS_OPTS=null;   // {title, intro}。「きょうの練習」の紙のとき、見出しと「おうちの方へ」を差しかえる
 function renderAnswerSheet(blocks, page, pages, forLabel){
   var rowsPerCol=blocks.reduce(function(a,b){ return a+Math.ceil(b.rows.length/2); },0);
   var boxMM=boxHeightFor(rowsPerCol);
   var tight=(rowsPerCol>15)?" p-tight":"";
   var html='<div class="p-sheet p-ansheet"><div class="p-body'+tight+'">'
-    +'<div class="p-title">漢検7級　答えとなおし'
+    +'<div class="p-title">漢検7級　'+(ANS_OPTS?ANS_OPTS.title:'答えとなおし')
     +(pages>1?'　<span style="font-size:9pt;font-weight:400">（'+page+'まいめ／全'+pages+'まい）</span>':'')
     +'<span class="p-sub">'+forLabel+'　'+sheetDay()+'</span></div>'
-    +'<div class="p-fixhead"><b>おうちの方へ</b>　丸つけに使ってください。'
+    +(ANS_OPTS ? ('<div class="p-fixhead">'+ANS_OPTS.intro+'</div>') : ('<div class="p-fixhead"><b>おうちの方へ</b>　丸つけに使ってください。'
     +'まちがえた番号だけ、<b>おてほん</b>を見て、まん中の<b>うすい字をなぞって</b>、'
     +'いちばん右に<b>もう一度じぶんで</b>書きます。<br>'
-    +'できたかどうかは「きろく」画面で入れてください。できなかった字は、次の日にまた出ます。</div>';
+    +'できたかどうかは「きろく」画面で入れてください。できなかった字は、次の日にまた出ます。</div>'));
   blocks.forEach(function(b){
     var cont=/（つづき）$/.test(b.title);
     html+='<div class="p-sec">'+(b.keyTitle ? b.keyTitle+(cont?"（つづき）":"") : b.title.replace(/^■\s*/,""))+'</div>';
     html+=twoCols(b.rows, function(row,i){
-      var no=(b.noBase||0)+i+1, hmm=ansRowMM(row, boxMM), h=hmm+"mm";
+      var no=row.no||((b.noBase||0)+i+1), hmm=ansRowMM(row, boxMM), h=hmm+"mm";
       // ★3マス（2026-09-13 ユーザー指示「お手本、なぞり、空欄でお願いします」）
       return "<tr><td class='p-no'>"+no+"</td>"
         +"<td class='p-ansbox' style='padding:0'><div class='p-slots'>"
@@ -2980,7 +3015,114 @@ function saveSheetResult(){
   alert("記録しました。✕の問題は、"+(late?"次の紙":"あしたの紙")+"にまた出ます。おうえん画面を見せてあげてください！");
 }
 
+/* =========================================================================
+   テスト → 結果を登録 → 練習を印刷 → あしたのテストを印刷（2026-10-07 ユーザー依頼）
+     「結局次の日に直しをしています。テスト→結果登録→練習印刷→翌日分テスト印刷 の流れでいけませんか」
+   ・きょうの紙を「記録する」と、そのまま続けて出せる
+       ① 練習 … きょう✕だった問題だけの「答えとなおし」（おてほん・なぞる・じぶんで。今の練習と同じ形）
+       ② あしたのテスト … きょうの結果を入れたうえで組んだ次の紙（20問・2段階・同じ字は1日1回）。K_NEXT に保存する
+       ③ ①＋②をまとめて（練習 → 改ページ → あしたのテスト）
+   ・あした開いたら、あしたのテストが「きょうの紙」になっている（採点から始められる）
+   ・★今までの「次の日に直し」も残る（きょうの紙を記録するだけでも、✕は あしたの紙に出る。この機能は足しただけ）
+   ・★きょうの紙を記録した日だけ（SESSION.date===きょう）。遅れて入れた紙は、今までどおり新しい紙が自動で出る
+   ・出題の決まり・記録の書き方は触らない。あしたの紙を組むときは「きょう」をあしたに読みかえるだけ（DAY_OVERRIDE）。記録は書かない
+   ========================================================================= */
+function sameDayReady(){ return !!(bookLoaded() && SESSION && SESSION.saved && SESSION.v>=3 && SESSION.date===todayStr()); }
+/* きょう✕だった問題の行だけの、答えとなおし用ブロック。番号は きょうの紙の番号のまま（紙の○番と合わせるため） */
+function practiceBlocksOfToday(){
+  if(!sameDayReady()) return [];
+  var res=SESSION.results||{}, out=[], n=0;
+  buildPaperBlocks().forEach(function(b){
+    var rows=[];
+    b.rows.forEach(function(r,i){
+      var wrong=(r.kanji||[]).some(function(k){ return res[markKey(r.id,k)]==="x"; });
+      if(wrong){ var c=Object.assign({}, r); c.no=(b.noBase||0)+i+1; rows.push(c); }
+    });
+    if(rows.length){ var nb=Object.assign({}, b); nb.rows=rows; nb.noBase=n; n+=rows.length; out.push(nb); }
+  });
+  return out;
+}
+function practiceHtml(region){
+  var bs=practiceBlocksOfToday();
+  if(!bs.length) return "";
+  var total=bs.reduce(function(a,b){ return a+b.rows.length; },0);
+  ANS_OPTS={ title:"きょうの れんしゅう",
+             intro:'<b>おうちの方へ</b>　きょう まちがえた問題だけです。<b>おてほん</b>を見て、まん中の<b>うすい字をなぞって</b>、いちばん右に<b>もう一度じぶんで</b>書きます。<br>'
+                  +'番号は、きょうの紙の番号です。できたかどうかは、あしたの紙で見ます（つづけて「あしたのテスト」の紙が出ます）。' };
+  try{
+    var pages=answerPages(bs, region);
+    return pages.map(function(p,k){ return renderAnswerSheet(p, k+1, pages.length, "きょう ✕だった問題（"+total+"問）"); }).join("");
+  }finally{ ANS_OPTS=null; }
+}
+/* あしたのぶんの紙を作る（無ければ）。あれば、同じ紙を返す（印刷し直しても、紙の中身は変わらない） */
+function ensureNext(rebuild){
+  if(!sameDayReady()) return null;
+  var tm=nextDayStr();
+  if(rebuild) NEXT=null;
+  if(NEXT && NEXT.date===tm) return NEXT;
+  DAY_OVERRIDE=tm;
+  var list;
+  try{ list=fitToday(); }finally{ DAY_OVERRIDE=null; }
+  if(!list.length) return null;
+  NEXT={ v:SHEET_VERSION, date:tm, ids:list.map(function(x){ return x.it.id; }), results:{}, saved:false,
+         boxMM:DAILY_BOX_MM, nid:"n"+Date.now()+"_"+Math.floor(Math.random()*1e6), from:todayStr() };
+  save(K_NEXT,NEXT);
+  return NEXT;
+}
+function nextHtml(region){
+  var nx=NEXT; if(!nx) return "";
+  var idx=bookIndex(), list=nx.ids.map(function(id){ return idx[id]; }).filter(Boolean);
+  if(!list.length) return "";
+  DAY_OVERRIDE=nx.date; BOX_OVERRIDE=DAILY_BOX_MM;
+  try{
+    var blocks=buildPaperBlocks(list), total=list.length;
+    return dailyPaperHtml(blocks, total, region);
+  }finally{ DAY_OVERRIDE=null; BOX_OVERRIDE=null; }
+}
+/* what: "practice" | "next" | "both" */
+function printAfterTest(what){
+  if(!bookLoaded()){ alert("本の問題がまだ読みこまれていません。「せってい」で合言葉を入れてください。"); return; }
+  if(!sameDayReady()){ alert("まず、きょうの紙を「きろく」で記録してください。"); return; }
+  var region=document.getElementById("print-region"), html="";
+  if(what==="practice" && !practiceBlocksOfToday().length){ alert("きょうは✕がありません。練習の紙は出しません。"); return; }
+  var nx=null;
+  if(what==="next"||what==="both"){
+    nx=ensureNext(false);
+    if(!nx){ alert("あしたの紙に出せる問題がありません。"); return; }
+  }
+  if(what==="practice"||what==="both") html+=practiceHtml(region);
+  if(nx) html+=nextHtml(region);
+  if(!html){ alert("出す紙がありません。"); return; }
+  region.innerHTML=html;
+  renderAfterTest();
+  window.print();
+}
+function rebuildNext(){
+  if(!NEXT) return;
+  if(!confirm("あしたの紙を作り直します。すでに印刷した「あしたの紙」とは別の問題になります。よろしいですか？")) return;
+  ensureNext(true); renderAfterTest();
+}
+function afterTestHtml(){
+  if(!sameDayReady()) return "";
+  var nWrong=practiceBlocksOfToday().reduce(function(a,b){ return a+b.rows.length; },0);
+  var h='<div class="note" style="text-align:left;margin-top:10px"><b>つづけて（きょうの紙は記録ずみです）</b></div>'
+    +'<div class="muted" style="font-size:.78rem;margin:4px 0 8px">① 練習 → ② あしたのテスト の順に印刷します。あした開くと、あしたのテストの採点から始められます。</div>'
+    +'<button class="btn" id="btn-both" onclick="printAfterTest(\'both\')">①＋② 練習とあしたのテストをまとめて印刷</button>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+    +'<button class="btn sec" id="btn-practice" style="flex:1" onclick="printAfterTest(\'practice\')"'+(nWrong?'':' disabled')+'>① 練習だけ'+(nWrong?'（✕ '+nWrong+' 問）':'（✕なし）')+'</button>'
+    +'<button class="btn sec" id="btn-next" style="flex:1" onclick="printAfterTest(\'next\')">② あしたのテストだけ</button></div>';
+  if(NEXT && NEXT.date===nextDayStr())
+    h+='<div class="muted" style="font-size:.78rem;margin-top:6px">📄 あしたのテスト（'+mdLabel(NEXT.date)+'のぶん・'+NEXT.ids.length+'問）は作ってあります。印刷し直しても同じ紙です。'
+      +' <a href="#" id="btn-rebuild" onclick="rebuildNext();return false" style="color:#64748b">作り直す</a></div>';
+  return h;
+}
+function renderAfterTest(){
+  var h=afterTestHtml();
+  ["after-box","ky-after"].forEach(function(id){ var el=document.getElementById(id); if(el) el.innerHTML=h; });
+}
+
 function renderKiroku(){
+  renderAfterTest();
   renderMarks();
   var sel=document.getElementById("k-unit"), keep=sel.value;
   // ★日割りのかたまり（ドリル）＋ それ以外の単元（ノート・テスト）。
@@ -3096,7 +3238,7 @@ var K_IMPORT_BACKUP="kanken7_import_backup_v1";
 /* ★format 2（2026-10-03 引越し対応・ユーザー承認）: 受検日・1回の問数（settings）と、目次の手直し（K_UNITS）も入れる。
    ・format 1（古いファイル）も読める。そのときは受検日・1回の問数・目次は、この端末のまま（ファイルに無いものは触らない）
    ・★合言葉の鍵（K_QKEY）は入れない。ファイルが人に渡ると、本の問題が読めてしまうため。読み込んだあと本が未読込なら、合言葉を入れるよう案内する */
-var EXPORT_KEYS=[K_ITEMS, K_KSTAT, K_WEAK, K_LOG, K_REC, K_SESSION, K_APP];
+var EXPORT_KEYS=[K_ITEMS, K_KSTAT, K_WEAK, K_LOG, K_REC, K_SESSION, K_APP, K_NEXT];
 var EXPORT_KEYS_V2=[K_UNITS];
 function exportData(){
   var o={ app:"kanken7", format:2, exportedAt:new Date().toISOString(), records:{}, doneDays:(SET.doneDays||[]).slice(),
@@ -3139,7 +3281,7 @@ function writeRecords(recs, doneDays, v2){   // v2 … {settings} を渡した�
     if(st.appCount===null || st.appCount===undefined) delete SET.appCount; else SET.appCount=st.appCount;
   }
   ITEMS=load(K_ITEMS,{}); KSTATS=load(K_KSTAT,{}); WEAK=load(K_WEAK,{}); LOG=load(K_LOG,[]); RECORDS=load(K_REC,{});
-  SESSION=load(K_SESSION,null); APP_S=load(K_APP,null);
+  SESSION=load(K_SESSION,null); APP_S=load(K_APP,null); NEXT=load(K_NEXT,null);
   SET.doneDays=Array.isArray(doneDays) ? doneDays.slice() : []; save(K_SET,SET);
 }
 function importFromText(text){
