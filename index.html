@@ -384,7 +384,7 @@
         紙は<b>手で書く問題だけ</b>です（書き取り・部首・同じ読み・対義語）。<br>
         <b>読み・記号で答える問題・画数は、下の「アプリでやる問題」でやります。</b>
       </div>
-      <button class="btn" onclick="printToday()">きょうの紙を印刷（A4）</button>
+      <button class="btn" onclick="printToday('q')">きょうの紙を印刷（もんだいだけ・A4）</button>
       <div class="muted" style="margin-top:10px">
         紙に書いてもらったら、<b>「きろく」で〇×を入れてください。</b><br>
         <b>×にした字は、次の日の紙にまた出ます。</b>
@@ -1008,7 +1008,7 @@ function renderKyou(){
 }
 
 /* ★きょうの紙を印刷する */
-function printToday(){ printSessionPractice(); }
+function printToday(what){ printSessionPractice(what); }
 
 /* =========================================================================
    アプリでやる問題（2026-09-11 ユーザー確定）
@@ -2457,16 +2457,17 @@ function bookQuestionText(it){
 var SHEET_MAX = 30;
 
 /* 毎日の紙（もんだいの紙 → 答えとなおし）の html。BOX_OVERRIDE は呼ぶ側で固定しておく */
-function dailyPaperHtml(blocks, total, region){
+function dailyPaperHtml(blocks, total, region, what){
   var ranges=packDaily(blocks, total, region);
   // ★答えは別紙。もんだいの紙を全部出したあとに、同じ枚数ぶんの「答えとなおし」を続ける
-  var probHtml=ranges.map(function(r,i){
+  // ★what: "q"=もんだいの紙だけ／"a"=答えとなおしだけ／省略=両方（2026-10-10 ユーザー依頼: 解く前に答えの紙を刷らない）
+  var probHtml=what==="a" ? "" : ranges.map(function(r,i){
     return renderSheet(sliceBlocks(blocks, r[0], r[1]), i+1, ranges.length);
   }).join("");
-  var ansHtml=SEPARATE_ANS ? renderAnswers(ranges.map(function(r){ return sliceBlocks(blocks, r[0], r[1]); }), region) : "";
+  var ansHtml=(SEPARATE_ANS && what!=="q") ? renderAnswers(ranges.map(function(r){ return sliceBlocks(blocks, r[0], r[1]); }), region) : "";
   return probHtml+ansHtml;
 }
-function printSessionPractice(){
+function printSessionPractice(what){
   var blocks=buildPaperBlocks();
   var total=blocks.reduce(function(a,b){return a+b.rows.length;},0);
   // ★出すものが無いときは、**前に作った紙を必ず消す。**
@@ -2492,7 +2493,7 @@ function printSessionPractice(){
   BOX_OVERRIDE=daily ? DAILY_BOX_MM : null;
   if(daily){
     // ★毎日の紙は「入るだけ詰めて、次の枚へ」。問数でそろえて割ると、1枚目の半分が空く（本物で実測）
-    region.innerHTML=dailyPaperHtml(blocks, total, region);
+    region.innerHTML=dailyPaperHtml(blocks, total, region, what);
     BOX_OVERRIDE=null;
     window.print();
     return;
@@ -3085,7 +3086,7 @@ function nextHtml(region){
   DAY_OVERRIDE=nx.date; BOX_OVERRIDE=DAILY_BOX_MM;
   try{
     var blocks=buildPaperBlocks(list), total=list.length;
-    return dailyPaperHtml(blocks, total, region);
+    return dailyPaperHtml(blocks, total, region, "q");   // あしたのテストは、もんだいの紙だけ（答えはあした開いたとき）
   }finally{ DAY_OVERRIDE=null; BOX_OVERRIDE=null; }
 }
 /* what: "practice" | "next" | "both" */
