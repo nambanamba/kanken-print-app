@@ -2407,16 +2407,18 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
       ask:instructionFor(b.g, (b.rows[0]&&b.rows[0].it.no))||FIELD_ASK[f]||"",
       src:"book",
       rows:b.rows.map(function(x){
-        var it=x.it, ans=it.answers||[], ruby=it.ruby||[];
+        var it=x.it, ans=it.answers||[], boxY=boxRubyYomi(it.ruby);   // ★□のルビだけ（boxRubyYomi の注を参照）
         return {
           cite: bookCite(x),
-          q: bookQuestionText(it),
+          // ★問題文の字のルビ（音訓の「好（こう）」など）は問題文に付ける。□のルビは答えらんの上（slots）に出すので、ここでは除く。
+          //   以前は答えらんの読みを ruby の添字で引いていたため、問題文の字の読みが答えらんに出ていて、問題文には出ていなかった
+          q: withRuby(bookQuestionText(it), (it.ruby||[]).filter(function(r){ return r && r.base!=="□"; })),
           // ★○の中の漢字（送りがな）。**出さないと「○の中の漢字を使え」が成立しない**（dr_23 で15問すべて解答不能だった。claude-e0 が配信前に発見）
           given: (typeof it.givenKanji==="string") ? it.givenKanji : "",
           choices: (it.choices||[]).slice(),
           note: bookNote(it.note),
           slots: ans.map(function(a,i){
-            return { yomi:(ruby[i]||{}).yomi||"", around:a.around||"" };
+            return { yomi:boxY[i]||"", around:a.around||"" };
           }),
           a: ans.map(function(a){return a.text;}).join("・"),
           aList: ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
