@@ -120,6 +120,17 @@ function practiceWordFor(it, g, wd) {
   return { pre: w.slice(0, i), k: k, post: w.slice(i + k.length), yomi: wd.dict[w], how: "other", word: w };
 }
 
+/* 答えらん（□）ごとの読み。□ に付いたルビだけを、何番目の □ か（nth）の順に並べる。
+   ★ruby の並びの添字で引かないこと。ruby には問題文の字のルビも混ざる（tn_21 問17 は □,□,妻,□ の順）。
+     添字で引くと3つ目の答えらんに「妻」の読みが付いた（2026-10-11 ユーザー指摘）。 */
+function boxRubyYomi(ruby) {
+  var out = [];
+  (ruby || []).forEach(function (r) {
+    if (r && r.base === "□" && r.yomi) out[(r.nth || 1) - 1] = String(r.yomi);
+  });
+  return out;
+}
+
 /* 部首の問題（答えが2〜4字、それぞれ □ を含む語）→ 字ごとの語の形の配列。作れなければ null（＝今までどおり）
    ★読み(yomi)は、問題の紙の答えらんの上に印刷されている字の読み（ruby の ぎょ・まん・よく）。語の読みではない（yk:true）。
    ruby が無い字は yomi:""（作らない・A-6） */
@@ -127,18 +138,18 @@ function practiceWordsFor(it, g) {
   if (!it) return null;
   var f = it.field || (g && g.field) || "";
   if (f !== "bushu") return null;
-  var ans = it.answers || [], ruby = it.ruby || [];
+  var ans = it.answers || [], boxY = boxRubyYomi(it.ruby);
   if (ans.length < 2 || ans.length > 4) return null;
   var out = [];
   for (var i = 0; i < ans.length; i++) {
     var k = String(ans[i].text || ""), parts = String(ans[i].around || "").split("□");
     if (pwChars(k).length !== 1 || parts.length !== 2 || !(parts[0] || parts[1])) return null;
-    var y = String((ruby[i] || {}).yomi || "");
+    var y = boxY[i] || "";
     out.push({ pre: parts[0], k: k, post: parts[1], yomi: /^[ぁ-ゖー]+$/.test(y) ? y : "", yk: true });
   }
   return out;
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS };
+  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, boxRubyYomi: boxRubyYomi, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS };
 }
