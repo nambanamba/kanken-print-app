@@ -85,17 +85,20 @@ async function inspect(html) {
     const days = [];
     try {
       /* A: 10-02 の条件（書き取りは全部〇・新しい問題は十分ある） */
-      let b = build(40, 6, 20, 20, true); reset(b, 40);   // 部首は6問ちょうど（共有の字の部首も必ず出る）
+      let b = build(40, fieldCaps(PAPER_FIELDS, 20).bushu, 20, 20, true); reset(b, 40);   // 部首は上限ちょうど（共有の字の部首も必ず出る。2026-10-13 に6→5問）
       const before = JSON.stringify(ITEMS);
       let s = composeSheet(20);
       days.push("A:" + s.length);
       if (s.length !== 20) add("A 20問にならない " + s.length);
       const c = cnt(s);
-      if (!(c.bushu === 6 && c.onaji === 5 && c.taigi === 4 && c.kaki === 5)) add("A 内訳が 部首6/同じ読み5/対義語4/書き取り復習5 でない " + JSON.stringify(c));
+      const cp = fieldCaps(PAPER_FIELDS, 20);   // 上限は配点比から（2026-10-13 に紙が6分野になった）
+      if (!(c.bushu === cp.bushu && c.onaji === cp.onaji && c.taigi === cp.taigi && c.kaki === 20 - cp.bushu - cp.onaji - cp.taigi)) add("A 内訳が 部首6/同じ読み5/対義語4/書き取り復習5 でない " + JSON.stringify(c));
       if (dupes(s).length) add("A 同じ字が重なっている " + dupes(s).join(""));
       if (new Set(s.map(x => x.it.id)).size !== s.length) add("A 問題idが重複");
       const rev = s.filter(x => itemFieldOf(x.it, x.g) === "kaki").map(x => x.it.id);
-      if (JSON.stringify(rev) !== JSON.stringify(["k1", "k2", "k3", "k4", "k5"])) add("A 復習が「最後に〇にした日が古い順」でない（k0 は部首と字が重なるので除く） " + rev.join(","));
+      // 古い順＝k の番号が小さい順に、すき間なく並ぶ（k0 は部首と字が重なる日は除かれる。2026-10-13 に部首が5問になり、k0 が出る日もある）
+      const rn = rev.map(id => +id.slice(1));
+      if (!(rn.length && rn[0] <= 1 && rn.every((v, i) => i === 0 || v === rn[i - 1] + 1))) add("A 復習が「最後に〇にした日が古い順」でない（k0 は部首と字が重なるので除く） " + rev.join(","));
       if (JSON.stringify(ITEMS) !== before) add("A 記録（ITEMS）が書き換わった");
       /* B: 新しい問題が尽きた日 */
       b = build(40, 6, 5, 4, false); reset(b, 40);

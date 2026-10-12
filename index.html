@@ -14,7 +14,7 @@
 <script src="kanken-kanji.js"></script>
 <script src="kanken-gen.js"></script>
 <!-- ★?v= は版の印。index.html だけ新しく、このファイルが古いキャッシュのままだと、紙を組むところで止まる（2026-10-12「今日の印刷もできません」） -->
-<script src="kanken-practice.js?v=20261012b"></script>
+<script src="kanken-practice.js?v=20261013a"></script>
 <style>
   :root{
     --primary:#2563eb; --accent:#0891b2; --good:#16a34a; --soft:#f59e0b;
@@ -1023,7 +1023,8 @@ function printToday(what){ printSessionPractice(what); }
        音訓（ア＝音／イ＝訓）   … **並べ替えない**（意味が壊れる）。出題順だけ変える
        読み・画数（選択肢なし）  … 出題順だけ
    ========================================================================= */
-var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu","okuri"];   // ★送りがなは 2026-09-11 に紙からアプリへ（下の okuriChoices）
+// ★2026-10-13 送りがなを紙に戻した（○の漢字は出さず、シズカナ → 静かな を書く）。じゅく語作りは「ジョウモン」の形にできる問題だけ紙へ（ユーザー指示）
+var APP_FIELDS = ["yomi","erabi","jukugo","onkun","kakusu"];   // ★送りがなは 2026-09-11 に紙からアプリへ（下の okuriChoices）
 var SHUFFLE_CHOICE_FIELDS = ["erabi","jukugo","okuri"];
 var APP_TARGET = 20;   // 既定の数。ユーザーが選んだ数は SET.appCount（appTarget）
 /* ★アプリの問題の数（2026-09-11 ユーザー指示「アプリ問題ですが数を選べるようにしてほしいです」）。
@@ -1053,6 +1054,7 @@ function appAllItems(){
       (g.items||[]).forEach(function(it){
         var f=itemFieldOf(it,g);
         if(!askable(it) || !isAppField(f)) return;
+        if(f==="jukugo" && jukugoOnPaper(it,g)) return;   // 「ジョウモン」の形にできる問題は紙で書く
         // 送りがなは、まちがいの選択肢が作れた（判定できた）問題だけ
         if(f==="okuri" && appChoicesOf(it,f).length<2) return;
         out.push({ u:u, g:g, it:it });
@@ -1900,9 +1902,11 @@ var SHEET_TARGET = 20;   // 1日の問数。本人の希望「毎日20問書く�
      紙   … 書き取り40・部首20・同じ読み16・送りがな14・対義語10（＝100点分）
      アプリ… 読み30・漢字えらび20・じゅく語作り20・音訓20・画数10（紙には1問も出さない）
    ⚠️ 読みを紙に戻さないこと（「ひらがなで書く」形式だが、ユーザーはアプリ側と決めた）。 */
-var PAPER_FIELDS = ["kaki","bushu","onaji","taigi"];   // ★送りがなは 2026-09-11 にアプリへ移した（○の漢字が出ていて、紙ではかなを書くだけになるため。ユーザー指示）
+var PAPER_FIELDS = ["kaki","bushu","onaji","taigi","okuri","jukugo"];   // ★2026-10-13 送りがな・じゅく語作り（ことばで書ける問題だけ）を紙へ   // ★送りがなは 2026-09-11 にアプリへ移した（○の漢字が出ていて、紙ではかなを書くだけになるため。ユーザー指示）
 function itemFieldOf(it,g){ return it.field||(g&&g.field)||""; }
 function isPaperField(f){ return PAPER_FIELDS.indexOf(f)>=0; }
+/* じゅく語作りを紙で「ジョウモン」の形にできるか（2つの語の読みが本にある）。kanken-practice.js の kanaWordsFor */
+function jukugoOnPaper(it,g){ return typeof kanaWordsFor==="function" && !!kanaWordsFor(it, g, bookWordDict()); }
 
 /* 照合が通った単元の、紙に出せる問題を全部集める（本の順＝単元の並び順） */
 function bookAllItems(){
@@ -1912,7 +1916,9 @@ function bookAllItems(){
     if(!isVerifiedUnit(u.unitId)) return;
     (u.groups||[]).forEach(function(g){
       (g.items||[]).forEach(function(it){
-        if(printable(it) && isPaperField(itemFieldOf(it,g))) out.push({ u:u, g:g, it:it });
+        var f=itemFieldOf(it,g);
+        if(f==="jukugo" && !jukugoOnPaper(it,g)) return;   // じゅく語作りは「ジョウモン」の形にできる問題だけ（ほかは画面で選ぶ）
+        if(printable(it) && isPaperField(f)) out.push({ u:u, g:g, it:it });
       });
     });
   });
@@ -2391,22 +2397,38 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
   (list||todaySheetItems()).forEach(function(x){
     var ins=x.g.instruction, insText=(ins&&typeof ins==="object")?JSON.stringify(ins):String(ins||"");
     var key=itemFieldOf(x.it,x.g)+"|"+insText+"|"+JSON.stringify(x.g.pool||null)+"|"+(!!x.g.poolUseOnce);
+    // ★部首・熟語作りで、語の読みが全部本にある問題は「キンカ・ネンガ」の形にする（2026-10-13 ユーザー指示。kanaWordsFor）。指示文がちがうので別のブロック
+    x.conv=(typeof kanaWordsFor==="function") ? kanaWordsFor(x.it, x.g, bookWordDict()) : null;
+    if(x.conv) key="conv|"+itemFieldOf(x.it,x.g);
     if(!byGroup[key]){ byGroup[key]={g:x.g, u:x.u, rows:[]}; order.push(key); }
     byGroup[key].rows.push(x);
   });
   order.forEach(function(key){
-    var b=byGroup[key], f=b.g.field||(b.rows[0].it.field)||"", fd=fieldOf(f);
+    var b=byGroup[key], f=b.g.field||(b.rows[0].it.field)||"", fd=fieldOf(f), conv=key.indexOf("conv|")===0;
+    if(conv){
+      blocks.push({ pool:[], poolUseOnce:false, example:"",
+        title:"■ "+(fd?fd.name:"もんだい")+"（ことばで書く）", keyTitle:(fd?fd.name:"もんだい")+"（ことばで書く）の答え",
+        ask:"次の カタカナの ことばを、漢字で ぜんぶ 書きなさい。", src:"book",
+        rows:b.rows.map(function(x){
+          var it=x.it, c=x.conv;
+          return { cite:bookCite(x), q:c.kana.map(function(k){ return "<u>"+k+"</u>"; }).join("　・　"), whole:c.words.reduce(function(a,w){ return w.length>a.length?w:a; },""),
+            given:"", choices:[], note:"", slots:c.kana.map(function(){ return {yomi:"",around:""}; }),
+            a:c.words.join("・"), aList:c.words.slice(), kanji:it.kanji||[], field:f, id:it.id, word:null, words:null };
+        }) });
+      return;
+    }
     blocks.push({
       pool:(b.g.pool||[]).slice(),
       poolUseOnce:!!b.g.poolUseOnce,
       // ★本の〈例〉。**紙に出していなかった**（claude-e0 の指摘 No.25）。
       //   dr_25（部首）では〈例〉が「□ごとに別の字を入れる」ことを示していて、無いと「同じ字を全部の□に」とも読める
-      example: exampleText(b.g.example, b.rows.map(function(x){ return x.it.no; })),
+      example: f==="okuri" ? "" : exampleText(b.g.example, b.rows.map(function(x){ return x.it.no; })),   // 送りがなの〈例〉は ○の漢字を見せる形なので出さない（2026-10-13）
       title:"■ "+(fd?fd.name:"もんだい"),
       keyTitle:(fd?fd.name:"もんだい")+"の答え",
       // ★書式v1.6 で instruction が {text, ruby[]} になりうる。文字列でもオブジェクトでも読む（ルビも出す）
-      ask:(instructionFor(b.g, (b.rows[0]&&b.rows[0].it.no))||FIELD_ASK[f]||"")
-        +(f==="kaki" ? "<br><b>——線の ことばを ぜんぶ 書きます（送りがなも）。</b>" : ""),
+      // 送りがなは ○の漢字を出さないので、本の指示文（○の中の漢字と…）を言いかえる（2026-10-13）
+      ask:(f==="okuri" ? "次の——線のカタカナを、漢字と送りがな（ひらがな）で書きなさい。" : (instructionFor(b.g, (b.rows[0]&&b.rows[0].it.no))||FIELD_ASK[f]||""))
+        +(f==="kaki" ? "<br><b>——線の ことばを ぜんぶ 漢字と送りがなで 書きます。</b>" : ""),
       src:"book",
       rows:b.rows.map(function(x){
         var it=x.it, ans=it.answers||[], boxY=boxRubyYomi(it.ruby);   // ★□のルビだけ（boxRubyYomi の注を参照）
@@ -2420,7 +2442,8 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
           q: withRuby(bookQuestionText(it, whole), (it.ruby||[]).filter(function(r){ return r && r.base!=="□"; })),
           whole: whole ? whole.word : "",
           // ★○の中の漢字（送りがな）。**出さないと「○の中の漢字を使え」が成立しない**（dr_23 で15問すべて解答不能だった。claude-e0 が配信前に発見）
-          given: (typeof it.givenKanji==="string") ? it.givenKanji : "",
+          // ★送りがなは ○の漢字を出さない（2026-10-13〜。シズカナ → 静かな を自分で書く。○を出すと「かなを書くだけ」になるため紙から外していた）
+          given: (f!=="okuri" && typeof it.givenKanji==="string") ? it.givenKanji : "",
           choices: (it.choices||[]).slice(),
           note: bookNote(it.note),
           slots: ans.map(function(a,i){
@@ -2449,7 +2472,7 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
      紙では傍線を引いて示す。 */
 function bookQuestionText(it, whole){
   var t=String(it.text||"");
-  if(whole) return t.slice(0,whole.ui)+"<u>"+t.slice(whole.ui,whole.ui+whole.ul)+"</u>"+t.slice(whole.ui+whole.ul);
+  if(whole) return t.slice(0,whole.ui)+"<u>"+(whole.kana||t.slice(whole.ui,whole.ui+whole.ul))+"</u>"+t.slice(whole.ui+whole.ul);
   if(it.target){
     var nth=it.targetNth||1, idx=-1;
     for(var i=0;i<nth;i++) idx=t.indexOf(it.target, idx+1);
@@ -2812,7 +2835,7 @@ function renderSheet(blocks, page, pages){
     var qW=(maxSlots<=2)?"66%":(oneCol?"40%":"45%"), aW=(maxSlots<=2)?"27%":(oneCol?"53%":"48%");
     // ★語ぜんぶを書く書き取り（2026-10-12）で3字以上の語があるブロックは、書くマスを広く（全国各地 を 25mm に詰めない）
     var maxWord=b.rows.reduce(function(a,r){ return Math.max(a, Array.from(r.whole||"").length); },0);
-    if(maxSlots<=2 && maxWord>=3){ qW="52%"; aW="41%"; }
+    if(maxSlots<=2 && maxWord*maxSlots>=3){ qW="52%"; aW="41%"; }   // じゅく語作り（2字×2つ）も広く
     html+=(oneCol ? function(list,fn){ return '<table class="p-tbl">'+list.map(function(k,j){ return fn(k,j); }).join("")+'</table>'; } : twoCols)(b.rows, function(row,i){
         // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
         //   （複数枚に分かれた日は、続きの枚でも通し番号になる）

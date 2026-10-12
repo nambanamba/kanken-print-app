@@ -162,8 +162,8 @@ ok("★紙の問題は全部、本の問題（アプリが作った問題が無�
 ok("★アプリの問題生成が1回も呼ばれていない", d1.gen.length === 0, d1.gen.join(","));
 ok("★照合の通っていない単元の問題が出ていない", d1.fromUnverified === 0, String(d1.fromUnverified));
 ok("★読みの問題が紙に1問も出ていない（読みはアプリ側）", d1.yomiOnPaper === 0, String(d1.yomiOnPaper));
-ok("★紙は手で書く分野だけ（書き取り・部首・同じ読み・対義語。送りがなは2026-09-11にアプリへ）",
-   d1.fields.every(f => ["kaki", "bushu", "onaji", "taigi"].includes(f)), [...new Set(d1.fields)].join(","));
+ok("★紙は手で書く分野だけ（書き取り・部首・同じ読み・対義語・送りがな・じゅく語作り。送りがなとじゅく語作りは2026-10-13に紙へ）",
+   d1.fields.every(f => ["kaki", "bushu", "onaji", "taigi", "okuri", "jukugo"].includes(f)), [...new Set(d1.fields)].join(","));
 ok("★どの分野も上限を超えない（書き取り11・部首6）",
    d1.fields.filter(f => f === "kaki").length === CAP.kaki && d1.fields.filter(f => f === "bushu").length === CAP.bushu,
    `kaki ${d1.fields.filter(f => f === "kaki").length} / bushu ${d1.fields.filter(f => f === "bushu").length}`);
@@ -183,13 +183,14 @@ const mix = await page.evaluate(() => {
   BOOK_UNITS = keepU; window.isVerifiedUnit = keepV; SESSION = keepS; ITEMS = keepI;
   return { c, q };
 });
-ok("★配点比の割り振りは 書き取り9・部首5・同じ読み4・対義語2（紙＝86点分）",
-   mix.q.kaki === 9 && mix.q.bushu === 5 && mix.q.onaji === 4 && mix.q.taigi === 2 &&
-   Object.keys(mix.q).length === 4, JSON.stringify(mix.q));
-ok("★全分野がそろえば、紙はその割り振りどおりに混ざる",
-   mix.c.kaki === 9 && mix.c.bushu === 5 && mix.c.onaji === 4 && mix.c.taigi === 2,
+// ★2026-10-13 送りがな・じゅく語作り（ことばで書ける問題だけ）を紙へ。割り振りは6分野の配点比
+ok("★配点比の割り振りは紙の6分野で、書き取りがいちばん多い",
+   Object.keys(mix.q).sort().join() === ["bushu","jukugo","kaki","okuri","onaji","taigi"].join() &&
+   Object.keys(mix.q).every(f => mix.q.kaki >= mix.q[f]) && Object.values(mix.q).reduce((a, b) => a + b, 0) === 20, JSON.stringify(mix.q));
+ok("★全分野がそろえば、紙は20問で、どの分野も割り振り以上（じゅく語作りはダミーに読みが無く0問→ほかに回る）",
+   Object.values(mix.c).reduce((a, b) => a + b, 0) === 20 && ["kaki","bushu","onaji","taigi","okuri"].every(f => (mix.c[f] || 0) >= mix.q[f]),
    JSON.stringify(mix.c));
-ok("★送りがなは紙に1問も出ない（アプリへ移した）", !mix.c.okuri, JSON.stringify(mix.c));
+ok("★送りがなは紙に出る（2026-10-13 紙へ戻した）", mix.c.okuri >= 1, JSON.stringify(mix.c));
 ok("★漢字えらび・画数（アプリ側）は紙に出ない", !mix.c.erabi && !mix.c.kakusu && !mix.c.yomi, JSON.stringify(mix.c));
 
 console.log("\n=== 全部の字を書く一巡（2026-09-17 ユーザー判断 Q2=B・Q3=A） ===");
@@ -774,10 +775,10 @@ const five = await page.evaluate(() => {
   const n = SESSION.ids.length;
   return { c, n, q: paperQuota(n), sheets: 1 };
 });
-const PAPER_FIELDS_T = ["kaki", "bushu", "onaji", "taigi"];
+const PAPER_FIELDS_T = ["kaki", "bushu", "onaji", "taigi", "okuri"];   // じゅく語作りはダミーに読みが無いので紙に来ない
 ok("★1枚に17問しか入らない日も、20問は削らない", five.n === 20, `${five.n}問`);
 ok("★各分野の数は配点比のまま",
-   PAPER_FIELDS_T.every(f => (five.c[f] || 0) === Math.max(1, five.q[f])) , `${JSON.stringify(five.c)} / 比 ${JSON.stringify(five.q)}`);
+   PAPER_FIELDS_T.every(f => (five.c[f] || 0) >= Math.max(1, five.q[f])) , `${JSON.stringify(five.c)} / 比 ${JSON.stringify(five.q)}`);
 ok("★どの分野も0問にならない", PAPER_FIELDS_T.every(f => (five.c[f] || 0) >= 1), JSON.stringify(five.c));
 ok("★書き取りがいちばん多いまま", ["bushu", "onaji", "taigi"].every(f => (five.c.kaki || 0) >= (five.c[f] || 0)), JSON.stringify(five.c));
 // ★前の版で組んだ「まだ記録していない」きょうの紙は、作り直す（送りがなが紙から外れた・20問を削らない、の反映）。
@@ -926,7 +927,7 @@ const a1 = await page.evaluate(() => {
 ok("アプリの問題は20問", a1.n === 20, String(a1.n));
 ok("★アプリの問題は全部、本の問題", a1.allBook);
 ok("★配点比どおり（読み・漢字えらび・じゅく語作り・音訓・画数・送りがな）",
-   Object.keys(a1.q).every(f => (a1.c[f] || 0) === a1.q[f]) && a1.c.okuri >= 1, JSON.stringify(a1.c) + " / " + JSON.stringify(a1.q));
+   Object.keys(a1.q).every(f => (a1.c[f] || 0) === a1.q[f]) && !a1.c.okuri, JSON.stringify(a1.c) + " / " + JSON.stringify(a1.q));   // 送りがなは 2026-10-13 に紙へ
 ok("★音訓は選択肢を並べ替えない", a1.ordOnkun.every(o => o === undefined), JSON.stringify(a1.ordOnkun));
 
 // ★出題順は乱数でなくルール（2026-09-15 ユーザー指示「ランダムはやめて、いつも一定のルールで」→ 案2）
@@ -1060,7 +1061,7 @@ const ok1 = await page.evaluate(() => {
 });
 const okRes = ok1.res.filter(r => r.choices);
 ok("検査の前提: 送りがなの問題に選択肢ができている", okRes.length >= 10, `${okRes.length}/${ok1.res.length}`);
-ok("★送りがな: 紙には1問も出ない", ok1.onPaper === 0, String(ok1.onPaper));
+ok("★送りがな: 紙に出る（2026-10-13 紙へ戻した）", ok1.onPaper > 0, String(ok1.onPaper));
 ok("★送りがな: 正解は本のデータのまま（選択肢の1つめ＝本の答え）", okRes.every(r => r.choices[0] === r.ans));
 ok("★送りがな: まちがいは切れ目をずらしただけ（○の漢字＋かな・正解と別）",
    okRes.every(r => r.choices.slice(1).every(c => c[0] === r.K && /^[ぁ-ゖ]+$/.test(c.slice(1)) && c !== r.ans)), okRes.map(r => r.choices.join("/")).slice(0, 3).join(" | "));

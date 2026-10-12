@@ -163,6 +163,7 @@ function practiceWordsFor(it, g) {
    ・記録（〇✕）は今までどおり答えの字だけ。問題id・本のデータは変えない（紙に出す形だけ）
    ・返す {pre, k, post, okuri, word, ui, ul}。ui/ul … 問題文の中で——線を引く位置と長さ。語にならなければ null（今までどおり）
    ========================================================================= */
+var HIRA_KATA = function (s) { return String(s || "").replace(/[ぁ-ゖ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) + 0x60); }); };
 var KATA_HIRA = function (s) { return String(s || "").replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); }); };
 var ROW_IE = "いきぎしじちぢにひびぴみりえけげせぜてでねへべぺめれ";
 // 活用で最後の1字がなりうる字（五段動詞はその行＋音便。形容詞は く・か・け・さ・い）。これ以外（を・の など助詞）は送りがなにしない
@@ -236,12 +237,41 @@ function kakiWholeFor(it, g, wd, master) {
     okuri = okuriOfLast(pwChars(o.post).slice(-1)[0], after, master);
     if (okuri.length === 1 && "のをにがはでともへやかさしすせ".indexOf(okuri) >= 0) okuri = "";
   }
+  // ★送りがなのあとの「た・て・だ・で・る」までを語に入れる（2026-10-13 ユーザー指示「サカえた ではなく サカエタ」）。
+  //   本の送りがなの問題（ツケル → 付ける）と同じく、活用した形のまま書く（栄えた・笑って・覚える）
+  if (okuri) { var nx = after.charAt(okuri.length); if ("たてだでる".indexOf(nx) >= 0) okuri += nx; }
   if (!o.pre && !o.post && !okuri) return null;
   var ui = idx - o.pre.length, ul = o.pre.length + t.length + o.post.length + okuri.length;
   if (txt.slice(ui, idx) !== o.pre) return null;   // 長い語を切った形で、前の字が文と合わない（念のため）
-  return { pre: o.pre, k: k, post: o.post, okuri: okuri, word: o.pre + k + o.post + okuri, ui: ui, ul: ul };
+  // ★——線の中をぜんぶカタカナにする（キンカ・サカエタ）。送りがなの切れ目を自分で考える形（本の送りがなの問題と同じ）。
+  //   となりの漢字があるときは、その語の読みが本の読み問題にあるときだけ（金貨＝きんか）。無ければ今までどおり（金カ）。読みは作らない（A-6）
+  var base = o.pre + k + o.post, kana = null;
+  if (!o.pre && !o.post) kana = t + HIRA_KATA(okuri);
+  else if (wd && wd.dict && wd.dict[base]) kana = HIRA_KATA(wd.dict[base] + okuri);
+  return { pre: o.pre, k: k, post: o.post, okuri: okuri, word: base + okuri, ui: ui, ul: ul, kana: kana };
+}
+
+/* ★部首（貝 金□・年□）・熟語作り（□門）を「キンカ・ネンガ」の形にする（2026-10-13 ユーザー指示「金□ではなくて、キンカという問題にできませんか？」。テストの紙も）。
+   ・語＝ around の □ に答えの字を入れたもの。熟語作りの答え「ウ 金」の記号は外す
+   ・**全部の語の読みが本の読み問題にあるときだけ**（ユーザー判断「読みが本にある語だけ」）。1つでも無ければ null＝今までどおり
+   ・返す {words:[金貨,年賀], kana:[キンカ,ネンガ]} */
+function kanaWordsFor(it, g, wd) {
+  if (!it || !wd || !wd.dict) return null;
+  var f = it.field || (g && g.field) || "";
+  if (f !== "bushu" && f !== "jukugo") return null;
+  var ans = it.answers || [];
+  if (!ans.length) return null;
+  var words = [], kana = [];
+  for (var i = 0; i < ans.length; i++) {
+    var ar = String(ans[i].around || ""), k = String(ans[i].text || "").replace(/^[ア-オ]\s*/, "");
+    if (pwChars(k).length !== 1 || !pwIsKanji(k) || ar.split("□").length !== 2) return null;
+    var w = ar.replace("□", k), y = wd.dict[w];
+    if (!y) return null;
+    words.push(w); kana.push(HIRA_KATA(y));
+  }
+  return { words: words, kana: kana };
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, boxRubyYomi: boxRubyYomi, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS, kakiWholeFor: kakiWholeFor, okuriOf: okuriOf };
+  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, boxRubyYomi: boxRubyYomi, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS, kakiWholeFor: kakiWholeFor, okuriOf: okuriOf, kanaWordsFor: kanaWordsFor };
 }

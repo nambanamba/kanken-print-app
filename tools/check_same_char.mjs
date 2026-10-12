@@ -102,7 +102,8 @@ async function inspect(html) {
       b = mkB(0); reset(b, 0);   // 書き取りの本が無い日（第2段階の別の語も復習も無い）
       s = composeSheet(20); days.push("A2:" + s.length);
       const c2 = s.reduce((a, x) => { const f = itemFieldOf(x.it, x.g); a[f] = (a[f] || 0) + 1; return a; }, {});
-      if (!(c2.bushu === 6 && c2.onaji === 5 && c2.taigi === 4 && s.length === 15)) add("A2 重なりで飛ばした分を次の候補で埋めていない " + JSON.stringify(c2));
+      const cp = fieldCaps(PAPER_FIELDS, 20);   // 上限は配点比から（2026-10-13 に紙が6分野になり 部首6/同じ読み5/対義語4 → 5/4/3）
+      if (!(c2.bushu === cp.bushu && c2.onaji === cp.onaji && c2.taigi === cp.taigi && s.length === cp.bushu + cp.onaji + cp.taigi)) add("A2 重なりで飛ばした分を次の候補で埋めていない " + JSON.stringify(c2));
       if (dupes(s).length) add("A2 同じ字が重なっている " + dupes(s).join(""));
       /* B: 一巡中（書き取りの字が、まだ書けていない） */
       b = mkB(40); reset(b, 0);

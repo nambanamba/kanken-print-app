@@ -29,9 +29,10 @@ function load(js) {
 const CASES = [
   ["あしたのシ合に出る。", "シ", "試", "試合", "シ合"],          // となりの漢字（熟語ぜんぶ）
   ["コップの食エンを足す。", "エン", "塩", "食塩", "食エン"],
-  ["弟がワラっている。", "ワラ", "笑", "笑っ", "ワラっ"],        // 五段動詞（活用した形のまま）
+  ["弟がワラっている。", "ワラ", "笑", "笑って", "ワラって"],    // 五段動詞（活用した形のまま・て まで）
   ["へやがシズかになる。", "シズ", "静", "静か", "シズか"],      // 形容動詞
-  ["空が赤みをオびてきた。", "オ", "帯", "帯び", "オび"],        // 一段動詞（る を落とす）
+  ["空が赤みをオびてきた。", "オ", "帯", "帯びて", "オびて"],    // 一段動詞（る を落とし、て まで）
+  ["国がサカえた。", "サカ", "栄", "栄えた", "サカえた"],        // 2026-10-13「サカエタ」
   ["雪がツもれば楽しい。", "ツ", "積", "積もれ", "ツもれ"],      // 積む と 積もる → 長いほう
   ["友だちとナカ直りした。", "ナカ", "仲", "仲直り", "ナカ直り"],  // 後ろの字の送りがな
   ["二人のサをちぢめる。", "サ", "差", null, null],               // 「を」は送りがなにしない
@@ -50,6 +51,17 @@ function run(js) {
     if (got !== want || gotU !== wantU) bad.push(`${k}: 語 ${got} ／——線 ${gotU}（期待 ${want} ／ ${wantU}）`);
   }
   if (P.kakiWholeFor(NONKAKI, { field: "yomi" }, null, master)) bad.push("書き取り以外が語ぜんぶになった");
+  // ——線の中はぜんぶカタカナ（2026-10-13）。となりの漢字がある語は、本の読み問題に読みがあるときだけ
+  const wd = { dict: { "試合": "しあい" }, byK: {} };
+  const kana = (text, target, k, w) => { const r = P.kakiWholeFor({ field: "kaki", text, target, targetNth: 1, answers: [{ text: k }] }, { field: "kaki" }, w, master); return r ? r.kana : undefined; };
+  if (kana("国がサカえた。", "サカ", "栄", null) !== "サカエタ") bad.push("送りがながカタカナにならない: " + kana("国がサカえた。", "サカ", "栄", null));
+  if (kana("あしたのシ合に出る。", "シ", "試", wd) !== "シアイ") bad.push("読みのある語がカタカナにならない");
+  if (kana("コップの食エンを足す。", "エン", "塩", wd) !== null) bad.push("読みの無い語をカタカナにした（読みを作った）");
+  // 部首・熟語作り → キンカ・ネンガ（全部の語に本の読みがあるときだけ）
+  const bu = (dict) => P.kanaWordsFor({ field: "bushu", answers: [{ text: "貨", around: "金□" }, { text: "賀", around: "年□" }] }, { field: "bushu" }, { dict });
+  const b1 = bu({ "金貨": "きんか", "年賀": "ねんが" });
+  if (!b1 || b1.kana.join() !== "キンカ,ネンガ" || b1.words.join() !== "金貨,年賀") bad.push("部首がキンカの形にならない");
+  if (bu({ "金貨": "きんか" })) bad.push("読みが1つ無いのに部首をキンカの形にした");
   return bad;
 }
 
@@ -63,6 +75,8 @@ const FAKES = [
   ["となりの漢字を付けない", () => mutate(JS, "var o = ownPartsOf(it, g, k, wd) || { pre: \"\", post: \"\" };", "var o = { pre: \"\", post: \"\" };", "となり")],
   ["割れたら短いほう", () => mutate(JS, "return b.length - a.length;", "return a.length - b.length;", "割れ")],
   ["書き取り以外も語にする", () => mutate(JS, "if (f !== \"kaki\") return null;", "", "書き取り以外")],
+  ["読みが無くても部首をキンカにする", () => mutate(JS, "    if (!y) return null;", "    if (!y) y = \"すいそく\";", "部首の読み")],
+  ["となりの漢字の読みを作る", () => mutate(JS, "else if (wd && wd.dict && wd.dict[base]) kana = HIRA_KATA(wd.dict[base] + okuri);", "else kana = HIRA_KATA(base + okuri);", "読みを作る")],
 ];
 
 console.log("=== 入口の自己テスト（落ちたら結果を出さずに止まります） ===");
