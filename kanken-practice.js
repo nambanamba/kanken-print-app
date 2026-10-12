@@ -217,7 +217,7 @@ function okuriOfLast(k, after, master) {
   });
   return pickOne(found);
 }
-function kakiWholeFor(it, g, wd, master) {
+function kakiWholeFor(it, g, wd, master, extra) {   // extra … 本に読みが無い語の読み（kanken-yomi-kaki.js の KAKI_YOMI）
   if (!it) return null;
   var f = it.field || (g && g.field) || "";
   if (f !== "kaki") return null;
@@ -248,6 +248,7 @@ function kakiWholeFor(it, g, wd, master) {
   var base = o.pre + k + o.post, kana = null;
   if (!o.pre && !o.post) kana = t + HIRA_KATA(okuri);
   else if (wd && wd.dict && wd.dict[base]) kana = HIRA_KATA(wd.dict[base] + okuri);
+  else if (extra && extra[base]) kana = HIRA_KATA(extra[base] + okuri);   // 担当が1語ずつ確かめた読み（2026-10-13「ジシン になりません？」）
   return { pre: o.pre, k: k, post: o.post, okuri: okuri, word: base + okuri, ui: ui, ul: ul, kana: kana };
 }
 

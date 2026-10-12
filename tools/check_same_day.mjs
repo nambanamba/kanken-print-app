@@ -36,7 +36,7 @@ const FAKES = [
   ["(a) 直す前の版（つづきのボタンが無い）", BEFORE, true],
   ["(b) あしたの紙を組むとき「きょう」をあしたに読みかえない", mutate([["function todayStr(){ return DAY_OVERRIDE || ymd(new Date()); }", "function todayStr(){ return ymd(new Date()); }"]], "b"), true],
   ["(c) 採り入れたあと NEXT を消さない（二重に入る）", mutate([["  NEXT=null; save(K_NEXT,NEXT);\n}\nfunction todaySheet(){", "}\nfunction todaySheet(){"], ["if(SESSION && SESSION.nid && SESSION.nid===NEXT.nid){ NEXT=null; save(K_NEXT,NEXT); return; }", ""]], "c"), true],
-  ["(d) 練習に〇の問題も入れる", mutate([["if(wrong){ var c=Object.assign({}, r);", "if(true){ var c=Object.assign({}, r);"]], "d"), true],
+  ["(d) 練習に〇の問題も入れる", mutate([["      if(!wrong) return;", "      if(false) return;"]], "d"), true],
   ["(e) あしたの紙を保存しない（あした開いても出ない）", mutate([["  save(K_NEXT,NEXT);\n  return NEXT;", "  return NEXT;"]], "e"), true],
   ["(f) 見た目だけ変えた（中身は同じ）", mutate([["var DAY_OVERRIDE=null;", "var DAY_OVERRIDE = null;"]], "f"), false],
   ["(h) 記録した日の紙しかボタンを出さない（遅れて入れた紙で出ない）", mutate([["function recordedToday(){ return !!(LAST && LAST.savedOn===todayStr()", "function recordedToday(){ return !!(LAST && LAST.date===todayStr() && LAST.savedOn===todayStr()"]], "h"), true],

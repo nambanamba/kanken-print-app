@@ -46,7 +46,7 @@ function mutate(src, pairs, name) {
 
 // ★2026-10-12〜 書き取りは「語ぜんぶ」を書く（kakiWholeFor。検査は tools/check_kaki_whole.mjs）。
 //   この検査は、語ぜんぶにならないときの「語の形（国 ▢）」の道を見るので、kakiWholeFor を止めて走らせる
-const KW_FROM = "function kakiWholeFor(it, g, wd, master) {";
+const KW_FROM = "function kakiWholeFor(it, g, wd, master, extra) {";
 const REAL = { html: fs.readFileSync(path.join(ROOT, "index.html"), "utf8"),
                js: mutate(fs.readFileSync(path.join(ROOT, "kanken-practice.js"), "utf8"), [[KW_FROM, KW_FROM + " return null;"]], "語ぜんぶを止める") };
 const NL = REAL.html.includes("\r\n") ? "\r\n" : "\n";

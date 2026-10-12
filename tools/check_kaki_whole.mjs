@@ -57,6 +57,9 @@ function run(js) {
   if (kana("国がサカえた。", "サカ", "栄", null) !== "サカエタ") bad.push("送りがながカタカナにならない: " + kana("国がサカえた。", "サカ", "栄", null));
   if (kana("あしたのシ合に出る。", "シ", "試", wd) !== "シアイ") bad.push("読みのある語がカタカナにならない");
   if (kana("コップの食エンを足す。", "エン", "塩", wd) !== null) bad.push("読みの無い語をカタカナにした（読みを作った）");
+  // 担当が確かめた読み（kanken-yomi-kaki.js）があればカタカナに（2026-10-13「自シン → ジシン」）
+  { const r = P.kakiWholeFor({ field: "kaki", text: "テストには自シンがある。", target: "シン", targetNth: 1, answers: [{ text: "信" }] }, { field: "kaki" }, null, master, { "自信": "じしん" });
+    if (!r || r.kana !== "ジシン") bad.push("確かめた読みがあるのにカタカナにならない: " + (r && r.kana)); }
   // 部首・熟語作り → キンカ・ネンガ（全部の語に本の読みがあるときだけ）
   const bu = (dict) => P.kanaWordsFor({ field: "bushu", answers: [{ text: "貨", around: "金□" }, { text: "賀", around: "年□" }] }, { field: "bushu" }, { dict });
   const b1 = bu({ "金貨": "きんか", "年賀": "ねんが" });
@@ -76,7 +79,7 @@ const FAKES = [
   ["割れたら短いほう", () => mutate(JS, "return b.length - a.length;", "return a.length - b.length;", "割れ")],
   ["書き取り以外も語にする", () => mutate(JS, "if (f !== \"kaki\") return null;", "", "書き取り以外")],
   ["読みが無くても部首をキンカにする", () => mutate(JS, "    if (!y) return null;", "    if (!y) y = \"すいそく\";", "部首の読み")],
-  ["となりの漢字の読みを作る", () => mutate(JS, "else if (wd && wd.dict && wd.dict[base]) kana = HIRA_KATA(wd.dict[base] + okuri);", "else kana = HIRA_KATA(base + okuri);", "読みを作る")],
+  ["となりの漢字の読みを作る", () => mutate(JS, "else if (wd && wd.dict && wd.dict[base]) kana = HIRA_KATA(wd.dict[base] + okuri);", "else if (true) kana = HIRA_KATA(base + okuri);", "読みを作る")],
 ];
 
 console.log("=== 入口の自己テスト（落ちたら結果を出さずに止まります） ===");

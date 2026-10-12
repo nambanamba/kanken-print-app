@@ -14,7 +14,8 @@
 <script src="kanken-kanji.js"></script>
 <script src="kanken-gen.js"></script>
 <!-- ★?v= は版の印。index.html だけ新しく、このファイルが古いキャッシュのままだと、紙を組むところで止まる（2026-10-12「今日の印刷もできません」） -->
-<script src="kanken-practice.js?v=20261013a"></script>
+<script src="kanken-practice.js?v=20261013b"></script>
+<script src="kanken-yomi-kaki.js?v=20261013b"></script>
 <style>
   :root{
     --primary:#2563eb; --accent:#0891b2; --good:#16a34a; --soft:#f59e0b;
@@ -2371,6 +2372,13 @@ function exampleText(ex, nos){
 /* 答えページの「注意」。書式v1.5 で {text, ruby[]} になった。
    ⚠️ **ルビを落とすと読めない。**書き起こし側が「小4には読めないから」とルビを付けている。
       落とすなら、そもそも書き起こす意味が無くなる。 */
+/* 注意書き（本の※）に、答えの漢字が1字でも入っているか。入っていれば紙には出さない（答えの露出・確認ポイント A-2b） */
+function noteShowsAnswer(it){
+  var t=bookNote(it && it.note); if(!t) return false;
+  var ks=[].concat(it.kanji||[]);
+  (it.answers||[]).forEach(function(a){ Array.from(String(a.text||"").replace(/^[ア-オ]\s*/,"")).forEach(function(c){ if(/[一-鿿]/.test(c)) ks.push(c); }); });
+  return ks.some(function(k){ return t.indexOf(k)>=0; });
+}
 function bookNote(n){
   if(!n) return "";
   var t=(typeof n==="object") ? (n.text||"") : String(n);
@@ -2413,7 +2421,8 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
           var it=x.it, c=x.conv;
           return { cite:bookCite(x), q:c.kana.map(function(k){ return "<u>"+k+"</u>"; }).join("　・　"), whole:c.words.reduce(function(a,w){ return w.length>a.length?w:a; },""),
             given:"", choices:[], note:"", slots:c.kana.map(function(){ return {yomi:"",around:""}; }),
-            a:c.words.join("・"), aList:c.words.slice(), kanji:it.kanji||[], field:f, id:it.id, word:null, words:null };
+            a:c.words.join("・"), aList:c.words.slice(), kanji:it.kanji||[], field:f, id:it.id, word:null, words:null,
+            ansK:(it.answers||[]).map(function(a){ return String(a.text||"").replace(/^[ア-オ]\s*/,""); }) };
         }) });
       return;
     }
@@ -2434,7 +2443,7 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
         var it=x.it, ans=it.answers||[], boxY=boxRubyYomi(it.ruby);   // ★□のルビだけ（boxRubyYomi の注を参照）
         // ★書き取りは語ぜんぶ（試合・食塩）と送りがな（笑っ・静か）まで書く（2026-10-12 ユーザー指示。kanken-practice.js の kakiWholeFor）。
         //   ——線・答え・答えとなおしの紙が語になる。〇✕の記録（kanji）は今までどおり答えの字だけ
-        var whole=(typeof kakiWholeFor==="function") ? kakiWholeFor(it, x.g, bookWordDict(), kanjiMasterMap()) : null;   // 古いキャッシュでも止めない
+        var whole=(typeof kakiWholeFor==="function") ? kakiWholeFor(it, x.g, bookWordDict(), kanjiMasterMap(), (typeof KAKI_YOMI!=="undefined") ? KAKI_YOMI : null) : null;   // 古いキャッシュでも止めない
         return {
           cite: bookCite(x),
           // ★問題文の字のルビ（音訓の「好（こう）」など）は問題文に付ける。□のルビは答えらんの上（slots）に出すので、ここでは除く。
@@ -2445,13 +2454,15 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
           // ★送りがなは ○の漢字を出さない（2026-10-13〜。シズカナ → 静かな を自分で書く。○を出すと「かなを書くだけ」になるため紙から外していた）
           given: (f!=="okuri" && typeof it.givenKanji==="string") ? it.givenKanji : "",
           choices: (it.choices||[]).slice(),
-          note: bookNote(it.note),
+          // ★注意書きに答えの字が入っていたら、もんだいの紙に出さない（2026-10-13 ユーザー指摘「最悪 — 最□」の注意に「悪」と「良」＝答えが見えていた）
+          note: noteShowsAnswer(it) ? "" : bookNote(it.note),
           slots: ans.map(function(a,i){
             return { yomi:boxY[i]||"", around:a.around||"" };
           }),
           a: whole ? whole.word : ans.map(function(a){return a.text;}).join("・"),
           aList: whole ? [whole.word] : ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
           kanji: it.kanji||[], field: f, id: it.id,
+          ansK: ans.map(function(a){ return String(a.text||"").replace(/^[ア-オ]\s*/,""); }),   // 答えごとの字（練習で✕の答えだけ出すため）
           // ★答えとなおしの紙の「語の形」（国 ▢（こっき））。無ければ null＝今までどおり字だけ（kanken-practice.js）
           word: whole ? null : practiceWordFor(it, x.g, bookWordDict()),
           // ★部首は、答え1字ずつを「漁▢・不▢・入▢」の形にする（2026-10-03）。作れなければ null＝今までどおり
@@ -3092,7 +3103,19 @@ function practiceBlocksOfToday(){
     var rows=[];
     b.rows.forEach(function(r,i){
       var wrong=(r.kanji||[]).some(function(k){ return res[markKey(r.id,k)]==="x"; });
-      if(wrong){ var c=Object.assign({}, r); c.no=(b.noBase||0)+i+1; rows.push(c); }
+      if(!wrong) return;
+      var c=Object.assign({}, r); c.no=(b.noBase||0)+i+1;
+      // ★答えが2つ以上の問題（部首の 金貨・年賀、じゅく語作り）は、✕だった答えだけ練習に出す（2026-10-13 ユーザー指摘「金貨をまちがえたのに、年賀も練習の紙に出てきます」）。
+      //   答えの字（ansK）と記録の字（kanji）の並びが同じときだけ絞る。対応が取れなければ今までどおり全部出す（落とさない）
+      var ak=r.ansK||[], al=r.aList||[];
+      if(ak.length>1 && al.length===ak.length && ak.every(function(k){ return (r.kanji||[]).indexOf(k)>=0; })){
+        var keep=ak.map(function(k){ return res[markKey(r.id,k)]==="x"; });
+        var pick=function(arr){ return (arr||[]).filter(function(_,j){ return keep[j]; }); };
+        c.aList=pick(al); c.a=c.aList.join("・");
+        if(c.words && c.words.length===ak.length) c.words=pick(c.words);
+        if(c.slots && c.slots.length===ak.length) c.slots=pick(c.slots);
+      }
+      rows.push(c);
     });
     if(rows.length){ var nb=Object.assign({}, b); nb.rows=rows; nb.noBase=n; n+=rows.length; out.push(nb); }
   });
