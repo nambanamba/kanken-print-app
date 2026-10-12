@@ -13,7 +13,8 @@
 <script src="kanken-data.js"></script>
 <script src="kanken-kanji.js"></script>
 <script src="kanken-gen.js"></script>
-<script src="kanken-practice.js"></script>
+<!-- ★?v= は版の印。index.html だけ新しく、このファイルが古いキャッシュのままだと、紙を組むところで止まる（2026-10-12「今日の印刷もできません」） -->
+<script src="kanken-practice.js?v=20261012b"></script>
 <style>
   :root{
     --primary:#2563eb; --accent:#0891b2; --good:#16a34a; --soft:#f59e0b;
@@ -2411,7 +2412,7 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
         var it=x.it, ans=it.answers||[], boxY=boxRubyYomi(it.ruby);   // ★□のルビだけ（boxRubyYomi の注を参照）
         // ★書き取りは語ぜんぶ（試合・食塩）と送りがな（笑っ・静か）まで書く（2026-10-12 ユーザー指示。kanken-practice.js の kakiWholeFor）。
         //   ——線・答え・答えとなおしの紙が語になる。〇✕の記録（kanji）は今までどおり答えの字だけ
-        var whole=kakiWholeFor(it, x.g, bookWordDict(), kanjiMasterMap());
+        var whole=(typeof kakiWholeFor==="function") ? kakiWholeFor(it, x.g, bookWordDict(), kanjiMasterMap()) : null;   // 古いキャッシュでも止めない
         return {
           cite: bookCite(x),
           // ★問題文の字のルビ（音訓の「好（こう）」など）は問題文に付ける。□のルビは答えらんの上（slots）に出すので、ここでは除く。
@@ -3047,10 +3048,23 @@ function saveSheetResult(){
 function recordedToday(){ return !!(LAST && LAST.savedOn===todayStr() && LAST.v>=3 && LAST.ids && LAST.ids.length); }
 function sameDayReady(){ return bookLoaded() && recordedToday(); }
 function lastList(){ var idx=bookIndex(); return LAST.ids.map(function(id){ return idx[id]; }).filter(Boolean); }
+/* ★記録した紙の〇✕に、「やった問題」で直した分を重ねたもの（2026-10-12 ユーザー報告「今日の直しがありません」）。
+   LAST.results は「記録する」を押したときの写し。あとで〇✕を直しても写しは変わらず、
+   〇で記録 → ✕に直した日は、練習の紙が「✕なし」になっていた。LOG（訂正の台帳）のいちばん新しい記録で上書きする。読むだけ（保存しない） */
+function lastResultsNow(){
+  var res=Object.assign({}, (LAST&&LAST.results)||{}), ids={};
+  if(!LAST) return res;
+  (LAST.ids||[]).forEach(function(id){ ids[id]=1; });
+  LOG.slice().sort(function(a,b){ return a.t-b.t; }).forEach(function(e){
+    if(e.src!=="paper" || e.date!==LAST.date || !ids[e.id]) return;
+    (e.kanji||[]).forEach(function(q){ res[markKey(e.id,q.k)]=q.ok?"o":"x"; });
+  });
+  return res;
+}
 /* きょう✕だった問題の行だけの、答えとなおし用ブロック。番号は きょうの紙の番号のまま（紙の○番と合わせるため） */
 function practiceBlocksOfToday(){
   if(!sameDayReady()) return [];
-  var res=LAST.results||{}, out=[], n=0;
+  var res=lastResultsNow(), out=[], n=0;
   buildPaperBlocks(lastList()).forEach(function(b){
     var rows=[];
     b.rows.forEach(function(r,i){
