@@ -44,15 +44,18 @@ function mutate(src, pairs, name) {
   return out;
 }
 
+// ★2026-10-12〜 書き取りは「語ぜんぶ」を書く（kakiWholeFor。検査は tools/check_kaki_whole.mjs）。
+//   この検査は、語ぜんぶにならないときの「語の形（国 ▢）」の道を見るので、kakiWholeFor を止めて走らせる
+const KW_FROM = "function kakiWholeFor(it, g, wd, master) {";
 const REAL = { html: fs.readFileSync(path.join(ROOT, "index.html"), "utf8"),
-               js: fs.readFileSync(path.join(ROOT, "kanken-practice.js"), "utf8") };
+               js: mutate(fs.readFileSync(path.join(ROOT, "kanken-practice.js"), "utf8"), [[KW_FROM, KW_FROM + " return null;"]], "語ぜんぶを止める") };
 const NL = REAL.html.includes("\r\n") ? "\r\n" : "\n";
 const withHtml = (pairs, name) => ({ html: mutate(REAL.html, pairs, name), js: REAL.js });
 const withJs = (pairs, name) => ({ html: REAL.html, js: mutate(REAL.js, pairs, name) });
 
 const FAKES = {
   // (a) 語を出さず、字だけのまま
-  a: () => withHtml([["word: practiceWordFor(it, x.g, bookWordDict())", "word: null"]], "a 字だけのまま"),
+  a: () => withHtml([["word: whole ? null : practiceWordFor(it, x.g, bookWordDict())", "word: null"]], "a 字だけのまま"),
   // (b) 本に語が無い字に、読みを推測して書く
   b: () => withJs([["  if (!w) return null;",
                     "  if (!w) return { pre: \"\", k: k, post: \"\", yomi: \"すいそく\", how: \"guess\", word: k };"]], "b 推測の読み"),

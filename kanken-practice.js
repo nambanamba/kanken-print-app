@@ -150,6 +150,98 @@ function practiceWordsFor(it, g) {
   return out;
 }
 
+/* =========================================================================
+   ★書き取りは「語ぜんぶ」を書く（2026-10-12 ユーザー指示）
+     「□合（試合）なんですが試合全部書かせてほしいです。熟語でちゃんと覚えてほしいので。食塩、城門、埼玉とかも。」
+     「どっちも送り仮名まで書かせたいです。」（テストの紙も）
+   ・語 ＝ となりの漢字（ownPartsOf。長い語は本の読み問題にある語の部分だけ）＋答えの字＋送りがな
+   ・送りがなは常用漢字表の訓（kanken-kanji.js の kun・ex）から決める。推測しない（A-6）:
+       カタカナ（target）が訓の「送りがなの前」と一致し、例欄に その字＋送りがな の形があるときだけ
+       五段動詞（う段で終わる）・形容詞（い）は最後の1字が活用で変わる → 字数だけ合わせる（笑う→「笑っ」て）
+       一段動詞（い段・え段＋る）は る を落とす（帯びる→「帯び」て）。それ以外（静か）は文と一字ずつ一致したときだけ
+       候補が2つ以上あって答えが割れたら、送りがなは付けない
+   ・記録（〇✕）は今までどおり答えの字だけ。問題id・本のデータは変えない（紙に出す形だけ）
+   ・返す {pre, k, post, okuri, word, ui, ul}。ui/ul … 問題文の中で——線を引く位置と長さ。語にならなければ null（今までどおり）
+   ========================================================================= */
+var KATA_HIRA = function (s) { return String(s || "").replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); }); };
+var ROW_IE = "いきぎしじちぢにひびぴみりえけげせぜてでねへべぺめれ";
+// 活用で最後の1字がなりうる字（五段動詞はその行＋音便。形容詞は く・か・け・さ・い）。これ以外（を・の など助詞）は送りがなにしない
+var CONJ = { "う": "わいうえおっ", "く": "かきくけこい", "ぐ": "がぎぐげごい", "す": "さしすせそ", "つ": "たちつてとっ",
+  "ぬ": "なにぬねのん", "ぶ": "ばびぶべぼん", "む": "まみむめもん", "る": "らりるれろっ", "い": "いくかけさ" };
+// tail（辞書の形の送りがな）と、文の続き（after）から、紙に書く送りがなを決める。決められなければ ""
+function okuriByTail(tail, after) {
+  var L = tail.length, last = tail.charAt(L - 1), n = L, free = "";
+  if (last === "る" && L >= 2 && ROW_IE.indexOf(tail.charAt(L - 2)) >= 0) n = L - 1;   // 一段動詞（る を落とす）
+  else if (CONJ[last]) free = CONJ[last];                                               // 五段動詞・形容詞（最後の1字が活用）
+  var got = after.slice(0, n);
+  if (got.length < n || !/^[ぁ-ゖ]+$/.test(got)) return "";
+  if (free) {
+    if (got.slice(0, n - 1) !== tail.slice(0, n - 1) || free.indexOf(got.charAt(n - 1)) < 0) return "";
+    if (last !== "い" && "あかがさざただなはばぱまやら".indexOf(after.charAt(n - 1)) >= 0 && /^し[いくかさ]/.test(after.slice(n))) return "";  // 勇ましい（勇む から作った語）は決められない
+  } else if (got !== tail.slice(0, n)) return "";
+  return got;
+}
+function pickOne(found) {
+  // 2つ以上合ったら長いほう（積む「も」と 積もる「もれ」→ もれ）。同じ長さで割れたら付けない
+  var ks = Object.keys(found).sort(function (a, b) { return b.length - a.length; });
+  return (ks.length === 1 || (ks.length > 1 && ks[0].length > ks[1].length)) ? ks[0] : "";
+}
+function okuriOf(k, stem, after, master) {
+  var m = master && master[k];
+  if (!m || !after || !/^[ぁ-ゖ]/.test(after)) return "";
+  var nOn = (m.on || []).length, found = {};
+  (m.kun || []).forEach(function (r, j) {
+    r = String(r);
+    if (r.indexOf(stem) !== 0 || r.length <= stem.length) return;
+    var tail = r.slice(stem.length), ex = String((m.ex || [])[nOn + j] || "");
+    if (ex.indexOf(k + tail.charAt(0)) < 0) return;          // 例欄に「字＋送りがな」が無い → 送りがなの切れ目が違う
+    var got = okuriByTail(tail, after);
+    if (got) found[got] = 1;
+  });
+  return pickOne(found);
+}
+/* 語の最後の字（答えの字ではない字。仲直り の 直）の送りがな。読みが分からないので、例欄の「字＋ひらがな」（直る）の形から決める */
+function okuriOfLast(k, after, master) {
+  var m = master && master[k];
+  if (!m || !after || !/^[ぁ-ゖ]/.test(after)) return "";
+  var found = {};
+  (m.ex || []).join("，").split(/[，、,]/).forEach(function (w) {
+    w = w.trim();
+    if (w.charAt(0) !== k) return;                            // 字で始まる例（直る・良い）だけ
+    var mm = /^.([ぁ-ゖ]+)/.exec(w);
+    if (!mm) return;
+    var tail = mm[1].replace(/(.)だ$/, "$1");                  // 静かだ → か
+    var got = okuriByTail(tail, after);
+    if (got) found[got] = 1;
+  });
+  return pickOne(found);
+}
+function kakiWholeFor(it, g, wd, master) {
+  if (!it) return null;
+  var f = it.field || (g && g.field) || "";
+  if (f !== "kaki") return null;
+  var ans = it.answers || [];
+  if (ans.length !== 1) return null;
+  var k = String(ans[0].text || "");
+  if (pwChars(k).length !== 1 || !pwIsKanji(k)) return null;
+  var t = String(it.target || ""), txt = String(it.text || "");
+  if (!t || !/^[ァ-ヶー]+$/.test(t)) return null;
+  var idx = -1;
+  for (var i = 0; i < (it.targetNth || 1); i++) { idx = txt.indexOf(t, idx + 1); if (idx < 0) return null; }
+  var o = ownPartsOf(it, g, k, wd) || { pre: "", post: "" };
+  var okuri = "", after = txt.slice(idx + t.length + o.post.length);
+  if (!o.post) okuri = okuriOf(k, KATA_HIRA(t), after, master);
+  else if (/^[ぁ-ゖ]/.test(after) && !/^(する|され|させ|し[てた])/.test(after)) {
+    // 後ろの字に送りがなが続く（仲直り・巣立ち）。ふつうは助詞（試合を・必死の）なので、1字で助詞と同じ字なら付けない
+    okuri = okuriOfLast(pwChars(o.post).slice(-1)[0], after, master);
+    if (okuri.length === 1 && "のをにがはでともへやかさしすせ".indexOf(okuri) >= 0) okuri = "";
+  }
+  if (!o.pre && !o.post && !okuri) return null;
+  var ui = idx - o.pre.length, ul = o.pre.length + t.length + o.post.length + okuri.length;
+  if (txt.slice(ui, idx) !== o.pre) return null;   // 長い語を切った形で、前の字が文と合わない（念のため）
+  return { pre: o.pre, k: k, post: o.post, okuri: okuri, word: o.pre + k + o.post + okuri, ui: ui, ul: ul };
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, boxRubyYomi: boxRubyYomi, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS };
+  module.exports = { buildWordDict: buildWordDict, practiceWordFor: practiceWordFor, practiceWordsFor: practiceWordsFor, boxRubyYomi: boxRubyYomi, ownPartsOf: ownPartsOf, ownWordOf: ownWordOf, WORD_FIELDS: WORD_FIELDS, kakiWholeFor: kakiWholeFor, okuriOf: okuriOf };
 }

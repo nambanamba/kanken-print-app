@@ -2404,15 +2404,20 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
       title:"■ "+(fd?fd.name:"もんだい"),
       keyTitle:(fd?fd.name:"もんだい")+"の答え",
       // ★書式v1.6 で instruction が {text, ruby[]} になりうる。文字列でもオブジェクトでも読む（ルビも出す）
-      ask:instructionFor(b.g, (b.rows[0]&&b.rows[0].it.no))||FIELD_ASK[f]||"",
+      ask:(instructionFor(b.g, (b.rows[0]&&b.rows[0].it.no))||FIELD_ASK[f]||"")
+        +(f==="kaki" ? "<br><b>——線の ことばを ぜんぶ 書きます（送りがなも）。</b>" : ""),
       src:"book",
       rows:b.rows.map(function(x){
         var it=x.it, ans=it.answers||[], boxY=boxRubyYomi(it.ruby);   // ★□のルビだけ（boxRubyYomi の注を参照）
+        // ★書き取りは語ぜんぶ（試合・食塩）と送りがな（笑っ・静か）まで書く（2026-10-12 ユーザー指示。kanken-practice.js の kakiWholeFor）。
+        //   ——線・答え・答えとなおしの紙が語になる。〇✕の記録（kanji）は今までどおり答えの字だけ
+        var whole=kakiWholeFor(it, x.g, bookWordDict(), kanjiMasterMap());
         return {
           cite: bookCite(x),
           // ★問題文の字のルビ（音訓の「好（こう）」など）は問題文に付ける。□のルビは答えらんの上（slots）に出すので、ここでは除く。
           //   以前は答えらんの読みを ruby の添字で引いていたため、問題文の字の読みが答えらんに出ていて、問題文には出ていなかった
-          q: withRuby(bookQuestionText(it), (it.ruby||[]).filter(function(r){ return r && r.base!=="□"; })),
+          q: withRuby(bookQuestionText(it, whole), (it.ruby||[]).filter(function(r){ return r && r.base!=="□"; })),
+          whole: whole ? whole.word : "",
           // ★○の中の漢字（送りがな）。**出さないと「○の中の漢字を使え」が成立しない**（dr_23 で15問すべて解答不能だった。claude-e0 が配信前に発見）
           given: (typeof it.givenKanji==="string") ? it.givenKanji : "",
           choices: (it.choices||[]).slice(),
@@ -2420,11 +2425,11 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
           slots: ans.map(function(a,i){
             return { yomi:boxY[i]||"", around:a.around||"" };
           }),
-          a: ans.map(function(a){return a.text;}).join("・"),
-          aList: ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
+          a: whole ? whole.word : ans.map(function(a){return a.text;}).join("・"),
+          aList: whole ? [whole.word] : ans.map(function(a){return a.text;}),   // 答えの紙で1個ずつ区画にする
           kanji: it.kanji||[], field: f, id: it.id,
           // ★答えとなおしの紙の「語の形」（国 ▢（こっき））。無ければ null＝今までどおり字だけ（kanken-practice.js）
-          word: practiceWordFor(it, x.g, bookWordDict()),
+          word: whole ? null : practiceWordFor(it, x.g, bookWordDict()),
           // ★部首は、答え1字ずつを「漁▢・不▢・入▢」の形にする（2026-10-03）。作れなければ null＝今までどおり
           words: practiceWordsFor(it, x.g)
         };
@@ -2441,8 +2446,9 @@ function buildPaperBlocks(list){   // list を渡すと、その問題で組む�
 /* 本の問題文を紙の形にする。
    ★——線は `target` / `targetNth` で持っている（`【】` のような囲み記号は使わない書式）。
      紙では傍線を引いて示す。 */
-function bookQuestionText(it){
+function bookQuestionText(it, whole){
   var t=String(it.text||"");
+  if(whole) return t.slice(0,whole.ui)+"<u>"+t.slice(whole.ui,whole.ui+whole.ul)+"</u>"+t.slice(whole.ui+whole.ul);
   if(it.target){
     var nth=it.targetNth||1, idx=-1;
     for(var i=0;i<nth;i++) idx=t.indexOf(it.target, idx+1);
@@ -2803,6 +2809,9 @@ function renderSheet(blocks, page, pages){
     //   漢字を書くには狭い（ユーザー指示「書くところは大きめ」）。1段なら1つ約20mm幅
     var oneCol=(maxSlots>=3);
     var qW=(maxSlots<=2)?"66%":(oneCol?"40%":"45%"), aW=(maxSlots<=2)?"27%":(oneCol?"53%":"48%");
+    // ★語ぜんぶを書く書き取り（2026-10-12）で3字以上の語があるブロックは、書くマスを広く（全国各地 を 25mm に詰めない）
+    var maxWord=b.rows.reduce(function(a,r){ return Math.max(a, Array.from(r.whole||"").length); },0);
+    if(maxSlots<=2 && maxWord>=3){ qW="52%"; aW="41%"; }
     html+=(oneCol ? function(list,fn){ return '<table class="p-tbl">'+list.map(function(k,j){ return fn(k,j); }).join("")+'</table>'; } : twoCols)(b.rows, function(row,i){
         // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
         //   （複数枚に分かれた日は、続きの枚でも通し番号になる）
@@ -3617,6 +3626,12 @@ function screenable(item){
 function printable(item){ return askable(item) && !screenable(item); }
 
 function bookLoaded(){ return !!BOOK_UNITS; }
+/* 字 → 漢字マスタの行（kanken-kanji.js）。書き取りの送りがなを決めるのに使う */
+var KMASTER_MAP=null;
+function kanjiMasterMap(){
+  if(!KMASTER_MAP){ KMASTER_MAP={}; KANJI_MASTER.forEach(function(r){ KMASTER_MAP[r.k]=r; }); }
+  return KMASTER_MAP;
+}
 /* 本の読み問題から集めた「語 → 読み」（kanken-practice.js）。本が読めていなければ null＝全部字だけ */
 var WORD_DICT=null, WORD_DICT_SRC=null;
 function bookWordDict(){
