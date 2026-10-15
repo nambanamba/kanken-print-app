@@ -1857,6 +1857,15 @@ function boxHeightFor(rowsPerCol){
 
 /* ★問題を2段組みにする。1問1マスにしたので、20問でも1枚に収まる。
    前半・後半で分けて左右に置く（左が1〜n/2、右が続き）。読む順が上から下で自然になる。 */
+/* ブロックの中でいちばん長い答えの字数（書き取りの語・答えの一覧）。書くマスの広さを決める */
+function blockMaxWord(b){
+  return b.rows.reduce(function(a,r){
+    var m=Array.from(r.whole||"").length;
+    (r.aList||[]).forEach(function(w){ m=Math.max(m, Array.from(String(w)).length); });
+    return Math.max(a,m);
+  },0);
+}
+function oneColTable(list, rowFn){ return '<table class="p-tbl">'+list.map(function(k,j){ return rowFn(k,j); }).join("")+'</table>'; }
 function twoCols(list, rowFn){
   if(!list.length) return "";
   var half=Math.ceil(list.length/2);
@@ -2791,7 +2800,8 @@ function renderAnswerSheet(blocks, page, pages, forLabel){
   blocks.forEach(function(b){
     var cont=/（つづき）$/.test(b.title);
     html+='<div class="p-sec">'+(b.keyTitle ? b.keyTitle+(cont?"（つづき）":"") : b.title.replace(/^■\s*/,""))+'</div>';
-    html+=twoCols(b.rows, function(row,i){
+    // ★4字以上の語があるブロックは1段組み（おてほん・なぞる・じぶんで のマスを広く。2026-10-16）
+    html+=(blockMaxWord(b)>=4 ? oneColTable : twoCols)(b.rows, function(row,i){
       var no=row.no||((b.noBase||0)+i+1), hmm=ansRowMM(row, boxMM), h=hmm+"mm";
       // ★3マス（2026-09-13 ユーザー指示「お手本、なぞり、空欄でお願いします」）
       return "<tr><td class='p-no'>"+no+"</td>"
@@ -2845,8 +2855,11 @@ function renderSheet(blocks, page, pages){
     var oneCol=(maxSlots>=3);
     var qW=(maxSlots<=2)?"66%":(oneCol?"40%":"45%"), aW=(maxSlots<=2)?"27%":(oneCol?"53%":"48%");
     // ★語ぜんぶを書く書き取り（2026-10-12）で3字以上の語があるブロックは、書くマスを広く（全国各地 を 25mm に詰めない）
-    var maxWord=b.rows.reduce(function(a,r){ return Math.max(a, Array.from(r.whole||"").length); },0);
+    var maxWord=blockMaxWord(b);
     if(maxSlots<=2 && maxWord*maxSlots>=3){ qW="52%"; aW="41%"; }   // じゅく語作り（2字×2つ）も広く
+    // ★4字以上の語（入学手続き・全国各地）があるブロックは1段組みにして、書くマスを紙の半分の幅に（2026-10-16 ユーザー指摘
+    //   「ここにどうやって入学手続きって書くんだよってくらいちいさい」。2段組みだと1字あたり約7mm → 1段で約17mm）。枚数は増えてよい（ユーザー既定）
+    if(maxSlots<=2 && maxWord>=4){ oneCol=true; qW="45%"; aW="50%"; }
     html+=(oneCol ? function(list,fn){ return '<table class="p-tbl">'+list.map(function(k,j){ return fn(k,j); }).join("")+'</table>'; } : twoCols)(b.rows, function(row,i){
         // ★答えの番号は問題の番号と同じ。採点する人が上から順に照らすだけで済むように
         //   （複数枚に分かれた日は、続きの枚でも通し番号になる）
