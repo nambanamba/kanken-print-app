@@ -3380,6 +3380,15 @@ function writeRecords(recs, doneDays, v2){   // v2 … {settings} を渡した�
   SESSION=load(K_SESSION,null); APP_S=load(K_APP,null); NEXT=load(K_NEXT,null); LAST=load(K_LAST,null);
   SET.doneDays=Array.isArray(doneDays) ? doneDays.slice() : []; save(K_SET,SET);
 }
+/* ★ファイルに入っている紙（きょうの紙・あしたのテスト）を1行で。読み込む前に「刷った紙が入っているか」を見られるように
+   （2026-10-16 ユーザー報告「別の端末で読み込んだら今日の問題が違っていて丸付けできない」。書き出しのあとに刷った紙はファイルに入らない） */
+function importPaperLine(recs){
+  var s=recs[K_SESSION], n=recs[K_NEXT], out=[];
+  if(s && s.ids && s.ids.length) out.push(mdLabel(s.date)+"の紙（"+s.ids.length+"問・"+(s.saved?"記録ずみ":"まだ丸つけしていない")+"）");
+  if(n && n.ids && n.ids.length) out.push(mdLabel(n.date)+"のぶんの「あしたのテスト」（"+n.ids.length+"問）");
+  return "ファイルに入っている紙： "+(out.length ? out.join("・") : "なし（読み込んだあと、この端末で新しい紙を組みます）")
+    +"\n※ 刷った紙がここに無いときは、刷った端末でもう一度書き出してください。";
+}
 function importFromText(text){
   var p=parseImport(text);
   if(p.error){ alert(p.error); return false; }
@@ -3387,6 +3396,7 @@ function importFromText(text){
   function line(name, d){ return name+"： 増える "+d.add+"・変わる "+d.chg+"・消える "+d.del; }
   if(!confirm("この端末の記録を、ファイルの内容に まるごと置きかえます。\n\n"
       +line("問題ごとの記録", v.items)+"\n"+line("字ごとの記録", v.kanji)+"\n"+line("やった問題の履歴", v.log)
+      +"\n\n"+importPaperLine(p.data.records||{})
       +"\n\nよろしいですか？")) return false;
   if(del>0 && !confirm("⚠️ 記録が "+del+" 件 消えます。本当に置きかえますか？\n（読み込む前の状態には、あとから1回だけ戻せます）")) return false;
   var cur=exportData();
